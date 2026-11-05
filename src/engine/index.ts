@@ -2,5 +2,7 @@
 export * from './types';
 export * from './document';
 export * from './docx';
+export * from './json';
+export * from './source';
 export { nodeRegistry } from './nodes';
-export const ENGINE_VERSION = '0.1.0';
+export const ENGINE_VERSION = '0.2.0';

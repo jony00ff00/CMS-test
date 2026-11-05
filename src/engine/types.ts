@@ -19,6 +19,34 @@ export interface DocumentMeta {
   styles: string[];
   /** Problems found while importing (removed scripts, unknown Word styles, ...). */
   warnings: string[];
+  /** Only for JSON sources: what is needed to write the transformed content back into the file. */
+  json?: JsonSourceInfo;
+}
+
+export type JsonPathSegment = string | number;
+export type JsonFieldFormat = 'text' | 'html' | 'markdown';
+
+export interface JsonFieldMapping {
+  /** JSONPath, may match many values, e.g. "$.articles[*].body". */
+  path: string;
+  format: JsonFieldFormat;
+  /** Wrapper element for each matched value. Default "div". */
+  blockTag?: string;
+}
+
+export interface JsonMapping {
+  /** "fields": each matched string becomes a block. "template": a Handlebars template renders the whole file. */
+  mode: 'fields' | 'template';
+  fields?: JsonFieldMapping[];
+  template?: string;
+}
+
+export interface JsonSourceInfo {
+  /** A copy of the parsed file. */
+  data: unknown;
+  mapping: JsonMapping;
+  /** Every block in the document, with the exact field it came from (field mode only). */
+  fields: { path: string; segments: JsonPathSegment[]; format: JsonFieldFormat }[];
 }
 
 /**

@@ -26,6 +26,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   (visible text, blocks separated by `\n`, each segment mapped to its text node and path), `locate`, `nodeAtPath`.
 - `docx.ts`: `importDocx` via mammoth, loaded on demand to keep the main bundle small. Images become assets
   referenced as `asset:<id>`. Custom `styleMap` rules take precedence over the defaults.
+- `json.ts`: `parseJson` (own error scanner gives line, column and a plain reason in every browser),
+  `discoverPaths` (every string field, with a suggested format), `mapJsonToDocument` / `importJson` (async).
+  Field mode: each matched string becomes a block with `data-json-path`, read as `text`, `html` or `markdown`;
+  `meta.json` keeps a copy of the data, the mapping and each block's exact path segments for write-back.
+  Template mode: Handlebars renders the whole file (`{{markdown x}}` and `{{json x}}` helpers), no write-back.
+  No mapping means every string field as text. Paths that match nothing or non-strings give warnings, not errors.
+- `source.ts`: `importSource({ name, data }, { json, docx })` picks the importer by file extension.
+- Large libraries (mammoth, Handlebars, the Markdown parser) are loaded with `import()` only when needed.
+  Keep it that way; the main bundle should stay near 430 kB.
 
 ## Commands
 - `npm run dev`: dev server
