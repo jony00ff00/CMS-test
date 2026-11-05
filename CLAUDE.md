@@ -43,6 +43,16 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   strategies. `resolveAnchor` returns `exact` / `moved` / `fuzzy` / `failed` with a confidence and a reason.
   Identical text always wins over similar text. Default `minConfidence` 0.75. Index once and pass the
   `DocIndex` when resolving many anchors.
+- `snippets.ts`: `applySnippet(selection, snippet, { params, snapToBlock })` (async: Handlebars loads on demand)
+  → `{ document, warnings, applied }`. Modes: wrap, prepend, append (`inside` for first/last child), replace,
+  attributes (merges class and style; selected text gets a <span>). Template variables: `{{content}}` (the
+  original nodes), `{{text}}`, `{{html}}`, `{{index}}`, `{{number}}`, `{{count}}`, `{{part}}`, `{{parts}}`,
+  `{{params.x}}`, `{{jsonPath}}`. Template output is cleaned like any HTML. CSS/JS go to
+  `meta.snippetAssets` once per `id@version`; `serialize(..., { fullDocument: true })` writes them out.
+- `ranges.ts`: `Workspace`, a working copy of the tree. Matches become node references before anything
+  changes, and splits are recorded, so overlapping matches stay valid in any order. Text ranges split text
+  nodes and partly covered inline elements, never block elements or JSON field blocks: a range across
+  blocks gives one piece per block (or one run of whole blocks with `snapToBlock`).
 - `text-match.ts`: bounded Levenshtein, Dice, and `fuzzyFind` (closest substring, Sellers' algorithm).
 - `hast-util-select`'s `:scope` gives wrong results on our root; generated CSS paths avoid it.
 - Never read the end of a string built with `+=` in a loop (it copies the string each time); collect parts and join.

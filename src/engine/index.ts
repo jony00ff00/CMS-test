@@ -8,5 +8,7 @@ export * from './text-match';
 export * from './doc-index';
 export * from './anchors';
 export * from './selectors';
+export * from './ranges';
+export * from './snippets';
 export { nodeRegistry } from './nodes';
-export const ENGINE_VERSION = '0.3.0';
+export const ENGINE_VERSION = '0.4.0';

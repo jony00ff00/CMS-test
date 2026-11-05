@@ -21,6 +21,16 @@ export interface DocumentMeta {
   warnings: string[];
   /** Only for JSON sources: what is needed to write the transformed content back into the file. */
   json?: JsonSourceInfo;
+  /** CSS and JS of the snippets applied so far, once per snippet version (see snippets.ts). */
+  snippetAssets?: SnippetAsset[];
+}
+
+export interface SnippetAsset {
+  /** `${id}@${version}` */
+  key: string;
+  name: string;
+  css?: string;
+  js?: string;
 }
 
 export type JsonPathSegment = string | number;
@@ -127,6 +137,13 @@ export interface Selection {
   warnings: string[];
 }
 
+/**
+ * wrap: put the selected content inside the template (at {{content}}).
+ * prepend / append: insert the template before / after the selected content (or inside it, see `inside`).
+ * replace: replace the selected content with the template ({{content}} brings the original back).
+ * attributes: the template is an attribute list (e.g. `class="hl" title="{{text}}"`) added to the selected elements;
+ * selected text is wrapped in a <span> that gets the attributes.
+ */
 export type SnippetMode = 'wrap' | 'prepend' | 'append' | 'replace' | 'attributes';
 
 export interface SnippetParam {
@@ -143,8 +160,11 @@ export interface Snippet {
   name: string;
   version: number;
   mode: SnippetMode;
+  /** Handlebars template. See applySnippet for the variables it can use. */
   template: string;
   params: SnippetParam[];
+  /** For prepend / append on elements: insert as the first / last child instead of before / after. */
+  inside?: boolean;
   css?: string;
   js?: string;
 }

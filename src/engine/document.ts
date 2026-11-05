@@ -153,7 +153,7 @@ function normalizeWhitespace(parent: Root | Element, preserve: boolean) {
 }
 
 export interface SerializeOptions {
-  /** Wrap the content in a complete page with <head>, <title> and the document's styles. */
+  /** Wrap the content in a complete page with <head>, <title>, the document's styles and the snippets' CSS and JS. */
   fullDocument?: boolean;
   /** Replace `asset:<id>` image sources with data URIs. */
   inlineAssets?: boolean;
@@ -178,8 +178,13 @@ export function serialize(doc: CmsDocument, options: SerializeOptions = {}): str
   if (!options.fullDocument) return body;
 
   const title = doc.meta.title ? `<title>${escapeHtml(doc.meta.title)}</title>` : '';
-  const styles = doc.meta.styles.map((css) => `<style>${css}</style>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8">${title}${styles}</head><body>${body}</body></html>`;
+  const assets = doc.meta.snippetAssets ?? [];
+  const css = [...doc.meta.styles, ...assets.flatMap((a) => (a.css ? [`/* ${a.key} */\n${a.css}`] : []))];
+  const styles = css.map((c) => `<style>${c.replace(/<\/style/gi, '<\\/style')}</style>`).join('');
+  const scripts = assets
+    .flatMap((a) => (a.js ? [`<script data-snippet="${escapeHtml(a.key)}">${a.js.replace(/<\/script/gi, '<\\/script')}</script>`] : []))
+    .join('');
+  return `<!doctype html><html><head><meta charset="utf-8">${title}${styles}</head><body>${body}${scripts}</body></html>`;
 }
 
 export function visitElements(node: Nodes, fn: (el: Element, path: number[]) => void, path: number[] = []) {
