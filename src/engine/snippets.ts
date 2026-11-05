@@ -12,6 +12,8 @@ export interface ApplyOptions {
   params?: Record<string, unknown>;
   /** Grow text selections to the whole blocks (paragraphs, list items, ...) they touch. */
   snapToBlock?: boolean;
+  /** Extra data per match, available in the template as `{{match.x}}` (e.g. the status of an anchor). */
+  matchData?: (index: number) => Record<string, unknown>;
 }
 
 export interface ApplyResult {
@@ -34,6 +36,7 @@ const SLOT = `<${SLOT_TAG}></${SLOT_TAG}>`;
  * - `{{index}}` (from 0), `{{number}}` (from 1), `{{count}}`: position among the matches.
  * - `{{part}}`, `{{parts}}`: when a text selection spans several blocks, which piece this is.
  * - `{{params.name}}`: parameter values. `{{jsonPath}}`: the JSON field the content comes from, if any.
+ * - `{{match.x}}`: whatever `options.matchData(index)` returns for this match.
  *
  * JSON field blocks (`data-json-path`) are never removed: wrap goes outside them, replace works inside them,
  * and attributes cannot overwrite `data-json-path`.
@@ -73,6 +76,7 @@ export async function applySnippet(selection: Selection, snippet: Snippet, optio
         part,
         parts: runs.length,
         params,
+        match: options.matchData?.(index) ?? {},
       };
       try {
         applyToRun(ws, run, snippet, context, { hb, render, warn });

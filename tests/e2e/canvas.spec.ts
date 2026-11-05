@@ -18,6 +18,17 @@ async function connect(page: Page, from: string, fromPort: string, to: string, t
 
 async function fitView(page: Page) {
   await page.locator('.react-flow__controls-fitview').click();
+  // The view may animate; wait until it has stopped moving before measuring handles.
+  const viewport = page.locator('.react-flow__viewport');
+  let last = '';
+  await expect
+    .poll(async () => {
+      const now = await viewport.evaluate((el) => (el as HTMLElement).style.transform);
+      const stable = now === last;
+      last = now;
+      return stable;
+    }, { intervals: [100] })
+    .toBe(true);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -50,6 +61,7 @@ test('build the default 4-node graph by hand', async ({ page }) => {
 
   await expect(node(page, 'selector-2')).toContainText('h2 · 2 matches');
   await expect(node(page, 'snippet-3')).toContainText('Callout (wrap) · applied 2×');
+  await node(page, 'output-4').click();
   await expect(preview(page).locator('aside.callout')).toHaveCount(2);
   await expect(preview(page).locator('aside.callout h2').first()).toHaveText('Getting started');
   await page.screenshot({ path: 'test-results/m5-built-by-hand.png' });
@@ -77,14 +89,16 @@ test('edit the HTML example in the inspector and see the preview update', async 
   await node(page, 'selector-2').click();
   await inspector.getByLabel('CSS selector').fill('blockquote, h1');
   await expect(node(page, 'selector-2')).toContainText('2 matches');
-  await expect(preview(page).locator('aside.callout-warning h1')).toHaveText('Field Guide to Node Gardens');
+  // A selected Selector shows its input with the matches highlighted.
+  await expect(preview(page).locator('h1[data-cms-match]')).toHaveText('Field Guide to Node Gardens');
 
   await inspector.getByLabel('Select by').selectOption('heading');
   await inspector.getByLabel('Heading text').fill('Pricing');
   await expect(node(page, 'selector-2')).toContainText('1 match');
-  await expect(preview(page).locator('aside.callout-warning > h2')).toHaveText('Pricing');
   await expect(inspector.getByRole('region', { name: 'Result' })).toContainText('OK');
   await page.screenshot({ path: 'test-results/m5-inspector.png' });
+  await node(page, 'output-4').click();
+  await expect(preview(page).locator('aside.callout-warning > h2')).toHaveText('Pricing');
 });
 
 test('map JSON fields in the inspector', async ({ page }) => {

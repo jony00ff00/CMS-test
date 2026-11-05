@@ -88,3 +88,48 @@ describe('editor store', () => {
     expect(store.getState().results).toBe(before);
   });
 });
+
+describe('saved selections', () => {
+  const anchorFor = async (store: ReturnType<typeof make>, pattern: string) => {
+    const { createAnchor, runSelector } = await import('../../src/engine');
+    const doc = store.getState().results['documentSource-1'].outputs.document as import('../../src/engine').CmsDocument;
+    return createAnchor(doc, runSelector(doc, { mode: 'regex', pattern }).matches[0].match);
+  };
+
+  it('creates a manual selector connected to the document it was made from', async () => {
+    const store = make();
+    store.getState().loadExample('html');
+    await store.getState().whenIdle();
+    const anchor = await anchorFor(store, 'costs nothing');
+    const id = store.getState().createManualSelector({ nodeId: 'documentSource-1', port: 'document' }, anchor);
+    expect(id).toBe('selector-5');
+    const { graph, selectedId } = store.getState();
+    expect(selectedId).toBe(id);
+    expect(graph.nodes.find((n) => n.id === id)?.config).toEqual({ mode: 'manual', anchors: [anchor] });
+    expect(graph.edges.some((e) => e.source === 'documentSource-1' && e.target === id)).toBe(true);
+    await store.getState().whenIdle();
+    expect(store.getState().results[id!].info).toEqual({ matches: 1 });
+  });
+
+  it('places a second new selector below the first one', async () => {
+    const store = make();
+    store.getState().loadExample('html');
+    await store.getState().whenIdle();
+    const a = store.getState().createManualSelector({ nodeId: 'documentSource-1', port: 'document' }, await anchorFor(store, 'costs'))!;
+    const b = store.getState().createManualSelector({ nodeId: 'documentSource-1', port: 'document' }, await anchorFor(store, 'adds'))!;
+    const pos = (id: string) => store.getState().graph.nodes.find((n) => n.id === id)!.position!;
+    expect(pos(b).y).toBeGreaterThan(pos(a).y);
+  });
+
+  it('adds selections to an existing manual selector, or turns a selector into one', async () => {
+    const store = make();
+    store.getState().loadExample('html');
+    await store.getState().whenIdle();
+    const anchor = await anchorFor(store, 'Pricing');
+    store.getState().addAnchor('selector-2', anchor);
+    expect(store.getState().graph.nodes[1].config).toEqual({ mode: 'manual', anchors: [anchor] });
+    const second = await anchorFor(store, 'Getting started');
+    store.getState().addAnchor('selector-2', second);
+    expect((store.getState().graph.nodes[1].config as { anchors: unknown[] }).anchors).toHaveLength(2);
+  });
+});

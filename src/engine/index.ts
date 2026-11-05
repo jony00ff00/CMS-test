@@ -10,6 +10,7 @@ export * from './anchors';
 export * from './selectors';
 export * from './ranges';
 export * from './snippets';
+export * from './preview';
 export * from './hash';
 export * from './graph';
 export * from './nodes';

@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import type { CmsDocument, GraphNode, SelectorConfig, SelectorMode } from '../../engine';
+import type { Anchor, CmsDocument, GraphNode, ResolveStatus, Selection, SelectorConfig, SelectorMode } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CheckboxField, SelectField, TextField } from './fields';
 
@@ -101,28 +101,64 @@ export function SelectorEditor({ node }: { node: GraphNode }) {
           </datalist>
         </>
       )}
-      {config.mode === 'manual' && (
-        <div className="field">
-          <p className="muted">
-            {config.anchors.length
-              ? `${config.anchors.length} saved selection${config.anchors.length === 1 ? '' : 's'}.`
-              : 'No saved selections yet.'}{' '}
-            Selecting text in the preview comes in the next version (M6).
-          </p>
-          {config.anchors.length > 0 && (
-            <ul className="anchors">
-              {config.anchors.map((a) => (
-                <li key={a.id}>
-                  <span>“{a.textQuote?.exact.slice(0, 60)}”</span>
-                  <button type="button" className="link" onClick={() => patch({ anchors: config.anchors.filter((x) => x.id !== a.id) })}>
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      {config.mode === 'manual' && <ManualSelections node={node} config={config} onChange={(anchors) => patch({ anchors })} />}
     </>
   );
 }
+
+const STATUS_TEXT: Record<ResolveStatus, string> = {
+  exact: 'Found',
+  moved: 'Moved',
+  fuzzy: 'Changed a little',
+  failed: 'Needs attention',
+};
+
+function ManualSelections({
+  node,
+  config,
+  onChange,
+}: {
+  node: GraphNode;
+  config: Extract<SelectorConfig, { mode: 'manual' }>;
+  onChange: (anchors: Anchor[]) => void;
+}) {
+  const selection = useEditor((s) => s.results[node.id]?.outputs.selection as Selection | undefined);
+  const statusOf = (a: Anchor) => {
+    const m = selection?.matches.find((x) => x.anchorId === a.id);
+    return m ? { status: m.status ?? 'exact', confidence: m.confidence } : selection ? { status: 'failed' as const } : undefined;
+  };
+  return (
+    <div className="field">
+      <span className="field-label">Saved selections</span>
+      {config.anchors.length === 0 ? (
+        <p className="muted">None yet. Select text in the preview, then choose “Add to {node.id}”.</p>
+      ) : (
+        <ol className="anchors" aria-label="Saved selections">
+          {config.anchors.map((a) => {
+            const st = statusOf(a);
+            return (
+              <li key={a.id}>
+                <span className="anchor-quote" title={a.textQuote?.exact}>
+                  “{shorten(a.textQuote?.exact ?? '')}”
+                  <span className="muted small"> {a.target === 'nodes' ? `whole ${a.structural?.tagName ?? 'block'}` : 'text'}</span>
+                </span>
+                {st && (
+                  <span className={`status-pill status-${st.status === 'failed' ? 'error' : st.status === 'fuzzy' ? 'blocked' : 'ok'}`}>
+                    {STATUS_TEXT[st.status]}
+                    {st.status === 'fuzzy' && st.confidence ? ` ${Math.round(st.confidence * 100)}%` : ''}
+                  </span>
+                )}
+                <button type="button" className="link" aria-label={`Remove “${shorten(a.textQuote?.exact ?? '')}”`} onClick={() => onChange(config.anchors.filter((x) => x.id !== a.id))}>
+                  Remove
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      <p className="hint">Saved selections follow the text when the document changes. Ones marked “Needs attention” were not found.</p>
+    </div>
+  );
+}
+
+const shorten = (s: string) => (s.length > 50 ? `${s.slice(0, 49)}…` : s).replace(/\n/g, ' ');

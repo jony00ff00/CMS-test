@@ -239,7 +239,7 @@ describe('manual selector', () => {
     const sel = runSelector(edited, { mode: 'manual', anchors: [phrase, section] });
     expect(sel.matches).toHaveLength(1);
     expect(sel.matches[0]).toMatchObject({ anchorId: 'section', text: expect.stringMatching(/^Pricing\n/) });
-    expect(sel.warnings).toEqual(['Selection phrase needs attention: "costs nothing" was not found']);
+    expect(sel.warnings).toEqual(['A saved selection needs attention: "costs nothing" was not found']);
   });
 });
 

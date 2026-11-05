@@ -93,8 +93,16 @@ fieldset.params legend { font-size: 0.8rem; font-weight: 600; }
 details.advanced summary { cursor: pointer; font-size: 0.85rem; }
 details.advanced[open] { display: grid; gap: 0.5rem; }
 .inline-form { display: flex; gap: 0.4rem; }
-.anchors { padding-left: 1rem; margin: 0; }
-.anchors li { display: flex; justify-content: space-between; gap: 0.5rem; }
+.anchors { padding-left: 1.2rem; margin: 0; display: grid; gap: 0.35rem; }
+.anchors li { display: grid; grid-template-columns: 1fr auto auto; gap: 0.5rem; align-items: baseline; }
+.anchor-quote { min-width: 0; overflow-wrap: anywhere; }
+.selection-actions {
+  position: fixed; z-index: 20; display: flex; gap: 0.4rem; align-items: center; padding: 0.4rem 0.5rem;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  max-width: 560px;
+}
+.selection-actions .quote { font-size: 0.8rem; color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-tip { margin-left: auto; }
 
 .json-mapping { display: grid; gap: 0.5rem; }
 .json-fields-head { display: flex; gap: 0.75rem; font-size: 0.8rem; font-weight: 600; }

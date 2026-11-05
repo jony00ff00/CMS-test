@@ -37,18 +37,14 @@ export function Canvas() {
     );
   }, [graph.nodes, selectedId]);
 
-  // Fit the view once nodes are measured: after loading an example, and when the first nodes appear.
-  const fitted = useRef({ request: -1, hadNodes: false });
+  // Fit the view once nodes are measured after loading an example (not when nodes are added one by one:
+  // moving the view then would get in the way of dragging).
+  const fitted = useRef(0);
   useEffect(() => {
-    if (!initialized) return;
-    const hasNodes = nodes.length > 0;
-    const firstNodes = hasNodes && !fitted.current.hadNodes;
-    if (fitRequest !== fitted.current.request || firstNodes) {
-      fitted.current.request = fitRequest;
-      void fitView({ padding: 0.15, maxZoom: 1 });
-    }
-    fitted.current.hadNodes = hasNodes;
-  }, [initialized, fitRequest, nodes.length, fitView]);
+    if (!initialized || fitRequest === fitted.current) return;
+    fitted.current = fitRequest;
+    void fitView({ padding: 0.15, maxZoom: 1 });
+  }, [initialized, fitRequest, fitView]);
 
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const edges = useMemo<Edge[]>(

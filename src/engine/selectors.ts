@@ -162,7 +162,7 @@ function selectManual(ix: DocIndex, config: Extract<SelectorConfig, { mode: 'man
   const out: SelectionMatch[] = [];
   for (const r of resolveAnchors(ix, config.anchors, config)) {
     if (!r.match) {
-      warnings.push(`Selection ${r.anchorId} needs attention: ${r.reason}`);
+      warnings.push(`A saved selection needs attention: ${r.reason}`);
       continue;
     }
     out.push({ ...withText(ix, r.match), anchorId: r.anchorId, status: r.status, confidence: r.confidence });

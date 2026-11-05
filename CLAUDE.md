@@ -47,7 +47,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   → `{ document, warnings, applied }`. Modes: wrap, prepend, append (`inside` for first/last child), replace,
   attributes (merges class and style; selected text gets a <span>). Template variables: `{{content}}` (the
   original nodes), `{{text}}`, `{{html}}`, `{{index}}`, `{{number}}`, `{{count}}`, `{{part}}`, `{{parts}}`,
-  `{{params.x}}`, `{{jsonPath}}`. Template output is cleaned like any HTML. CSS/JS go to
+  `{{params.x}}`, `{{jsonPath}}`, `{{match.x}}` (from the `matchData(index)` option). Template output is cleaned like any HTML. CSS/JS go to
   `meta.snippetAssets` once per `id@version`; `serialize(..., { fullDocument: true })` writes them out.
 - `ranges.ts`: `Workspace`, a working copy of the tree. Matches become node references before anything
   changes, and splits are recorded, so overlapping matches stay valid in any order. Text ranges split text
@@ -79,10 +79,23 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `onConnectEnd` shows why a drop on a wrong handle was refused. `CmsNode` renders any node type from its
   definition (ports as handles named after the port).
 - `src/ui/inspector`: one editor per node type (`EDITORS` in `Inspector.tsx`), plus `ResultPanel`.
-- `src/ui/preview`: the selected (or first) Output node's HTML in `<iframe sandbox="allow-scripts">`.
+- `src/ui/preview`: what it shows follows the selected node: a Selector shows its *input* with its matches
+  highlighted (`highlightSelection` in `engine/preview.ts`, attributes mode, `data-cms-match` /
+  `data-cms-status`); a Document Source or Snippet shows its output document; an Output (or nothing selected)
+  shows the first Output's page. Always `<iframe sandbox="allow-scripts">` via `srcdoc`, so the editor cannot
+  read the page: `bridge.ts` is injected and talks over `postMessage` (`source: 'cms-preview'`). It rebuilds
+  the engine's text index from the DOM using `BLOCK_TAGS`, so selections come back as engine text offsets
+  (an e2e test checks the two agree for HTML, .docx and JSON). Elements marked `data-cms-preview` are ignored.
+- Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
+  shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives
+  an element anchor, anything else a text anchor. Highlighting never changes the text, so offsets stay valid.
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
-  call `fitView` first. The Playwright viewport is 1440×900.
+  call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1440×900.
+  `tests/e2e/preview.spec.ts` has `selectInPreview` / `selectElementInPreview` / `previewText`. After an
+  action that changes highlights, wait for the new highlights before selecting again (the page reloads).
+- The canvas fits the view only after loading an example, never while nodes are added (it would move them
+  under the pointer).
 
 ## Commands
 - `npm run dev`: dev server

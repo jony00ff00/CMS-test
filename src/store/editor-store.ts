@@ -3,8 +3,8 @@
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import {
-  connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type EdgeCandidate, type Graph, type GraphNode,
-  type NodeRegistry, type NodeResult, type StoredFile,
+  connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type EdgeCandidate, type Graph,
+  type GraphNode, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile,
 } from '../engine';
 import { sampleHtml, sampleJson } from '../samples';
 
@@ -39,6 +39,10 @@ export interface EditorState {
   /** Add a file and use it in a Document Source node. */
   chooseFile(nodeId: string, name: string, data: StoredFile['data']): void;
   loadExample(kind: 'html' | 'json'): void;
+  /** Add a saved selection to a manual Selector node. */
+  addAnchor(selectorId: string, anchor: Anchor): void;
+  /** Create a manual Selector fed by `from` (a node's document output), holding one saved selection. */
+  createManualSelector(from: { nodeId: string; port: string }, anchor: Anchor): string | undefined;
   clear(): void;
   notify(kind: Notice['kind'], text: string): void;
   dismissNotice(): void;
@@ -198,6 +202,31 @@ export function createEditorStore(options: EditorOptions = {}) {
         selectedId: 'output-4',
         fitRequest: get().fitRequest + 1,
       });
+    },
+
+    addAnchor(selectorId, anchor) {
+      get().updateConfig<SelectorConfig>(selectorId, (c) =>
+        c.mode === 'manual' ? { ...c, anchors: [...c.anchors, anchor] } : { mode: 'manual', anchors: [anchor] },
+      );
+    },
+
+    createManualSelector(from, anchor) {
+      const source = get().graph.nodes.find((n) => n.id === from.nodeId);
+      const base = source?.position ?? { x: 40, y: 120 };
+      // Below the source, moving further down while that spot is taken.
+      let position = { x: base.x + NODE_SPACING, y: base.y + 170 };
+      while (get().graph.nodes.some((n) => n.position && Math.abs(n.position.x - position.x) < 120 && Math.abs(n.position.y - position.y) < 90)) {
+        position = { x: position.x, y: position.y + 140 };
+      }
+      const id = get().addNode('selector', position);
+      get().updateConfig<SelectorConfig>(id, { mode: 'manual', anchors: [anchor] });
+      const error = get().connect({ source: from.nodeId, sourcePort: from.port, target: id, targetPort: 'document' });
+      if (error) {
+        get().removeNodes([id]);
+        return undefined;
+      }
+      get().select(id);
+      return id;
     },
 
     clear() {
