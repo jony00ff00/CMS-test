@@ -1,0 +1,28 @@
+:root {
+  --bg: #f7f7f8;
+  --panel: #ffffff;
+  --border: #e2e2e6;
+  --text: #1c1c22;
+  --muted: #6b6b76;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text);
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); }
+h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 0.75rem; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.app {
+  display: grid;
+  grid-template-columns: 200px 1fr 280px;
+  grid-template-rows: 1fr 220px;
+  grid-template-areas: 'palette canvas inspector' 'preview preview preview';
+  height: 100%;
+}
+.panel, .preview { background: var(--panel); padding: 1rem; overflow: auto; }
+.palette { grid-area: palette; border-right: 1px solid var(--border); }
+.palette ul { list-style: none; padding: 0; margin: 0; }
+.palette li { padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.5rem; font-size: 0.9rem; }
+.canvas { grid-area: canvas; }
+.inspector { grid-area: inspector; border-left: 1px solid var(--border); }
+.preview { grid-area: preview; border-top: 1px solid var(--border); }
