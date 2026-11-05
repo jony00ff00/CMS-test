@@ -33,3 +33,7 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 ## Roadmap
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
+
+## Deployment
+`.github/workflows/pages.yml` runs unit tests, builds with `VITE_BASE=/<repo-name>/`, and deploys `dist/`
+to GitHub Pages on every push to `main`. Local builds keep base `/`.
