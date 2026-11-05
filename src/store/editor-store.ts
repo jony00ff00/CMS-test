@@ -1,5 +1,6 @@
 // Editor state: the graph, the project's files, the selection and the latest results.
 // The graph is evaluated automatically (debounced) whenever the graph or the files change.
+import { temporal } from 'zundo';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import {
@@ -9,6 +10,7 @@ import {
 } from '../engine';
 import { sampleHtml, sampleJson } from '../samples';
 import { seedLibrary } from '../snippets/seed';
+import { parseProject, projectToJson } from './project';
 
 export interface Notice {
   id: number;
@@ -35,6 +37,8 @@ export interface EditorState {
   addNode(type: string, position?: { x: number; y: number }): string;
   removeNodes(ids: string[]): void;
   removeEdges(ids: string[]): void;
+  /** Remove nodes and connections together, as one undo step. */
+  removeElements(nodeIds: string[], edgeIds: string[]): void;
   moveNode(id: string, position: { x: number; y: number }): void;
   /** Replace a node's config, or derive the new config from the old one. */
   updateConfig<C>(id: string, update: C | ((config: C) => C)): void;
@@ -74,12 +78,40 @@ export interface EditorState {
   evaluate(): Promise<void>;
   /** Resolves once no evaluation is scheduled or running (for tests). */
   whenIdle(): Promise<void>;
+
+  /** When the project was last saved in this browser. */
+  savedAt?: Date;
+  /** The project as a project file (JSON). */
+  exportProject(): string;
+  /** Replace the project with one from a project file. Returns the reason when it cannot be opened. */
+  importProject(text: string): string | undefined;
+  undo(): void;
+  redo(): void;
 }
+
+/** The part of localStorage the store uses. */
+export type ProjectStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export interface EditorOptions {
   registry?: NodeRegistry;
   /** Milliseconds to wait after a change before evaluating. Default 150. */
   evaluateDelay?: number;
+  /** Where to autosave the project. Default: localStorage when there is one; null for none. */
+  storage?: ProjectStorage | null;
+  /** Milliseconds to wait after a change before autosaving. Default 600. */
+  autosaveDelay?: number;
+  /** Edits to the same node's settings closer together than this become one undo step (typing). Default 1000. */
+  undoGrouping?: number;
+}
+
+export const STORAGE_KEY = 'node-cms:project';
+
+function defaultStorage(): ProjectStorage | null {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null; // blocked by the browser
+  }
 }
 
 const NODE_SPACING = 280;
@@ -100,7 +132,32 @@ export function createEditorStore(options: EditorOptions = {}) {
     return `${type}-${i}`;
   };
 
-  const store = createStore<EditorState>()((set, get) => ({
+  const storage = options.storage === undefined ? defaultStorage() : options.storage;
+  const grouping = options.undoGrouping ?? 1000;
+  /** Set while one store action changes several things, so they become one undo step. */
+  let batchDepth = 0;
+  /** Set by updateConfig, so typing into one node's settings becomes one undo step. */
+  let groupKey: string | undefined;
+  const batch = <T,>(fn: () => T): T => {
+    const t = store.temporal.getState();
+    if (batchDepth === 0) {
+      const { graph, files, library } = store.getState();
+      store.temporal.setState({ pastStates: [...t.pastStates, { graph, files, library }].slice(-100), futureStates: [] });
+      t.pause();
+    }
+    batchDepth++;
+    try {
+      return fn();
+    } finally {
+      batchDepth--;
+      if (batchDepth === 0) {
+        groupKey = undefined;
+        store.temporal.getState().resume();
+      }
+    }
+  };
+
+  const store = createStore<EditorState>()(temporal((set, get) => ({
     graph: { nodes: [], edges: [] },
     files: {},
     results: {},
@@ -132,6 +189,20 @@ export function createEditorStore(options: EditorOptions = {}) {
       });
     },
 
+    removeElements(nodeIds, edgeIds) {
+      if (nodeIds.length === 0 && edgeIds.length === 0) return;
+      const nodes = new Set(nodeIds);
+      const edges = new Set(edgeIds);
+      const { graph, selectedId } = get();
+      set({
+        graph: {
+          nodes: graph.nodes.filter((n) => !nodes.has(n.id)),
+          edges: graph.edges.filter((e) => !edges.has(e.id) && !nodes.has(e.source) && !nodes.has(e.target)),
+        },
+        selectedId: selectedId && nodes.has(selectedId) ? undefined : selectedId,
+      });
+    },
+
     removeEdges(ids) {
       if (ids.length === 0) return;
       const gone = new Set(ids);
@@ -147,6 +218,7 @@ export function createEditorStore(options: EditorOptions = {}) {
 
     updateConfig(id, update) {
       const { graph } = get();
+      groupKey = `config:${id}`;
       set({
         graph: {
           ...graph,
@@ -243,17 +315,21 @@ export function createEditorStore(options: EditorOptions = {}) {
     saveNodeSnippetToLibrary(nodeId) {
       const node = get().graph.nodes.find((n) => n.id === nodeId);
       if (!node) return undefined;
+      return batch(() => {
       const config = node.config as SnippetNodeConfig;
       const id = config.ref && get().library[config.ref.id] ? config.ref.id : snippetIdFor(get().library, config.snippet.name);
       const saved = get().saveSnippet({ ...config.snippet, id });
       get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({ ...c, snippet: structuredClone(saved), ref: { id, version: saved.version } }));
       return saved;
+      });
     },
 
     addSnippetNode(id, position) {
-      const nodeId = get().addNode('snippet', position);
-      get().useLibrarySnippet(nodeId, id);
-      return nodeId;
+      return batch(() => {
+        const nodeId = get().addNode('snippet', position);
+        get().useLibrarySnippet(nodeId, id);
+        return nodeId;
+      });
     },
 
     addFile(name, data) {
@@ -263,9 +339,11 @@ export function createEditorStore(options: EditorOptions = {}) {
     },
 
     chooseFile(nodeId, name, data) {
-      const file = get().addFile(name, data);
-      // A new file means a new JSON structure, so an old JSON mapping no longer applies.
-      get().updateConfig<Record<string, unknown>>(nodeId, (c) => ({ ...c, fileId: file.id, json: undefined }));
+      batch(() => {
+        const file = get().addFile(name, data);
+        // A new file means a new JSON structure, so an old JSON mapping no longer applies.
+        get().updateConfig<Record<string, unknown>>(nodeId, (c) => ({ ...c, fileId: file.id, json: undefined }));
+      });
     },
 
     loadExample(kind) {
@@ -321,6 +399,7 @@ export function createEditorStore(options: EditorOptions = {}) {
     },
 
     createManualSelector(from, anchor) {
+      return batch(() => {
       const source = get().graph.nodes.find((n) => n.id === from.nodeId);
       const base = source?.position ?? { x: 40, y: 120 };
       // Below the source, moving further down while that spot is taken.
@@ -337,6 +416,7 @@ export function createEditorStore(options: EditorOptions = {}) {
       }
       get().select(id);
       return id;
+      });
     },
 
     clear() {
@@ -375,7 +455,90 @@ export function createEditorStore(options: EditorOptions = {}) {
         else await running;
       }
     },
+    exportProject() {
+      const { graph, files, library } = get();
+      return projectToJson({ graph, files, library });
+    },
+
+    importProject(text) {
+      try {
+        const { project, warnings } = parseProject(text, registry);
+        set({ ...project, selectedId: undefined, openSnippetId: undefined, results: {}, fitRequest: get().fitRequest + 1 });
+        get().notify('info', warnings.length ? `Project opened. ${warnings.join('. ')}.` : 'Project opened.');
+        return undefined;
+      } catch (err) {
+        const message = (err as Error).message;
+        get().notify('error', message);
+        return message;
+      }
+    },
+
+    undo() {
+      store.temporal.getState().undo();
+    },
+
+    redo() {
+      store.temporal.getState().redo();
+    },
+  }), {
+    // Only the project itself is undoable; selection, results and notices are not.
+    partialize: (s) => ({ graph: s.graph, files: s.files, library: s.library }),
+    equality: (a, b) => a.graph === b.graph && a.files === b.files && a.library === b.library,
+    limit: 100,
+    // Typing into one node's settings becomes one undo step; every other change is its own step.
+    // (Actions that change several things at once use batch(), which records one step itself.)
+    handleSet: (handleSet) => {
+      let last = -Infinity;
+      let lastKey: string | undefined;
+      return (...args: Parameters<typeof handleSet>) => {
+        const key = groupKey;
+        groupKey = undefined;
+        const now = Date.now();
+        const sameGroup = key !== undefined && key === lastKey && now - last < grouping;
+        if (!sameGroup) handleSet(...args);
+        last = now;
+        lastKey = key;
+      };
+    },
   }));
+
+  // Open the project saved in this browser, if there is one.
+  const saved = (() => {
+    try {
+      return storage?.getItem(STORAGE_KEY) ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  if (saved) {
+    try {
+      const { project, warnings } = parseProject(saved, registry);
+      store.setState({ ...project, fitRequest: 1 });
+      if (warnings.length) store.getState().notify('info', `Parts of the saved project could not be restored. ${warnings.join('. ')}.`);
+    } catch (err) {
+      store.getState().notify('error', `The saved project could not be opened: ${(err as Error).message}`);
+    }
+    store.temporal.getState().clear();
+    if (store.getState().graph.nodes.length) setTimeout(() => void store.getState().evaluate(), 0);
+  }
+
+  // Autosave.
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let warnedFull = false;
+  store.subscribe((state, prev) => {
+    if (!storage || (state.graph === prev.graph && state.files === prev.files && state.library === prev.library)) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const { graph, files, library } = store.getState();
+      try {
+        storage.setItem(STORAGE_KEY, projectToJson({ graph, files, library }));
+        store.setState({ savedAt: new Date() });
+      } catch {
+        if (!warnedFull) store.getState().notify('error', 'The project is too large to keep in this browser. Use “Save project file” to keep it.');
+        warnedFull = true;
+      }
+    }, options.autosaveDelay ?? 600);
+  });
 
   store.subscribe((state, prev) => {
     if (state.graph === prev.graph && state.files === prev.files) return;

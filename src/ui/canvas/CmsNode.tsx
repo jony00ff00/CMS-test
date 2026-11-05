@@ -28,6 +28,11 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
       </header>
       <div className="cms-node-summary">{summarize(node, result)}</div>
       {libraryStatus?.outdated && <div className="update-pill node-badge">Update available: v{libraryStatus.latest!.version}</div>}
+      {typeof result?.info.needsAttention === 'number' && (
+        <div className="attention-pill node-badge">
+          {result.info.needsAttention} selection{result.info.needsAttention === 1 ? ' needs' : 's need'} attention
+        </div>
+      )}
       {result?.message && status !== 'ok' && <div className="cms-node-message">{result.message}</div>}
       {warnings > 0 && (
         <div className="cms-node-warnings">
@@ -90,6 +95,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       return `${c.snippet.name}${version}${applied}`;
     }
     case 'output':
+      if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
       return typeof info.bytes === 'number' ? `${(info.bytes / 1024).toFixed(1)} kB of HTML` : 'Nothing to show yet';
     default:
       return '';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/store/editor-store';
 
-const make = () => createEditorStore({ evaluateDelay: 1 });
+const make = () => createEditorStore({ evaluateDelay: 1, storage: null, undoGrouping: 0 });
 
 describe('editor store', () => {
   it('adds nodes with unique ids, default configs and positions left to right', () => {

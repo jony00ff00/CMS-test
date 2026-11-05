@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { edgeError, nodeRegistry, type EdgeCandidate } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CmsNode, type CmsFlowNode } from './CmsNode';
+import { ProjectToolbar } from './ProjectToolbar';
 import { DRAG_SNIPPET } from '../library/LibraryPanel';
 import { DRAG_TYPE } from './Palette';
 
@@ -69,18 +70,14 @@ export function Canvas() {
   const onNodesChange = useCallback((changes: NodeChange<CmsFlowNode>[]) => {
     setNodes((ns) => applyNodeChanges(changes, ns));
     const state = editorStore.getState();
-    const removed: string[] = [];
     for (const c of changes) {
       if (c.type === 'position' && c.position && !c.dragging) state.moveNode(c.id, c.position);
-      if (c.type === 'remove') removed.push(c.id);
       if (c.type === 'select' && c.selected) state.select(c.id);
     }
-    state.removeNodes(removed);
+    // Removals are handled in onDelete, all at once.
   }, []);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    const removed = changes.filter((c) => c.type === 'remove').map((c) => c.id);
-    editorStore.getState().removeEdges(removed);
     setSelectedEdges((prev) => {
       const next = new Set(prev);
       for (const c of changes) {
@@ -142,6 +139,7 @@ export function Canvas() {
         onConnectEnd={onConnectEnd}
         isValidConnection={isValidConnection}
         onPaneClick={() => editorStore.getState().select(undefined)}
+        onDelete={({ nodes: n, edges: e }) => editorStore.getState().removeElements(n.map((x) => x.id), e.map((x) => x.id))}
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
         fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
@@ -159,6 +157,9 @@ export function Canvas() {
             </button>
           )}
           {evaluating && <span className="running" role="status">Running…</span>}
+        </Panel>
+        <Panel position="top-right">
+          <ProjectToolbar />
         </Panel>
       </ReactFlow>
       {graph.nodes.length === 0 && (

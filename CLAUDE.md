@@ -71,9 +71,14 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   never change. `refStatus` (outdated / missing), `carryParams` (keep values that still fit), `validateSnippet`,
   `snippetIdFor`. The seed snippets (callout, details, highlight, tooltip, code-block) are content, so they live
   in `src/snippets/seed.ts`, outside the engine (the code block's JS mentions `document`).
+- `json-export.ts`: `exportJson(doc, { assets })` writes a field-mode JSON document back into its file. A field's
+  value is the HTML inside its block plus any wrappers around that block alone (e.g. `<details>`); text fields
+  that are still plain paragraphs go back as text; untouched fields keep their original value exactly (compared
+  with a fresh import). Content outside fields and wrappers around several fields are reported as warnings.
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
   `snippet` (`snippet` = the node's own copy, `ref` = `{ id, version }` when it came from the library,
-  `params`, `snapToBlock`; default is the library's Callout v1), `output` (`fullDocument`, `inlineAssets`).
+  `params`, `snapToBlock`; default is the library's Callout v1), `output` (`format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
+  preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`.
 
 ## UI (so far)
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
@@ -103,6 +108,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - Code fields use CodeMirror through `CodeField` (`fields.tsx`): loaded with `import()` (≈570 kB) and preloaded
   when the app is idle; a text area stands in until then. In e2e, wait for `.cm-content[aria-label=…]` before
   typing, and use `keyboard.insertText`.
+- Persistence (`src/store/project.ts`): project file = `{ format: 'node-cms-project', version: 1, graph, files,
+  library }`; binary files as base64; only files a node uses are saved. `parseProject` drops broken parts
+  (unknown node types, bad connections, unreadable files or snippets) with warnings and refuses newer versions.
+  The store autosaves to localStorage (`STORAGE_KEY`, 600 ms after changes to graph, files or library) and opens
+  it on start; `exportProject` / `importProject` for project files. Tests pass `storage: null`.
+- Undo/redo: zundo `temporal` on the store, tracking only `graph`, `files` and `library`. Edits to the same
+  node's settings within `undoGrouping` (1 s) are one step (`groupKey` set by `updateConfig`); actions that
+  change several things use `batch()` so they are one step; deletes go through `removeElements` (React Flow's
+  `onDelete`) for the same reason. Keyboard: Ctrl/Cmd+Z, Ctrl+Y / Shift+Cmd+Z, ignored inside fields.
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1440×900.
@@ -125,6 +139,8 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 ## Roadmap
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
+All planned milestones are done. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment
 `.github/workflows/pages.yml` runs unit tests, builds with `VITE_BASE=/<repo-name>/`, and deploys `dist/`

@@ -202,5 +202,11 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .param-row { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; display: grid; gap: 0.4rem; }
 .param-row-head { display: flex; justify-content: space-between; }
 .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+.project-toolbar { display: grid; justify-items: end; gap: 0.25rem; }
+.project-toolbar-buttons { display: flex; gap: 0.4rem; align-items: center; }
+.toolbar-gap { width: 0.4rem; }
+.saved-label { font-size: 0.75rem; }
+.attention-pill { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; background: #fee2e2; color: var(--danger); }
+.json-preview { max-height: 16rem; overflow: auto; font-size: 0.75rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-editor { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; font-size: 0.8rem; }
 .code-editor .cm-editor.cm-focused { outline: 2px solid var(--accent-soft); }

@@ -11,6 +11,13 @@ export const selector: NodeDefinition<SelectorConfig> = {
   defaultConfig: () => ({ mode: 'css', selector: 'h2' }),
   async evaluate(inputs, config) {
     const selection = runSelector(inputs.document as CmsDocument, config);
-    return { outputs: { selection }, warnings: selection.warnings, info: { matches: selection.matches.length } };
+    const info: Record<string, number> = { matches: selection.matches.length };
+    if (config.mode === 'manual') {
+      // Saved selections that could not be found in this version of the document.
+      const found = new Set(selection.matches.map((m) => m.anchorId));
+      const missing = config.anchors.filter((a) => !found.has(a.id)).length;
+      if (missing) info.needsAttention = missing;
+    }
+    return { outputs: { selection }, warnings: selection.warnings, info };
   },
 };

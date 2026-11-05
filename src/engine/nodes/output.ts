@@ -1,24 +1,38 @@
 import { serialize } from '../document';
-import type { NodeDefinition } from '../graph';
+import type { NodeDefinition, NodeOutput } from '../graph';
+import { exportJson } from '../json-export';
 import type { CmsDocument } from '../types';
 
 export interface OutputConfig {
+  /** "html" (default): a web page. "json": the JSON source file with the changed fields written back. */
+  format?: 'html' | 'json';
   /** A complete page with title, styles and snippet scripts (default), or just the body content. */
   fullDocument?: boolean;
   /** Put images into the HTML as data URIs (default true), so the page works on its own. */
   inlineAssets?: boolean;
+  /** JSON only: add the snippets' CSS and JS under "$assets". */
+  jsonAssets?: boolean;
 }
 
 export const output: NodeDefinition<OutputConfig> = {
   type: 'output',
   label: 'Output',
-  description: 'Shows the result and exports it as HTML',
+  description: 'Shows the result and exports it as HTML or JSON',
   inputs: [{ name: 'document', type: 'document', label: 'Document' }],
   outputs: [{ name: 'html', type: 'html', label: 'HTML' }],
-  defaultConfig: () => ({ fullDocument: true, inlineAssets: true }),
-  async evaluate(inputs, config) {
+  defaultConfig: () => ({ format: 'html', fullDocument: true, inlineAssets: true }),
+  async evaluate(inputs, config): Promise<NodeOutput> {
     const doc = inputs.document as CmsDocument;
+    // The page is always made: the preview shows it, also when exporting JSON.
     const html = serialize(doc, { fullDocument: config.fullDocument ?? true, inlineAssets: config.inlineAssets ?? true });
+    if (config.format === 'json') {
+      const result = await exportJson(doc, { assets: config.jsonAssets });
+      return {
+        outputs: { html, json: result.json, document: doc },
+        warnings: result.warnings,
+        info: { format: 'json', changed: result.changed.length, bytes: new TextEncoder().encode(result.json).length },
+      };
+    }
     return { outputs: { html, document: doc }, info: { bytes: new TextEncoder().encode(html).length } };
   },
 };

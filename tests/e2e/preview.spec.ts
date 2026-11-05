@@ -164,6 +164,7 @@ test('saved selections follow the text when the file changes', async ({ page }) 
   await expect(saved.getByRole('listitem').nth(2)).toContainText('Needs attention');
   await expect(node(page, 'selector-5')).toContainText('2 matches');
   await expect(node(page, 'selector-5')).toContainText('1 warning');
+  await expect(node(page, 'selector-5')).toContainText('1 selection needs attention');
   await expect(preview(page).locator('[data-cms-status="fuzzy"]')).toHaveText('Plant a sourse node first');
   await page.screenshot({ path: 'test-results/m6-after-edit.png' });
 });

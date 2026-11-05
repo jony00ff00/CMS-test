@@ -3,6 +3,7 @@ export * from './types';
 export * from './document';
 export * from './docx';
 export * from './json';
+export * from './json-export';
 export * from './source';
 export * from './text-match';
 export * from './doc-index';
