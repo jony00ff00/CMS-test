@@ -33,6 +33,19 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Template mode: Handlebars renders the whole file (`{{markdown x}}` and `{{json x}}` helpers), no write-back.
   No mapping means every string field as text. Paths that match nothing or non-strings give warnings, not errors.
 - `source.ts`: `importSource({ name, data }, { json, docx })` picks the importer by file extension.
+- `selectors.ts`: `runSelector(doc, config)` → `Selection` (never throws; problems become `warnings`).
+  Modes: `css` (hast-util-select), `regex` (text ranges, or `scope: 'block'` for the enclosing block),
+  `heading` (heading plus everything up to the next heading of the same or higher level), `jsonField`
+  (JSONPath over `meta.json.data`, selects the mapped blocks), `manual` (stored anchors).
+- Matches are `NodeMatch` (sibling run: `parent` path, `start`..`end` child indexes) or `TextMatch`
+  (text index offsets). `doc-index.ts` holds the shared lookups (`indexDocument`, `rangeOf`, `textOf`, sections).
+- `anchors.ts`: `createAnchor` stores a text quote with context plus structural, CSS, heading and JSON-path
+  strategies. `resolveAnchor` returns `exact` / `moved` / `fuzzy` / `failed` with a confidence and a reason.
+  Identical text always wins over similar text. Default `minConfidence` 0.75. Index once and pass the
+  `DocIndex` when resolving many anchors.
+- `text-match.ts`: bounded Levenshtein, Dice, and `fuzzyFind` (closest substring, Sellers' algorithm).
+- `hast-util-select`'s `:scope` gives wrong results on our root; generated CSS paths avoid it.
+- Never read the end of a string built with `+=` in a loop (it copies the string each time); collect parts and join.
 - Large libraries (mammoth, Handlebars, the Markdown parser) are loaded with `import()` only when needed.
   Keep it that way; the main bundle should stay near 430 kB.
 

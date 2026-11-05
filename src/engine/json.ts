@@ -254,27 +254,21 @@ async function mapFields(data: unknown, fields: JsonFieldMapping[], options: Jso
   const children: RootContent[] = [];
   const resolved: { path: string; segments: JsonPathSegment[]; format: JsonFieldFormat }[] = [];
   const seen = new Set<string>();
-  const segmentsOf = indexContainers(data);
 
   for (const field of fields) {
-    let matches: { value: unknown; parent: unknown; parentProperty: string | number }[];
-    try {
-      matches = (JSONPath({ path: field.path, json: data as object, resultType: 'all', eval: 'safe', wrap: true }) ?? []) as typeof matches;
-    } catch (err) {
-      warnings.push(`${field.path}: invalid JSONPath (${(err as Error).message})`);
+    const query = queryJsonPaths(data, field.path);
+    if ('error' in query) {
+      warnings.push(`${field.path}: ${query.error}`);
       continue;
     }
-    if (matches.length === 0) warnings.push(`${field.path}: matched nothing`);
+    if (query.matches.length === 0) warnings.push(`${field.path}: matched nothing`);
 
-    for (const match of matches) {
-      if (match.parent == null) {
+    for (const match of query.matches) {
+      if (match.segments.length === 0) {
         warnings.push(`${field.path}: the whole file cannot be a field`);
         continue;
       }
-      const parentSegments = segmentsOf.get(match.parent as object) ?? [];
-      const key = Array.isArray(match.parent) ? Number(match.parentProperty) : String(match.parentProperty);
-      const segments = [...parentSegments, key];
-      const path = formatJsonPath(segments);
+      const { segments, path } = match;
 
       let value = match.value;
       if (typeof value === 'number' || typeof value === 'boolean') value = String(value);
@@ -312,6 +306,31 @@ async function mapFields(data: unknown, fields: JsonFieldMapping[], options: Jso
       json: { data: undefined, mapping: { mode: 'fields', fields }, fields: resolved },
     },
     assets: {},
+  };
+}
+
+export interface JsonPathMatch {
+  path: string;
+  segments: JsonPathSegment[];
+  value: unknown;
+}
+
+/** Run a JSONPath query and return each match with its exact, normalized path. */
+export function queryJsonPaths(data: unknown, path: string): { matches: JsonPathMatch[] } | { error: string } {
+  let raw: { value: unknown; parent: unknown; parentProperty: string | number }[];
+  try {
+    raw = (JSONPath({ path, json: data as object, resultType: 'all', eval: 'safe', wrap: true }) ?? []) as typeof raw;
+  } catch (err) {
+    return { error: `invalid JSONPath (${(err as Error).message})` };
+  }
+  const segmentsOf = indexContainers(data);
+  return {
+    matches: raw.map((m) => {
+      if (m.parent == null) return { path: '$', segments: [], value: m.value };
+      const key = Array.isArray(m.parent) ? Number(m.parentProperty) : String(m.parentProperty);
+      const segments = [...(segmentsOf.get(m.parent as object) ?? []), key];
+      return { path: formatJsonPath(segments), segments, value: m.value };
+    }),
   };
 }
 

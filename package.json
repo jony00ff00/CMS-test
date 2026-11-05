@@ -17,6 +17,7 @@
   "dependencies": {
     "@xyflow/react": "^12.12.1",
     "handlebars": "^4.7.10",
+    "hast-util-select": "^6.0.4",
     "hast-util-to-string": "^3.0.1",
     "jsonpath-plus": "^11.2.1",
     "mammoth": "^1.13.0",

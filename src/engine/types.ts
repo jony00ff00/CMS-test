@@ -67,21 +67,64 @@ export interface TextQuote {
   suffix: string;
 }
 
-/** A pointer to part of a document, stored with several strategies so it survives edits (see M2). */
-export interface Anchor {
-  id: string;
-  structural?: { path: number[] };
-  css?: string;
-  textQuote?: TextQuote;
-  textPosition?: { start: number; end: number };
-  semantic?: { headingText: string; scope: 'section' | 'block' };
-  jsonPath?: { path: string; textQuote?: TextQuote };
+/** A run of sibling nodes: children `start` (inclusive) to `end` (exclusive) of the node at path `parent`. */
+export interface NodeMatch {
+  kind: 'nodes';
+  parent: number[];
+  start: number;
+  end: number;
 }
 
+/** A range of the document's text index (see buildTextIndex). May cross element boundaries. */
+export interface TextMatch {
+  kind: 'text';
+  start: number;
+  end: number;
+}
+
+export type Match = NodeMatch | TextMatch;
+
+/**
+ * How an anchor was found again: `exact` (same place, same text), `moved` (same text elsewhere),
+ * `fuzzy` (text changed a little), `failed` (not found with enough confidence: needs attention).
+ */
+export type ResolveStatus = 'exact' | 'moved' | 'fuzzy' | 'failed';
+
+/**
+ * A stored pointer to part of a document. It keeps several strategies so it can be found again
+ * after the document changes (see anchors.ts).
+ */
+export interface Anchor {
+  id: string;
+  target: 'nodes' | 'text';
+  /** Child-index position (fast, but breaks when content is inserted above). */
+  structural?: { parent: number[]; start: number; end: number; tagName: string };
+  /** CSS path to the first node. `depth` is set when the path does not start from an id. */
+  css?: { selector: string; depth?: number };
+  textQuote?: TextQuote;
+  textPosition?: { start: number; end: number };
+  /** Set when the anchor is a heading or a whole heading section. */
+  semantic?: { headingText: string; level: number; scope: 'section' | 'block' };
+  /** Set when the anchor is a JSON field block, or text inside one. */
+  jsonPath?: { path: string };
+}
+
+export interface SelectionMatch {
+  match: Match;
+  /** The matched text, as it appears in the text index. */
+  text: string;
+  /** For anchored (manual) selections. */
+  anchorId?: string;
+  status?: ResolveStatus;
+  confidence?: number;
+}
+
+/** Output of a Selector node: a document and the parts of it that were picked. */
 export interface Selection {
   kind: 'selection';
   document: CmsDocument;
-  anchors: Anchor[];
+  matches: SelectionMatch[];
+  warnings: string[];
 }
 
 export type SnippetMode = 'wrap' | 'prepend' | 'append' | 'replace' | 'attributes';

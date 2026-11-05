@@ -219,22 +219,30 @@ export interface TextIndex {
 }
 
 export function buildTextIndex(tree: Root): TextIndex {
-  let text = '';
+  // Collect pieces and join once: reading the end of a string built with += copies it every time.
+  const parts: string[] = [];
+  let length = 0;
+  let lastChar = '';
   const segments: TextSegment[] = [];
+  const add = (s: string) => {
+    parts.push(s);
+    length += s.length;
+    lastChar = s[s.length - 1];
+  };
   const breakLine = () => {
-    if (text.length > 0 && !text.endsWith('\n')) text += '\n';
+    if (length > 0 && lastChar !== '\n') add('\n');
   };
 
   const walk = (node: Nodes, path: number[]) => {
     if (node.type === 'text') {
       if (node.value === '') return;
-      segments.push({ start: text.length, end: text.length + node.value.length, path, node });
-      text += node.value;
+      segments.push({ start: length, end: length + node.value.length, path, node });
+      add(node.value);
       return;
     }
     if (!isElement(node) && node.type !== 'root') return;
     if (isElement(node) && node.tagName === 'br') {
-      text += '\n';
+      add('\n');
       return;
     }
     const block = isBlock(node);
@@ -244,7 +252,7 @@ export function buildTextIndex(tree: Root): TextIndex {
   };
 
   walk(tree, []);
-  return { text: text.replace(/\n+$/, ''), segments };
+  return { text: parts.join('').replace(/\n+$/, ''), segments };
 }
 
 export interface TextLocation {
