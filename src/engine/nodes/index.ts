@@ -1,3 +1,18 @@
-// Node type registry. Each node type lives in its own file in this folder
-// and is registered here (filled in from M4).
-export const nodeRegistry: Record<string, unknown> = {};
+// Node type registry. Each node type lives in its own file in this folder and is registered here.
+import type { NodeRegistry } from '../graph';
+import { documentSource } from './document-source';
+import { output } from './output';
+import { selector } from './selector';
+import { snippet } from './snippet';
+
+export const nodeRegistry: NodeRegistry = {
+  [documentSource.type]: documentSource,
+  [selector.type]: selector,
+  [snippet.type]: snippet,
+  [output.type]: output,
+};
+
+export { documentSource, output, selector, snippet };
+export { DEFAULT_SNIPPET, type SnippetNodeConfig } from './snippet';
+export type { DocumentSourceConfig } from './document-source';
+export type { OutputConfig } from './output';

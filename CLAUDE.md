@@ -57,7 +57,18 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `hast-util-select`'s `:scope` gives wrong results on our root; generated CSS paths avoid it.
 - Never read the end of a string built with `+=` in a loop (it copies the string each time); collect parts and join.
 - Large libraries (mammoth, Handlebars, the Markdown parser) are loaded with `import()` only when needed.
-  Keep it that way; the main bundle should stay near 430 kB.
+  Keep it that way. The main chunk is about 720 kB (engine + React + React Flow); the build warns above 800 kB.
+- `graph.ts`: `Graph` (`nodes`, `edges` with `sourcePort` / `targetPort`), `NodeDefinition` (typed `inputs` /
+  `outputs`, `defaultConfig`, `evaluate`, optional `dependencies` for things outside the config such as a
+  file's hash). `edgeError` / `connect` reject unknown ports, mismatched port types (`document`, `selection`,
+  `html`), a second connection into one input, self-loops and loops. `topologicalSort`, `downstreamOf`,
+  `validateGraph` (for loaded files). `GraphEvaluator.evaluate(graph, { files })` → per-node `NodeResult`
+  (`ok` / `waiting` / `error` / `blocked`, outputs, warnings, info, `cached`) and `ran`. A node's cache key
+  hashes its type, config, dependencies and the keys of its inputs, so a change re-runs only that node and
+  the nodes after it. Only `ok` results are cached (LRU, default 200). Files live in a store
+  (`storeFile(name, data)` adds a content hash); Document Source nodes refer to them by `fileId`.
+- `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
+  `snippet` (`snippet`, `params`, `snapToBlock`; default is a Callout), `output` (`fullDocument`, `inlineAssets`).
 
 ## Commands
 - `npm run dev`: dev server
