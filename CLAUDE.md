@@ -19,6 +19,14 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `@playwright/test` is pinned to 1.63.0 to match the Chromium preinstalled in the cloud environment.
   Do not run `playwright install` or upgrade it without checking that.
 
+## Engine API (so far)
+- `types.ts`: `CmsDocument` (hast `tree` of body content, `meta`, `assets`), `Anchor`, `Selection`, `Snippet`.
+- `document.ts`: `parseHtml` (drops scripts, event handlers, `javascript:` URLs and comments; collects `<style>`;
+  collapses whitespace like a browser), `serialize` (`fullDocument`, `inlineAssets`), `buildTextIndex`
+  (visible text, blocks separated by `\n`, each segment mapped to its text node and path), `locate`, `nodeAtPath`.
+- `docx.ts`: `importDocx` via mammoth, loaded on demand to keep the main bundle small. Images become assets
+  referenced as `asset:<id>`. Custom `styleMap` rules take precedence over the defaults.
+
 ## Commands
 - `npm run dev`: dev server
 - `npm test`: unit tests (must pass before every commit)

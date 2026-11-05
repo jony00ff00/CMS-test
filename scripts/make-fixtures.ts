@@ -4,8 +4,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  Document, HeadingLevel, LevelFormat, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType,
+  Document, HeadingLevel, ImageRun, LevelFormat, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx';
+
+// A 2x2 red PNG, small enough to inline.
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGP4z8DAwMDAwMDAAAAMAAH0nkv8AAAAAElFTkSuQmCC';
 
 const outDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'tests', 'fixtures');
 
@@ -16,6 +20,7 @@ const content = {
     { heading: 'Getting started', body: 'Plant a source node first. Then connect a selector to it.' },
     { heading: 'Pricing', body: 'The basic plan costs nothing. The pro plan adds snippets.' },
   ],
+  quote: 'Every node does one job well.',
   steps: ['Upload a document', 'Select some text', 'Apply a snippet'],
   table: [
     ['Node', 'Input', 'Output'],
@@ -36,6 +41,8 @@ function html(): string {
   <h1>${content.title}</h1>
   <p>${content.intro.replace('well-structured', '<strong>well-structured</strong>').replace('grow best', '<em>grow best</em>')}</p>
 ${sections}
+  <blockquote><p>${content.quote}</p></blockquote>
+  <p><img src="data:image/png;base64,${PNG_BASE64}" alt="Logo"></p>
   <ol>
 ${steps}
   </ol>
@@ -56,6 +63,9 @@ async function docx(): Promise<Buffer> {
   const cell = (text: string, bold = false) =>
     new TableCell({ children: [new Paragraph({ children: [new TextRun({ text, bold })] })] });
   const doc = new Document({
+    styles: {
+      paragraphStyles: [{ id: 'Quote', name: 'Quote', basedOn: 'Normal', run: { italics: true } }],
+    },
     numbering: {
       config: [{ reference: 'steps', levels: [{ level: 0, format: LevelFormat.DECIMAL, text: '%1.' }] }],
     },
@@ -75,6 +85,15 @@ async function docx(): Promise<Buffer> {
           new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_2 }),
           new Paragraph({ text: s.body }),
         ]),
+        new Paragraph({ text: content.quote, style: 'Quote' }),
+        new Paragraph({
+          children: [new ImageRun({
+            type: 'png',
+            data: Buffer.from(PNG_BASE64, 'base64'),
+            transformation: { width: 32, height: 32 },
+            altText: { name: 'Logo', title: 'Logo', description: 'Logo' },
+          })],
+        }),
         ...content.steps.map((s) => new Paragraph({ text: s, numbering: { reference: 'steps', level: 0 } })),
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },

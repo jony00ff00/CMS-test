@@ -21,7 +21,8 @@ describe('engine', () => {
   it('stays pure: no React, no DOM APIs, no .tsx files', () => {
     const banned = [/from ['"]react/, /from ['"]@xyflow/, /\bdocument\./, /\bwindow\./];
     for (const file of sourceFiles(engineDir)) {
-      const src = readFileSync(file, 'utf8');
+      // Ignore comments, so prose such as "the document." does not count.
+      const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
       for (const pattern of banned) expect(src, `${file} matches ${pattern}`).not.toMatch(pattern);
     }
     expect(readdirSync(engineDir, { recursive: true }).some((f) => String(f).endsWith('.tsx'))).toBe(false);
