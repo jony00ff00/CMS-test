@@ -11,7 +11,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 800,
   },
   test: {
-    include: ['tests/engine/**/*.test.ts'],
+    include: ['tests/engine/**/*.test.ts', 'tests/store/**/*.test.ts'],
     environment: 'node',
   },
 });

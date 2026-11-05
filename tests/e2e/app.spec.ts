@@ -9,8 +9,7 @@ test('app shell loads with all panels', async ({ page }) => {
   await expect(page.getByRole('complementary', { name: 'Inspector' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Preview' })).toBeVisible();
   for (const name of ['Document Source', 'Selector', 'Snippet', 'Output']) {
-    await expect(page.getByText(name, { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
   }
-  await page.screenshot({ path: 'test-results/m0-shell.png' });
   expect(errors).toEqual([]);
 });

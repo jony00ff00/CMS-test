@@ -70,6 +70,20 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
   `snippet` (`snippet`, `params`, `snapToBlock`; default is a Callout), `output` (`fullDocument`, `inlineAssets`).
 
+## UI (so far)
+- `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
+  app). Holds `graph`, `files`, `selectedId`, `results`, `notice`. Changes to the graph or files re-evaluate
+  after 150 ms; position-only changes do not. Stale evaluations are dropped. `whenIdle()` for tests.
+- `src/ui/canvas`: React Flow canvas. Nodes live in local state (React Flow stores measured sizes on them) and
+  are synced from the store; positions go back on drag end. `isValidConnection` uses `edgeError`;
+  `onConnectEnd` shows why a drop on a wrong handle was refused. `CmsNode` renders any node type from its
+  definition (ports as handles named after the port).
+- `src/ui/inspector`: one editor per node type (`EDITORS` in `Inspector.tsx`), plus `ResultPanel`.
+- `src/ui/preview`: the selected (or first) Output node's HTML in `<iframe sandbox="allow-scripts">`.
+- `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`.
+- e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
+  call `fitView` first. The Playwright viewport is 1440×900.
+
 ## Commands
 - `npm run dev`: dev server
 - `npm test`: unit tests (must pass before every commit)
