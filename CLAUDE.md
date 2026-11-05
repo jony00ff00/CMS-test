@@ -67,8 +67,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   hashes its type, config, dependencies and the keys of its inputs, so a change re-runs only that node and
   the nodes after it. Only `ok` results are cached (LRU, default 200). Files live in a store
   (`storeFile(name, data)` adds a content hash); Document Source nodes refer to them by `fileId`.
+- `library.ts`: `SnippetLibrary` (id → versions, oldest first). `addVersion` numbers versions; saved versions
+  never change. `refStatus` (outdated / missing), `carryParams` (keep values that still fit), `validateSnippet`,
+  `snippetIdFor`. The seed snippets (callout, details, highlight, tooltip, code-block) are content, so they live
+  in `src/snippets/seed.ts`, outside the engine (the code block's JS mentions `document`).
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
-  `snippet` (`snippet`, `params`, `snapToBlock`; default is a Callout), `output` (`fullDocument`, `inlineAssets`).
+  `snippet` (`snippet` = the node's own copy, `ref` = `{ id, version }` when it came from the library,
+  `params`, `snapToBlock`; default is the library's Callout v1), `output` (`fullDocument`, `inlineAssets`).
 
 ## UI (so far)
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
@@ -89,6 +94,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
   shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives
   an element anchor, anything else a text anchor. Highlighting never changes the text, so offsets stay valid.
+- Snippet library UI: `src/ui/library` (`LibraryPanel` under the palette: click opens, drag onto the canvas adds a
+  node; `LibraryEditor` in the inspector when `openSnippetId` is set: edits a draft, "Save as version N+1",
+  "Used by" with update buttons, a "Try it" preview). Store actions: `saveSnippet`, `createSnippet`,
+  `duplicateSnippet`, `deleteSnippet`, `useLibrarySnippet`, `updateNodeSnippet`, `detachSnippet`
+  (gives the copy its own id so its CSS is not merged with the library version's), `saveNodeSnippetToLibrary`,
+  `addSnippetNode`. Nodes show "Update available: vN" when the library has a newer version.
+- Code fields use CodeMirror through `CodeField` (`fields.tsx`): loaded with `import()` (≈570 kB) and preloaded
+  when the app is idle; a text area stands in until then. In e2e, wait for `.cm-content[aria-label=…]` before
+  typing, and use `keyboard.insertText`.
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1440×900.

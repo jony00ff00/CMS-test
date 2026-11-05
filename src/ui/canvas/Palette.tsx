@@ -1,5 +1,6 @@
 import { nodeRegistry } from '../../engine';
 import { useEditor } from '../../store/editor-store';
+import { LibraryPanel } from '../library/LibraryPanel';
 
 export const DRAG_TYPE = 'application/x-cms-node';
 
@@ -29,6 +30,7 @@ export function Palette() {
           </li>
         ))}
       </ul>
+      <LibraryPanel />
     </aside>
   );
 }

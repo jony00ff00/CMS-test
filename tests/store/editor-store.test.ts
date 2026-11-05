@@ -133,3 +133,67 @@ describe('saved selections', () => {
     expect((store.getState().graph.nodes[1].config as { anchors: unknown[] }).anchors).toHaveLength(2);
   });
 });
+
+describe('snippet library in the store', () => {
+  type Cfg = import('../../src/engine').SnippetNodeConfig;
+  const cfg = (store: ReturnType<typeof make>, id: string) => store.getState().graph.nodes.find((n) => n.id === id)!.config as Cfg;
+
+  it('starts with the seed snippets, and new Snippet nodes use the Callout from it', () => {
+    const store = make();
+    expect(Object.keys(store.getState().library)).toEqual(['callout', 'details', 'highlight', 'tooltip', 'code-block']);
+    const id = store.getState().addNode('snippet');
+    expect(cfg(store, id).ref).toEqual({ id: 'callout', version: 1 });
+  });
+
+  it('links a node to a library snippet and updates it to newer versions', async () => {
+    const store = make();
+    store.getState().loadExample('html');
+    store.getState().useLibrarySnippet('snippet-3', 'details');
+    store.getState().updateConfig<Cfg>('snippet-3', (c) => ({ ...c, params: { summary: 'Read' } }));
+    expect(cfg(store, 'snippet-3').ref).toEqual({ id: 'details', version: 1 });
+
+    const v1 = store.getState().library.details[0];
+    const v2 = store.getState().saveSnippet({ ...v1, template: '<details><summary>{{params.summary}}!</summary>{{content}}</details>' });
+    expect(v2.version).toBe(2);
+    // The node keeps version 1 until it is updated.
+    expect(cfg(store, 'snippet-3').snippet.version).toBe(1);
+    store.getState().updateNodeSnippet('snippet-3');
+    expect(cfg(store, 'snippet-3')).toMatchObject({ ref: { id: 'details', version: 2 }, params: { summary: 'Read' } });
+    await store.getState().whenIdle();
+    expect(store.getState().results['output-4'].outputs.html).toContain('<details><summary>Read!</summary><h2>Pricing</h2></details>');
+  });
+
+  it('detaches a node into its own copy, and saves a custom snippet to the library', () => {
+    const store = make();
+    const id = store.getState().addNode('snippet');
+    store.getState().detachSnippet(id);
+    expect(cfg(store, id).ref).toBeUndefined();
+    expect(cfg(store, id).snippet.id).toBe(`callout-${id}`);
+
+    store.getState().updateConfig<Cfg>(id, (c) => ({ ...c, snippet: { ...c.snippet, name: 'Warning box' } }));
+    const saved = store.getState().saveNodeSnippetToLibrary(id)!;
+    expect(saved).toMatchObject({ id: 'warning-box', version: 1 });
+    expect(cfg(store, id).ref).toEqual({ id: 'warning-box', version: 1 });
+    expect(store.getState().library['warning-box']).toHaveLength(1);
+  });
+
+  it('creates, duplicates, opens and deletes library snippets', () => {
+    const store = make();
+    const created = store.getState().createSnippet();
+    expect(store.getState().openSnippetId).toBe(created);
+    const copy = store.getState().duplicateSnippet('tooltip')!;
+    expect(store.getState().library[copy][0]).toMatchObject({ name: 'Tooltip copy', version: 1 });
+    store.getState().deleteSnippet(copy);
+    expect(store.getState().library[copy]).toBeUndefined();
+    expect(store.getState().openSnippetId).toBeUndefined();
+    store.getState().openSnippet('callout');
+    store.getState().select('x');
+    expect(store.getState().openSnippetId).toBeUndefined();
+  });
+
+  it('adds a Snippet node from the library', () => {
+    const store = make();
+    const id = store.getState().addSnippetNode('highlight');
+    expect(cfg(store, id)).toMatchObject({ ref: { id: 'highlight', version: 1 }, snippet: { name: 'Highlight' } });
+  });
+});

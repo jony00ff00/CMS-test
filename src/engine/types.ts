@@ -158,6 +158,8 @@ export interface Snippet {
   kind: 'snippet';
   id: string;
   name: string;
+  /** One line shown in the library. */
+  description?: string;
   version: number;
   mode: SnippetMode;
   /** Handlebars template. See applySnippet for the variables it can use. */

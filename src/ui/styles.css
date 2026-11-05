@@ -174,3 +174,33 @@ details.advanced[open] { display: grid; gap: 0.5rem; }
 .react-flow__edge .react-flow__edge-path { stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3.5; }
 .minimap { width: 140px; height: 90px; }
+
+/* Snippet library */
+.library { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.library-title { display: flex; justify-content: space-between; align-items: center; }
+.library-title h2 { margin: 0; }
+.small-button { padding: 0.1rem 0.5rem; font-size: 0.8rem; }
+.library ul { list-style: none; padding: 0; margin: 0.6rem 0 0.4rem; }
+.library li { margin-bottom: 0.35rem; }
+.library-item { width: 100%; text-align: left; display: flex; justify-content: space-between; gap: 0.4rem; padding: 0.35rem 0.6rem; }
+.library-item.is-open { border-color: var(--accent); background: var(--accent-soft); }
+.library-name { font-weight: 600; font-size: 0.85rem; }
+.library-head { display: flex; gap: 0.6rem; align-items: center; }
+.version-pill { font-size: 0.75rem; font-weight: 600; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.update-pill { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; background: #ede9fe; color: #6d28d9; margin-left: 0.4rem; }
+.node-badge { margin: 0.3rem 0.6rem 0; }
+.update-banner { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-radius: 6px; background: #f5f3ff; border: 1px solid #ddd6fe; }
+.button-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.warn-text { color: var(--warn); }
+.errors { margin: 0; padding-left: 1.1rem; color: var(--danger); font-size: 0.8rem; }
+.library-usage ul { margin: 0.25rem 0 0.5rem; padding-left: 1.1rem; }
+.try-it { display: grid; gap: 0.5rem; }
+.try-it h4 { margin: 0; }
+.try-it iframe { width: 100%; height: 110px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.params-schema { gap: 0.75rem; }
+.param-row { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; display: grid; gap: 0.4rem; }
+.param-row-head { display: flex; justify-content: space-between; }
+.param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+.code-editor { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; font-size: 0.8rem; }
+.code-editor .cm-editor.cm-focused { outline: 2px solid var(--accent-soft); }

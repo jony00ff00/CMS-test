@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { edgeError, nodeRegistry, type EdgeCandidate } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CmsNode, type CmsFlowNode } from './CmsNode';
+import { DRAG_SNIPPET } from '../library/LibraryPanel';
 import { DRAG_TYPE } from './Palette';
 
 const nodeTypes = { cms: CmsNode };
@@ -118,10 +119,13 @@ export function Canvas() {
   const onDrop = useCallback(
     (e: DragEvent) => {
       const type = e.dataTransfer.getData(DRAG_TYPE);
-      if (!type) return;
+      const snippetId = e.dataTransfer.getData(DRAG_SNIPPET);
+      if (!type && !snippetId) return;
       e.preventDefault();
       const p = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      editorStore.getState().addNode(type, { x: p.x - 110, y: p.y - 30 });
+      const at = { x: p.x - 110, y: p.y - 30 };
+      if (snippetId) editorStore.getState().addSnippetNode(snippetId, at);
+      else editorStore.getState().addNode(type, at);
     },
     [screenToFlowPosition],
   );

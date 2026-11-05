@@ -60,7 +60,7 @@ test('build the default 4-node graph by hand', async ({ page }) => {
   await expect(page.locator('.react-flow__edge')).toHaveCount(3);
 
   await expect(node(page, 'selector-2')).toContainText('h2 · 2 matches');
-  await expect(node(page, 'snippet-3')).toContainText('Callout (wrap) · applied 2×');
+  await expect(node(page, 'snippet-3')).toContainText('Callout v1 · applied 2×');
   await node(page, 'output-4').click();
   await expect(preview(page).locator('aside.callout')).toHaveCount(2);
   await expect(preview(page).locator('aside.callout h2').first()).toHaveText('Getting started');

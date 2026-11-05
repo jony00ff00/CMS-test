@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo } from 'react';
-import { nodeRegistry, type GraphNode, type NodeResult, type SelectorConfig, type SnippetNodeConfig } from '../../engine';
+import { nodeRegistry, refStatus, type GraphNode, type NodeResult, type SelectorConfig, type SnippetNodeConfig } from '../../engine';
 import { useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -10,7 +10,9 @@ const STATUS_LABEL: Record<string, string> = { ok: 'OK', waiting: 'Waiting', err
 function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
   const node = useEditor((s) => s.graph.nodes.find((n) => n.id === id));
   const result = useEditor((s) => s.results[id]);
+  const library = useEditor((s) => s.library);
   if (!node) return null;
+  const libraryStatus = node.type === 'snippet' ? refStatus(library, (node.config as SnippetNodeConfig).ref) : undefined;
   const def = nodeRegistry[node.type];
   const status = result?.status ?? 'waiting';
   const warnings = result?.warnings.length ?? 0;
@@ -25,6 +27,7 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
         </span>
       </header>
       <div className="cms-node-summary">{summarize(node, result)}</div>
+      {libraryStatus?.outdated && <div className="update-pill node-badge">Update available: v{libraryStatus.latest!.version}</div>}
       {result?.message && status !== 'ok' && <div className="cms-node-message">{result.message}</div>}
       {warnings > 0 && (
         <div className="cms-node-warnings">
@@ -83,7 +86,8 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     case 'snippet': {
       const c = node.config as SnippetNodeConfig;
       const applied = typeof info.applied === 'number' ? ` · applied ${info.applied}×` : '';
-      return `${c.snippet.name} (${c.snippet.mode})${applied}`;
+      const version = c.ref ? ` v${c.ref.version}` : ' (custom)';
+      return `${c.snippet.name}${version}${applied}`;
     }
     case 'output':
       return typeof info.bytes === 'number' ? `${(info.bytes / 1024).toFixed(1)} kB of HTML` : 'Nothing to show yet';

@@ -1,5 +1,6 @@
 import { nodeRegistry } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
+import { LibraryEditor } from '../library/LibraryEditor';
 import { OutputEditor } from './OutputEditor';
 import { ResultPanel } from './ResultPanel';
 import { SelectorEditor } from './SelectorEditor';
@@ -16,6 +17,24 @@ const EDITORS = {
 export function Inspector() {
   const node = useEditor((s) => s.graph.nodes.find((n) => n.id === s.selectedId));
   const result = useEditor((s) => (s.selectedId ? s.results[s.selectedId] : undefined));
+  const openSnippetId = useEditor((s) => s.openSnippetId);
+
+  if (openSnippetId) {
+    return (
+      <aside className="panel inspector" aria-label="Inspector">
+        <div className="inspector-head">
+          <h2>Snippet library</h2>
+          <span className="muted small">{openSnippetId}</span>
+          <button type="button" className="ghost" onClick={() => editorStore.getState().openSnippet(undefined)}>
+            Close
+          </button>
+        </div>
+        <div className="inspector-body" key={openSnippetId}>
+          <LibraryEditor id={openSnippetId} />
+        </div>
+      </aside>
+    );
+  }
 
   if (!node) {
     return (

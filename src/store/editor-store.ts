@@ -4,9 +4,11 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import {
   connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type EdgeCandidate, type Graph,
-  type GraphNode, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile,
+  type GraphNode, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
+  latestVersion, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
 } from '../engine';
 import { sampleHtml, sampleJson } from '../samples';
+import { seedLibrary } from '../snippets/seed';
 
 export interface Notice {
   id: number;
@@ -25,6 +27,10 @@ export interface EditorState {
   notice?: Notice;
   /** Increases when the canvas should fit all nodes into view (after loading an example). */
   fitRequest: number;
+  /** Reusable snippets, each with its versions. */
+  library: SnippetLibrary;
+  /** The library snippet open in the inspector (instead of the selected node). */
+  openSnippetId?: string;
 
   addNode(type: string, position?: { x: number; y: number }): string;
   removeNodes(ids: string[]): void;
@@ -35,6 +41,24 @@ export interface EditorState {
   /** Add a connection. Returns the reason when it is not allowed (and shows it). */
   connect(edge: EdgeCandidate): string | undefined;
   select(id?: string): void;
+
+  openSnippet(id?: string): void;
+  /** Save a snippet as the next version of its id. Returns the saved version. */
+  saveSnippet(snippet: Snippet): Snippet;
+  /** A new, simple snippet in the library, opened for editing. */
+  createSnippet(): string;
+  duplicateSnippet(id: string): string | undefined;
+  deleteSnippet(id: string): void;
+  /** Make a Snippet node use a library snippet (the latest version unless one is given). */
+  useLibrarySnippet(nodeId: string, id: string, version?: number): void;
+  /** Move a Snippet node to the latest version of its library snippet, keeping parameter values that still fit. */
+  updateNodeSnippet(nodeId: string): void;
+  /** Turn a Snippet node's library snippet into its own copy that can be edited in the node. */
+  detachSnippet(nodeId: string): void;
+  /** Save a Snippet node's own snippet into the library (as a new snippet, or a new version of its linked one). */
+  saveNodeSnippetToLibrary(nodeId: string): Snippet | undefined;
+  /** Add a Snippet node that uses a library snippet. */
+  addSnippetNode(id: string, position?: { x: number; y: number }): string;
   addFile(name: string, data: StoredFile['data']): StoredFile;
   /** Add a file and use it in a Document Source node. */
   chooseFile(nodeId: string, name: string, data: StoredFile['data']): void;
@@ -82,6 +106,7 @@ export function createEditorStore(options: EditorOptions = {}) {
     results: {},
     evaluating: false,
     fitRequest: 0,
+    library: seedLibrary(),
 
     addNode(type, position) {
       const def = registry[type];
@@ -143,7 +168,92 @@ export function createEditorStore(options: EditorOptions = {}) {
     },
 
     select(id) {
-      if (get().selectedId !== id) set({ selectedId: id });
+      if (get().selectedId !== id || get().openSnippetId) set({ selectedId: id, openSnippetId: undefined });
+    },
+
+    openSnippet(id) {
+      set({ openSnippetId: id });
+    },
+
+    saveSnippet(snippet) {
+      const { library, snippet: saved } = addVersion(get().library, snippet);
+      set({ library });
+      return saved;
+    },
+
+    createSnippet() {
+      const id = snippetIdFor(get().library, 'New snippet');
+      get().saveSnippet({
+        kind: 'snippet',
+        id,
+        name: 'New snippet',
+        description: '',
+        version: 0,
+        mode: 'wrap',
+        template: '<div class="box">{{content}}</div>',
+        params: [],
+        css: '.box{border:1px solid #ccc;padding:1rem}',
+      });
+      set({ openSnippetId: id });
+      return id;
+    },
+
+    duplicateSnippet(id) {
+      const source = latestVersion(get().library, id);
+      if (!source) return undefined;
+      const name = `${source.name} copy`;
+      const copyId = snippetIdFor(get().library, name);
+      get().saveSnippet({ ...structuredClone(source), id: copyId, name, version: 0 });
+      set({ openSnippetId: copyId });
+      return copyId;
+    },
+
+    deleteSnippet(id) {
+      // Nodes keep their own copy, so they keep working; they just show that the library entry is gone.
+      set({ library: removeSnippet(get().library, id), openSnippetId: get().openSnippetId === id ? undefined : get().openSnippetId });
+    },
+
+    useLibrarySnippet(nodeId, id, version) {
+      const versions = get().library[id];
+      const snippet = version === undefined ? versions?.[versions.length - 1] : versions?.find((v) => v.version === version);
+      if (!snippet) return;
+      get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({
+        ...c,
+        snippet: structuredClone(snippet),
+        ref: { id, version: snippet.version },
+        params: c.ref?.id === id ? carryParams(c.params, snippet.params) : undefined,
+      }));
+    },
+
+    updateNodeSnippet(nodeId) {
+      const node = get().graph.nodes.find((n) => n.id === nodeId);
+      const ref = (node?.config as SnippetNodeConfig | undefined)?.ref;
+      if (ref) get().useLibrarySnippet(nodeId, ref.id);
+    },
+
+    detachSnippet(nodeId) {
+      get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({
+        ...c,
+        ref: undefined,
+        // Its own id, so its CSS is never mixed up with the library version's.
+        snippet: { ...c.snippet, id: `${c.snippet.id}-${nodeId}`, name: c.snippet.name },
+      }));
+    },
+
+    saveNodeSnippetToLibrary(nodeId) {
+      const node = get().graph.nodes.find((n) => n.id === nodeId);
+      if (!node) return undefined;
+      const config = node.config as SnippetNodeConfig;
+      const id = config.ref && get().library[config.ref.id] ? config.ref.id : snippetIdFor(get().library, config.snippet.name);
+      const saved = get().saveSnippet({ ...config.snippet, id });
+      get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({ ...c, snippet: structuredClone(saved), ref: { id, version: saved.version } }));
+      return saved;
+    },
+
+    addSnippetNode(id, position) {
+      const nodeId = get().addNode('snippet', position);
+      get().useLibrarySnippet(nodeId, id);
+      return nodeId;
     },
 
     addFile(name, data) {
