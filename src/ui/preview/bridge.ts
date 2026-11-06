@@ -19,6 +19,14 @@ export type BridgeMessage =
       rect: { x: number; y: number; width: number; height: number };
     }
   | { source: typeof BRIDGE_SOURCE; type: 'selection-cleared' }
+  | {
+      source: typeof BRIDGE_SOURCE;
+      type: 'caret';
+      /** Where the cursor is after a click, as an engine text offset. */
+      offset: number;
+      /** The click, relative to the preview's viewport. */
+      rect: { x: number; y: number; width: number; height: number };
+    }
   | { source: typeof BRIDGE_SOURCE; type: 'text'; text: string };
 
 /** Runs inside the iframe. Must not use anything from outside its own body. */
@@ -106,6 +114,17 @@ function bridge(blockTags: string[], source: string) {
     hadSelection = true;
     post({ type: 'selection', start, end, text: ix.text.slice(start, end), rect: { x: r.x, y: r.y, width: r.width, height: r.height } });
   };
+  // A click that leaves a cursor (no selected text): report where the cursor is.
+  document.addEventListener('pointerup', (e) => {
+    setTimeout(() => {
+      const sel = getSelection();
+      if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      const ix = buildIndex();
+      const offset = offsetOf(ix, range.startContainer, range.startOffset, 'start');
+      post({ type: 'caret', offset, rect: { x: e.clientX, y: e.clientY, width: 0, height: 0 } });
+    }, 0);
+  });
   document.addEventListener('selectionchange', () => {
     clearTimeout(timer);
     timer = window.setTimeout(report, 120);
@@ -116,8 +135,8 @@ function bridge(blockTags: string[], source: string) {
     if (e.data.type === 'get-text') post({ type: 'text', text: buildIndex().text });
     if (e.data.type === 'clear-selection') getSelection()?.removeAllRanges();
   });
-  // Show the first highlighted match, which may be further down the page.
-  document.querySelector('[data-cms-match]')?.scrollIntoView({ block: 'center' });
+  // Show the first highlighted match or insertion marker, which may be further down the page.
+  document.querySelector('[data-cms-match], .cms-insert-marker, .cms-insert-caret')?.scrollIntoView({ block: 'center' });
   post({ type: 'ready' });
 }
 

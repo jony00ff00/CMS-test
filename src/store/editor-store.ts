@@ -67,6 +67,8 @@ export interface EditorState {
   /** Add a file and use it in a Document Source node. */
   chooseFile(nodeId: string, name: string, data: StoredFile['data']): void;
   loadExample(kind: 'html' | 'json'): void;
+  /** Add an image or video file and use it in an Insert node. */
+  chooseMediaFile(nodeId: string, name: string, data: Uint8Array): void;
   /** Add a saved selection to a manual Selector node. */
   addAnchor(selectorId: string, anchor: Anchor): void;
   /** Create a manual Selector fed by `from` (a node's document output), holding one saved selection. */
@@ -344,6 +346,19 @@ export function createEditorStore(options: EditorOptions = {}) {
         // A new file means a new JSON structure, so an old JSON mapping no longer applies.
         get().updateConfig<Record<string, unknown>>(nodeId, (c) => ({ ...c, fileId: file.id, json: undefined }));
       });
+    },
+
+    chooseMediaFile(nodeId, name, data) {
+      batch(() => {
+        const file = get().addFile(name, data);
+        get().updateConfig<{ content: Record<string, unknown> }>(nodeId, (c) => ({ ...c, content: { ...c.content, fileId: file.id } }));
+      });
+      if (data.byteLength > 2 * 1024 * 1024) {
+        get().notify(
+          'info',
+          `${name} is ${(data.byteLength / 1024 / 1024).toFixed(1)} MB. Large files make the project big and may not fit in this browser's storage; a linked image or video keeps it small.`,
+        );
+      }
     },
 
     loadExample(kind) {

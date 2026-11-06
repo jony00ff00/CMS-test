@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo } from 'react';
-import { nodeRegistry, refStatus, type GraphNode, type NodeResult, type SelectorConfig, type SnippetNodeConfig } from '../../engine';
+import { describeInsertion, nodeRegistry, refStatus, type GraphNode, type InsertNodeConfig, type NodeResult, type SelectorConfig, type SnippetNodeConfig } from '../../engine';
 import { useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -93,6 +93,11 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       const applied = typeof info.applied === 'number' ? ` · applied ${info.applied}×` : '';
       const version = c.ref ? ` v${c.ref.version}` : ' (custom)';
       return `${c.snippet.name}${version}${applied}`;
+    }
+    case 'insert': {
+      const c = node.config as InsertNodeConfig;
+      const where = c.where.mode === 'selector' ? `${c.where.place} each match` : c.where.point ? 'at a picked point' : 'no point yet';
+      return `${describeInsertion(c.content)} · ${where}`;
     }
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;

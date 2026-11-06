@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  createAnchor, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, indexDocument, rangeOf, serialize, type CmsDocument,
-  type Match, type Selection, type SelectorConfig,
+  buildInsertion, caretTarget, createAnchor, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, indexDocument, INSERT_MARKER_CSS,
+  insertionPointAt, markInsertionPoint, rangeOf, serialize, type CmsDocument, type InsertNodeConfig, type InsertWhere, type Match,
+  type Selection, type SelectorConfig,
 } from '../../engine';
 import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
 import { BRIDGE_SOURCE, withBridge, type BridgeMessage } from './bridge';
@@ -22,6 +23,10 @@ interface PreviewSource {
   html?: string;
   /** The selected manual Selector that text can be added to. */
   manualSelectorId?: string;
+  /** The selected Insert node: show where it inserts, and let a click pick the point. */
+  insert?: { nodeId: string; where: InsertWhere; block: boolean };
+  /** The selected node is an Insert node (both views). */
+  insertNodeId?: string;
   message?: string;
 }
 
@@ -32,8 +37,29 @@ function inputOf(s: EditorState, nodeId: string, port: string) {
   return { doc, from: { nodeId: edge.source, port: edge.sourcePort } };
 }
 
-function previewSource(s: EditorState): PreviewSource {
+function previewSource(s: EditorState, showResult: boolean): PreviewSource {
   const selected = s.graph.nodes.find((n) => n.id === s.selectedId);
+  if (selected?.type === 'insert') {
+    const config = selected.config as InsertNodeConfig;
+    if (showResult) {
+      const result = s.results[selected.id];
+      const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
+      return { label: `Result of ${selected.id}`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, message: result?.message ?? 'Waiting…' };
+    }
+    const input = inputOf(s, selected.id, 'document');
+    const built = buildInsertion(config.content, s.files);
+    // Until the content is complete, guess from its kind whether it is block content.
+    const block = 'nodes' in built ? built.block : config.content.kind === 'video' || config.content.kind === 'videoUrl' || config.content.kind === 'code';
+    const placed = config.where.mode === 'selector' || !!config.where.point;
+    return {
+      label: `Input of ${selected.id} · ${placed ? 'the marker shows where the insertion goes; click to move it' : 'click where the insertion should go'}`,
+      doc: input?.doc,
+      from: input?.from,
+      insert: { nodeId: selected.id, where: config.where, block },
+      insertNodeId: selected.id,
+      message: !input ? 'Connect a document to this Insert node.' : input.doc ? undefined : 'Waiting…',
+    };
+  }
   if (selected?.type === 'selector') {
     const input = inputOf(s, selected.id, 'document');
     const result = s.results[selected.id];
@@ -83,7 +109,13 @@ export interface PreviewProps {
 
 export function Preview({ height, onHeightChange, onDetachedChange }: PreviewProps) {
   const s = useEditor((state) => state);
-  const source = useMemo(() => previewSource(s), [s]);
+  const [showResult, setShowResult] = useState(false);
+  useEffect(() => setShowResult(false), [s.selectedId]);
+  const source = useMemo(() => previewSource(s, showResult), [s, showResult]);
+  // The message listener lives longer than one render: it reads the current source from here.
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
+  const [caret, setCaret] = useState<{ offset: number; rect: TextSelection['rect']; name: string }>();
   const iframe = useRef<HTMLIFrameElement>(null);
   const [page, setPage] = useState<string>();
   const [picked, setPicked] = useState<TextSelection>();
@@ -126,9 +158,14 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
   useEffect(() => {
     let cancelled = false;
     setPicked(undefined);
+    setCaret(undefined);
     (async () => {
       if (source.html) return withBridge(source.html);
       if (!source.doc) return undefined;
+      if (source.insert) {
+        const marked = await markInsertionPoint(source.doc, source.insert.where, source.insert.block);
+        return withBridge(serialize(marked, { fullDocument: true, inlineAssets: true }), HIGHLIGHT_CSS + INSERT_MARKER_CSS);
+      }
       const doc = source.selection && source.selection.document === source.doc ? await highlightSelection(source.selection) : source.doc;
       return withBridge(serialize(doc, { fullDocument: true, inlineAssets: true }), HIGHLIGHT_CSS);
     })()
@@ -137,7 +174,7 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
     return () => {
       cancelled = true;
     };
-  }, [source.html, source.doc, source.selection]);
+  }, [source.html, source.doc, source.selection, source.insert?.where, source.insert?.block]);
 
   // Messages from the preview page.
   useEffect(() => {
@@ -145,8 +182,16 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
       if (e.source !== iframe.current?.contentWindow) return;
       const msg = e.data as BridgeMessage;
       if (msg?.source !== BRIDGE_SOURCE) return;
-      if (msg.type === 'selection') setPicked({ start: msg.start, end: msg.end, text: msg.text, rect: msg.rect });
+      if (msg.type === 'selection') {
+        setCaret(undefined);
+        setPicked({ start: msg.start, end: msg.end, text: msg.text, rect: msg.rect });
+      }
       if (msg.type === 'selection-cleared') setPicked(undefined);
+      if (msg.type === 'caret') {
+        const current = sourceRef.current;
+        const target = current.insert && current.doc ? caretTarget(current.doc, msg.offset) : undefined;
+        setCaret(target ? { offset: msg.offset, rect: msg.rect, name: target.name } : undefined);
+      }
     };
     // Messages arrive at the window the iframe is in: this one, or the preview window.
     host.addEventListener('message', onMessage);
@@ -156,6 +201,15 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
   const dismiss = () => {
     setPicked(undefined);
     iframe.current?.contentWindow?.postMessage({ source: BRIDGE_SOURCE, type: 'clear-selection' }, '*');
+  };
+
+  /** Put the selected Insert node's insertion here. */
+  const placeInsertion = (choice: 'cursor' | 'before' | 'after') => {
+    if (!caret || !source.insert || !source.doc) return;
+    const point = insertionPointAt(source.doc, caret.offset, choice);
+    setCaret(undefined);
+    if (!point) return;
+    editorStore.getState().updateConfig<InsertNodeConfig>(source.insert.nodeId, (c) => ({ ...c, where: { mode: 'point', point } }));
   };
 
   const save = (target: 'new' | 'existing') => {
@@ -211,9 +265,47 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
             </button>
           </div>
         )}
+        {caret && source.insert && frameBox && (
+          <div
+            className="selection-actions insert-actions"
+            role="dialog"
+            aria-label="Insert here"
+            style={{
+              left: clamp(frameBox.left + caret.rect.x, frameBox.left + 8, Math.min(frameBox.right, win.innerWidth) - 420),
+              top: clamp(frameBox.top + caret.rect.y + 12, frameBox.top + 8, Math.min(frameBox.bottom, win.innerHeight) - 48),
+            }}
+          >
+            <span className="quote">Insert</span>
+            {!source.insert.block && (
+              <button type="button" onClick={() => placeInsertion('cursor')}>
+                At the cursor
+              </button>
+            )}
+            <button type="button" onClick={() => placeInsertion('before')}>
+              Before this {caret.name}
+            </button>
+            <button type="button" onClick={() => placeInsertion('after')}>
+              After this {caret.name}
+            </button>
+            <button type="button" className="ghost" aria-label="Cancel" onClick={() => setCaret(undefined)}>
+              ✕
+            </button>
+          </div>
+        )}
       </>
     );
   };
+
+  const insertToggle = source.insertNodeId && (
+    <span className="segmented" role="group" aria-label="Show">
+      <button type="button" aria-pressed={!showResult} onClick={() => setShowResult(false)}>
+        Where it goes
+      </button>
+      <button type="button" aria-pressed={showResult} onClick={() => setShowResult(true)}>
+        Result
+      </button>
+    </span>
+  );
 
   return (
     <section className={`preview${popup ? ' is-detached' : ''}`} aria-label="Preview">
@@ -221,7 +313,8 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
       <div className="preview-head">
         <h2>Preview</h2>
         <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
-        {!popup && page && source.doc && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+        {!popup && page && source.doc && !source.insertNodeId && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+        {!popup && insertToggle}
         {popup ? (
           <span className="preview-actions">
             <button type="button" onClick={() => popup.win.focus()}>
@@ -245,7 +338,8 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
               <div className="preview-head">
                 <h2>Preview</h2>
                 <span className="muted small">{label}</span>
-                {page && source.doc && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+                {page && source.doc && !source.insertNodeId && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+                {insertToggle}
                 <span className="preview-actions">
                   <button type="button" onClick={attach}>
                     Back into the editor

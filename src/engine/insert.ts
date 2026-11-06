@@ -1,0 +1,442 @@
+// Insert new content (code, images, videos) into a document, at a picked point or at every match of a selector.
+import type { Element, ElementContent, Nodes } from 'hast';
+import { createAnchor, resolveAnchor } from './anchors';
+import { enclosingBlock, indexDocument, rangeOf } from './doc-index';
+import { BLOCK_TAGS, parseHtml } from './document';
+import type { StoredFile } from './graph';
+import { runSelector, type SelectorConfig } from './selectors';
+import { applySnippet } from './snippets';
+import type { Anchor, Asset, CmsDocument, Match, Selection, Snippet } from './types';
+
+export type InsertContent =
+  | { kind: 'code'; code: string; language?: string; /** "block": shown as code. "html": added to the page as HTML. */ render: 'block' | 'html' }
+  | { kind: 'image'; fileId?: string; alt: string; caption?: string; width?: number; href?: string }
+  | { kind: 'video'; fileId?: string; caption?: string; width?: number; autoplay?: boolean; loop?: boolean; muted?: boolean }
+  | { kind: 'imageUrl'; url: string; alt: string; caption?: string; width?: number; href?: string }
+  | { kind: 'videoUrl'; url: string; caption?: string; width?: number };
+
+export type InsertKind = InsertContent['kind'];
+
+/** before / after: next to the target. start / end: inside it, as its first / last content. */
+export type InsertPlace = 'before' | 'after' | 'start' | 'end';
+
+export interface InsertionPoint {
+  /** A block (paragraph, heading, ...) or a short piece of text next to the cursor. */
+  anchor: Anchor;
+  place: InsertPlace;
+}
+
+export type InsertWhere =
+  | { mode: 'point'; point?: InsertionPoint }
+  | { mode: 'selector'; selector: SelectorConfig; place: InsertPlace };
+
+export interface InsertResult {
+  document: CmsDocument;
+  warnings: string[];
+  inserted: number;
+  /** The picked point could not be found in this version of the document. */
+  needsAttention: boolean;
+  /** Set when nothing can be inserted yet (no content, no point). */
+  waiting?: string;
+}
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml',
+};
+const VIDEO_TYPES: Record<string, string> = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg', ogg: 'video/ogg', mov: 'video/quicktime' };
+
+export const IMAGE_EXTENSIONS = Object.keys(IMAGE_TYPES).map((e) => `.${e}`);
+export const VIDEO_EXTENSIONS = Object.keys(VIDEO_TYPES).map((e) => `.${e}`);
+
+export function mediaType(fileName: string): { kind: 'image' | 'video'; contentType: string } | undefined {
+  const ext = /\.([^.]+)$/.exec(fileName.toLowerCase())?.[1] ?? '';
+  if (IMAGE_TYPES[ext]) return { kind: 'image', contentType: IMAGE_TYPES[ext] };
+  if (VIDEO_TYPES[ext]) return { kind: 'video', contentType: VIDEO_TYPES[ext] };
+  return undefined;
+}
+
+const INSERT_CSS =
+  '.cms-figure{margin:1rem 0}.cms-figure figcaption{font-size:.9em;color:#555;margin-top:.35rem}' +
+  '.cms-figure img,.cms-figure video,img.cms-insert,video.cms-insert{max-width:100%;height:auto}' +
+  'pre.cms-insert-code{background:#0f172a;color:#e2e8f0;padding:1rem;border-radius:6px;overflow:auto;font-size:.9rem}' +
+  '.cms-embed{position:relative;max-width:100%;aspect-ratio:16/9}.cms-embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}';
+
+const el = (tagName: string, properties: Element['properties'], children: ElementContent[] = []): Element => ({
+  type: 'element',
+  tagName,
+  properties,
+  children,
+});
+const text = (value: string): ElementContent => ({ type: 'text', value });
+
+interface Built {
+  nodes: ElementContent[];
+  assets: Asset[];
+  /** Block content cannot go inside a paragraph. */
+  block: boolean;
+  warnings: string[];
+}
+
+/** The elements to insert. Returns a reason instead when the content is not complete yet. */
+export function buildInsertion(content: InsertContent, files: Record<string, StoredFile>): Built | { waiting: string } | { error: string } {
+  const warnings: string[] = [];
+  const figure = (media: Element, caption?: string): { node: Element; block: boolean } =>
+    caption?.trim()
+      ? { node: el('figure', { className: ['cms-figure'] }, [media, el('figcaption', {}, [text(caption.trim())])]), block: true }
+      : { node: media, block: false };
+  const width = (w?: number) => (w && w > 0 ? { width: Math.round(w) } : {});
+
+  switch (content.kind) {
+    case 'code': {
+      if (!content.code.trim()) return { waiting: 'Write the code to insert' };
+      if (content.render === 'html') {
+        const parsed = parseHtml(content.code);
+        warnings.push(...parsed.meta.warnings);
+        const nodes = parsed.tree.children as ElementContent[];
+        if (nodes.length === 0) return { error: 'The HTML is empty once scripts and the like are removed' };
+        return { nodes, assets: [], block: nodes.some((n) => n.type === 'element' && BLOCK_TAGS.has(n.tagName)), warnings };
+      }
+      const code = el('code', content.language ? { className: [`language-${content.language}`] } : {}, [text(content.code)]);
+      return {
+        nodes: [el('pre', { className: ['cms-insert-code'], ...(content.language ? { dataLanguage: content.language } : {}) }, [code])],
+        assets: [],
+        block: true,
+        warnings,
+      };
+    }
+    case 'image':
+    case 'video': {
+      if (!content.fileId) return { waiting: `Choose ${content.kind === 'image' ? 'an image' : 'a video'} file` };
+      const file = files[content.fileId];
+      if (!file) return { waiting: 'The chosen file is no longer in the project; choose it again' };
+      const type = mediaType(file.name);
+      if (!type || type.kind !== content.kind) {
+        return { error: `${file.name} is not ${content.kind === 'image' ? 'an image' : 'a video'} (${(content.kind === 'image' ? IMAGE_EXTENSIONS : VIDEO_EXTENSIONS).join(', ')})` };
+      }
+      const asset: Asset = { id: `insert-${file.hash}`, contentType: type.contentType, base64: toBase64(file.data) };
+      if (content.kind === 'image') {
+        let media: Element = el('img', { src: `asset:${asset.id}`, alt: content.alt, className: ['cms-insert'], ...width(content.width) });
+        if (content.href?.trim()) media = linked(media, content.href, warnings);
+        const f = figure(media, content.caption);
+        if (!content.alt.trim()) warnings.push('The image has no alternative text');
+        return { nodes: [f.node], assets: [asset], block: f.block, warnings };
+      }
+      const video = el('video', {
+        src: `asset:${asset.id}`,
+        controls: true,
+        playsInline: true,
+        className: ['cms-insert'],
+        ...(content.autoplay ? { autoPlay: true, muted: true } : {}),
+        ...(content.muted ? { muted: true } : {}),
+        ...(content.loop ? { loop: true } : {}),
+        ...width(content.width),
+      });
+      return { nodes: [figure(video, content.caption).node], assets: [asset], block: true, warnings };
+    }
+    case 'imageUrl': {
+      const url = checkUrl(content.url);
+      if ('waiting' in url || 'error' in url) return url;
+      let media: Element = el('img', { src: url.href, alt: content.alt, className: ['cms-insert'], loading: 'lazy', ...width(content.width) });
+      if (content.href?.trim()) media = linked(media, content.href, warnings);
+      if (!content.alt.trim()) warnings.push('The image has no alternative text');
+      const f = figure(media, content.caption);
+      return { nodes: [f.node], assets: [], block: f.block, warnings };
+    }
+    case 'videoUrl': {
+      const url = checkUrl(content.url);
+      if ('waiting' in url || 'error' in url) return url;
+      const embed = embedUrl(url.href);
+      const media = embed
+        ? el('div', { className: ['cms-embed'], ...(content.width ? { style: `width:${Math.round(content.width)}px` } : {}) }, [
+            el('iframe', {
+              src: embed,
+              title: content.caption?.trim() || 'Video',
+              allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+              allowFullScreen: true,
+              loading: 'lazy',
+              referrerPolicy: 'strict-origin-when-cross-origin',
+            }),
+          ])
+        : el('video', { src: url.href, controls: true, playsInline: true, className: ['cms-insert'], preload: 'metadata', ...width(content.width) });
+      if (embed) warnings.push('YouTube and Vimeo videos may not play in the preview (it is sandboxed); they do play in the exported page');
+      return { nodes: [figure(media, content.caption).node], assets: [], block: true, warnings };
+    }
+    default:
+      return { error: `Unknown kind of insertion "${(content as { kind: string }).kind}"` };
+  }
+}
+
+function linked(media: Element, href: string, warnings: string[]): Element {
+  const url = checkUrl(href);
+  if ('href' in url) return el('a', { href: url.href }, [media]);
+  warnings.push(`The link "${href}" is not a web address, so the image is not linked`);
+  return media;
+}
+
+/** Only http(s) addresses; anything else (javascript:, data:, file:) is refused. */
+export function checkUrl(input: string): { href: string } | { waiting: string } | { error: string } {
+  const value = input.trim();
+  if (!value) return { waiting: 'Enter the address of the image or video' };
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`);
+  } catch {
+    return { error: `"${value}" is not a web address` };
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return { error: 'Only http and https addresses can be used' };
+  return { href: url.href };
+}
+
+/** The embed address for YouTube and Vimeo links, or undefined for anything else. */
+export function embedUrl(href: string): string | undefined {
+  const url = new URL(href);
+  const host = url.hostname.replace(/^(www\.|m\.)/, '');
+  let id: string | null | undefined;
+  if (host === 'youtu.be') id = url.pathname.slice(1).split('/')[0];
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    id = url.searchParams.get('v') ?? /^\/(?:embed|shorts|live)\/([^/?#]+)/.exec(url.pathname)?.[1];
+  }
+  if (id && /^[\w-]{6,}$/.test(id)) return `https://www.youtube-nocookie.com/embed/${id}`;
+  if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+    const vimeo = /\/(?:video\/)?(\d+)/.exec(url.pathname)?.[1];
+    if (vimeo) return `https://player.vimeo.com/video/${vimeo}`;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Placement
+
+const PLACEHOLDER = 'cms-insert';
+
+const placeSnippet = (place: InsertPlace): Snippet => ({
+  kind: 'snippet',
+  id: 'cms-insert',
+  name: 'Insert',
+  version: 1,
+  mode: place === 'before' || place === 'start' ? 'prepend' : 'append',
+  inside: place === 'start' || place === 'end',
+  template: `<${PLACEHOLDER} data-i="{{index}}"></${PLACEHOLDER}>`,
+  params: [],
+});
+
+/** Elements that may only hold inline content: block insertions go next to them instead of inside. */
+const PHRASING_BLOCKS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'summary', 'caption', 'figcaption']);
+
+interface Targets {
+  matches: Match[];
+  place: InsertPlace;
+  warnings: string[];
+  needsAttention: boolean;
+  waiting?: string;
+}
+
+/** Where the insertion goes, worked out against this version of the document. */
+export function insertionTargets(doc: CmsDocument, where: InsertWhere, block: boolean): Targets {
+  const ix = indexDocument(doc);
+  const warnings: string[] = [];
+  let matches: Match[];
+  let place: InsertPlace;
+  let needsAttention = false;
+
+  if (where.mode === 'point') {
+    if (!where.point) return { matches: [], place: 'after', warnings, needsAttention, waiting: 'Click in the preview where the insertion should go' };
+    const r = resolveAnchor(ix, where.point.anchor);
+    if (!r.match) {
+      return { matches: [], place: 'after', warnings: [`The insertion point needs attention: ${r.reason}`], needsAttention: true };
+    }
+    if (r.status === 'fuzzy') warnings.push('The text at the insertion point changed a little; check that it is still in the right place');
+    matches = [r.match];
+    place = where.point.place;
+  } else {
+    const selection = runSelector(doc, where.selector);
+    warnings.push(...selection.warnings);
+    matches = selection.matches.map((m) => m.match);
+    place = where.place;
+  }
+
+  // Text matches: start / end mean before / after the text.
+  if (place === 'start' || place === 'end') {
+    if (matches.some((m) => m.kind === 'text')) place = place === 'start' ? 'before' : 'after';
+  }
+  if (block) {
+    // A video or code block cannot sit inside a paragraph: put it next to the paragraph.
+    let moved = false;
+    matches = matches.map((m) => {
+      if (m.kind !== 'text') return m;
+      moved = true;
+      return enclosingBlock(ix, place === 'before' ? m.start : Math.max(m.start, m.end - 1)) ?? m;
+    });
+    if (place === 'start' || place === 'end') {
+      const inline = matches.some((m) => {
+        if (m.kind !== 'nodes' || m.end - m.start !== 1) return false;
+        const node = nodeAt(doc, m);
+        return node?.type === 'element' && PHRASING_BLOCKS.has(node.tagName);
+      });
+      if (inline) {
+        place = place === 'start' ? 'before' : 'after';
+        moved = true;
+      }
+    }
+    if (moved) warnings.push(`This content cannot go inside a paragraph, so it goes ${place === 'before' ? 'before' : 'after'} it`);
+    // Several text matches in one paragraph now point at the same paragraph: insert once.
+    const seen = new Set<string>();
+    matches = matches.filter((m) => {
+      const k = JSON.stringify(m);
+      return seen.has(k) ? false : (seen.add(k), true);
+    });
+  }
+  if (matches.length === 0 && where.mode === 'selector' && !warnings.length) warnings.push('The selector matched nothing, so nothing was inserted');
+  return { matches, place, warnings, needsAttention };
+}
+
+function nodeAt(doc: CmsDocument, m: Extract<Match, { kind: 'nodes' }>): Nodes | undefined {
+  let node: Nodes = doc.tree;
+  for (const i of m.parent) {
+    if (!('children' in node)) return undefined;
+    node = node.children[i];
+  }
+  return 'children' in node ? node.children[m.start] : undefined;
+}
+
+/** Put `nodesFor(i)` at each target. Never changes `doc`. */
+async function place(doc: CmsDocument, targets: Targets, nodesFor: (i: number) => ElementContent[]) {
+  const selection: Selection = { kind: 'selection', document: doc, matches: targets.matches.map((match) => ({ match, text: '' })), warnings: [] };
+  const result = await applySnippet(selection, placeSnippet(targets.place));
+  const replace = (children: ElementContent[]): ElementContent[] =>
+    children.flatMap((c) => {
+      if (c.type !== 'element') return [c];
+      if (c.tagName === PLACEHOLDER) return nodesFor(Number(c.properties.dataI ?? 0));
+      c.children = replace(c.children);
+      return [c];
+    });
+  result.document.tree.children = replace(result.document.tree.children as ElementContent[]) as typeof result.document.tree.children;
+  return { document: result.document, warnings: result.warnings, inserted: result.applied };
+}
+
+/** Insert `content` into a copy of `doc`. */
+export async function insertContent(
+  doc: CmsDocument,
+  where: InsertWhere,
+  content: InsertContent,
+  files: Record<string, StoredFile>,
+): Promise<InsertResult> {
+  const built = buildInsertion(content, files);
+  if ('waiting' in built) return { document: doc, warnings: [], inserted: 0, needsAttention: false, waiting: built.waiting };
+  if ('error' in built) throw new Error(built.error);
+  const targets = insertionTargets(doc, where, built.block);
+  if (targets.waiting) return { document: doc, warnings: [], inserted: 0, needsAttention: false, waiting: targets.waiting };
+  const warnings = [...built.warnings, ...targets.warnings];
+  if (targets.matches.length === 0) return { document: doc, warnings, inserted: 0, needsAttention: targets.needsAttention };
+
+  const placed = await place(doc, targets, () => structuredClone(built.nodes));
+  const out = placed.document;
+  for (const a of built.assets) out.assets = { ...out.assets, [a.id]: a };
+  const assets = out.meta.snippetAssets ?? [];
+  if (!assets.some((a) => a.key === 'cms-insert@1')) out.meta.snippetAssets = [...assets, { key: 'cms-insert@1', name: 'Insert', css: INSERT_CSS }];
+  return { document: out, warnings: [...warnings, ...placed.warnings], inserted: placed.inserted, needsAttention: false };
+}
+
+/** Attribute on preview-only markers; the preview ignores marked elements when it measures text. */
+export const PREVIEW_ONLY = 'dataCmsPreview';
+
+/** A copy of `doc` with a marker where the insertion will go (for the preview). */
+export async function markInsertionPoint(doc: CmsDocument, where: InsertWhere, block: boolean): Promise<CmsDocument> {
+  const targets = insertionTargets(doc, where, block);
+  if (targets.matches.length === 0) return doc;
+  const blockMarker = targets.matches.some((m) => m.kind === 'nodes') && targets.place !== 'start' && targets.place !== 'end';
+  const marker = (): ElementContent[] => [
+    blockMarker || block
+      ? el('div', { [PREVIEW_ONLY]: '', className: ['cms-insert-marker'] }, [text('Insertion goes here')])
+      : el('span', { [PREVIEW_ONLY]: '', className: ['cms-insert-caret'], title: 'Insertion goes here' }),
+  ];
+  return (await place(doc, targets, marker)).document;
+}
+
+export const INSERT_MARKER_CSS = `
+.cms-insert-marker { margin: .4rem 0; padding: .3rem .6rem; border: 2px dashed #0d9488; border-radius: 6px; color: #0f766e;
+  background: #f0fdfa; font: 600 12px/1.4 system-ui, sans-serif; }
+.cms-insert-caret { display: inline-block; width: 3px; height: 1.1em; vertical-align: text-bottom; background: #0d9488; margin: 0 1px;
+  border-radius: 2px; box-shadow: 0 0 0 3px rgba(13, 148, 136, .25); }
+`;
+
+/** A summary of what an insertion is, for node labels. */
+export function describeInsertion(content: InsertContent): string {
+  switch (content.kind) {
+    case 'code':
+      return content.render === 'html' ? 'HTML code' : `Code${content.language ? ` (${content.language})` : ''}`;
+    case 'image':
+      return 'Image';
+    case 'video':
+      return 'Video';
+    case 'imageUrl':
+      return 'Linked image';
+    case 'videoUrl':
+      return 'Linked video';
+  }
+}
+
+function toBase64(data: StoredFile['data']): string {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(binary);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Picking a point in the preview
+
+const BLOCK_NAMES: Record<string, string> = {
+  p: 'paragraph', li: 'list item', blockquote: 'quote', td: 'table cell', th: 'table cell', pre: 'code block',
+  h1: 'heading', h2: 'heading', h3: 'heading', h4: 'heading', h5: 'heading', h6: 'heading', figure: 'figure',
+  dt: 'term', dd: 'definition', summary: 'summary', div: 'block', section: 'section', aside: 'box', article: 'article',
+};
+
+/** A friendly name for a block element: "paragraph", "heading", "list item", ... */
+export const blockName = (tagName: string) => BLOCK_NAMES[tagName] ?? tagName;
+
+/** The block a cursor offset is in (a cursor at the very end of a block belongs to that block). */
+function caretBlock(doc: CmsDocument, offset: number) {
+  const ix = indexDocument(doc);
+  const t = ix.text.text;
+  const at = offset > 0 && (offset >= t.length || t[offset] === '\n') ? offset - 1 : offset;
+  const block = enclosingBlock(ix, Math.max(0, at));
+  if (!block) return undefined;
+  const node = nodeAt(doc, block);
+  const tagName = node?.type === 'element' ? node.tagName : 'block';
+  return { ix, block, tagName, range: rangeOf(ix, block) ?? { start: offset, end: offset } };
+}
+
+/** What a cursor in the preview is in, for labels such as "After this paragraph". */
+export function caretTarget(doc: CmsDocument, offset: number): { tagName: string; name: string } | undefined {
+  const b = caretBlock(doc, offset);
+  return b && { tagName: b.tagName, name: BLOCK_NAMES[b.tagName] ?? b.tagName };
+}
+
+/** How much text next to the cursor is saved, so the point can be found again after edits. */
+const CARET_CONTEXT = 24;
+
+/**
+ * An insertion point from a cursor offset: "cursor" anchors the text right before the cursor (or after it,
+ * at the start of a block) and inserts next to it; "before" / "after" anchor the whole block.
+ */
+export function insertionPointAt(doc: CmsDocument, offset: number, choice: 'cursor' | 'before' | 'after'): InsertionPoint | undefined {
+  const b = caretBlock(doc, offset);
+  if (!b) return undefined;
+  const { ix, block, range } = b;
+  if (choice !== 'cursor' || range.end === range.start) {
+    return { anchor: createAnchor(ix, block), place: choice === 'before' ? 'before' : 'after' };
+  }
+  const at = Math.min(Math.max(offset, range.start), range.end);
+  if (at > range.start) {
+    // Start the saved text at a word boundary, so it does not begin halfway through a word.
+    let start = Math.max(range.start, at - CARET_CONTEXT);
+    const t = ix.text.text;
+    if (start > range.start && /\w/.test(t[start - 1] ?? '')) {
+      const next = t.slice(start, at).search(/\W\w/);
+      if (next !== -1) start += next + 1;
+    }
+    return { anchor: createAnchor(ix, { kind: 'text', start, end: at }), place: 'after' };
+  }
+  return { anchor: createAnchor(ix, { kind: 'text', start: at, end: Math.min(range.end, at + CARET_CONTEXT) }), place: 'before' };
+}

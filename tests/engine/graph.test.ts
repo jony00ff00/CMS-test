@@ -53,13 +53,14 @@ describe('hashing', () => {
 });
 
 describe('node registry', () => {
-  it('has the four node types with typed ports', () => {
-    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'output']);
+  it('has the node types with typed ports', () => {
+    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'insert', 'output']);
     const ports = Object.values(nodeRegistry).map((d) => [d.type, d.inputs.map((p) => p.type), d.outputs.map((p) => p.type)]);
     expect(ports).toEqual([
       ['documentSource', [], ['document']],
       ['selector', ['document'], ['selection']],
       ['snippet', ['selection'], ['document']],
+      ['insert', ['document'], ['document']],
       ['output', ['document'], ['html']],
     ]);
   });

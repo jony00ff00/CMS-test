@@ -206,3 +206,15 @@ describe('deleting', () => {
     expect(store.getState().graph.edges).toHaveLength(3);
   });
 });
+
+describe('project files and Insert nodes', () => {
+  it('keeps the image or video an Insert node uses', () => {
+    const img = storeFile('logo.png', new Uint8Array([137, 80, 78, 71]));
+    const graph: Graph = {
+      nodes: [{ id: 'insert-1', type: 'insert', config: { content: { kind: 'image', fileId: img.id, alt: '' }, where: { mode: 'point' } } }],
+      edges: [],
+    };
+    const { project } = parseProject(projectToJson({ graph, files: { [img.id]: img }, library: {} }));
+    expect(project.files[img.id]?.hash).toBe(img.hash);
+  });
+});

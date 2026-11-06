@@ -58,6 +58,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-selector { border-left-color: var(--port-selection); }
 .palette-snippet { border-left-color: #7c3aed; }
 .palette-output { border-left-color: var(--port-html); }
+.palette-insert { border-left-color: #0d9488; }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
 
@@ -166,6 +167,7 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-selector { border-top-color: var(--port-selection); }
 .cms-node-snippet { border-top-color: #7c3aed; }
 .cms-node-output { border-top-color: var(--port-html); }
+.cms-node-insert { border-top-color: #0d9488; }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
 .cms-node header { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem 0.2rem; }
@@ -217,6 +219,14 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .param-row { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; display: grid; gap: 0.4rem; }
 .param-row-head { display: flex; justify-content: space-between; }
 .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+.segmented { display: inline-flex; margin-left: auto; }
+.segmented button { border-radius: 0; font-size: 0.8rem; padding: 0.2rem 0.6rem; }
+.segmented button:first-child { border-radius: 6px 0 0 6px; }
+.segmented button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.segmented button[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.segmented + .preview-actions { margin-left: 0.6rem; }
+.point-summary { margin: 0; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
+fieldset.where { gap: 0.6rem; }
 .project-toolbar { display: grid; justify-items: end; gap: 0.25rem; }
 .project-toolbar-buttons { display: flex; gap: 0.4rem; align-items: center; }
 .toolbar-gap { width: 0.4rem; }

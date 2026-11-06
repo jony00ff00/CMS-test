@@ -1,9 +1,9 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import type { Anchor, CmsDocument, GraphNode, ResolveStatus, Selection, SelectorConfig, SelectorMode } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CheckboxField, SelectField, TextField } from './fields';
 
-const MODES: { value: SelectorMode; label: string }[] = [
+export const SELECTOR_MODES: { value: SelectorMode; label: string }[] = [
   { value: 'css', label: 'CSS selector' },
   { value: 'regex', label: 'Text pattern (regex)' },
   { value: 'heading', label: 'Section under a heading' },
@@ -19,15 +19,43 @@ const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
   manual: { mode: 'manual', anchors: [] },
 };
 
-export function SelectorEditor({ node }: { node: GraphNode }) {
-  const config = node.config as SelectorConfig;
-  const listId = useId();
-  // The document coming in, for suggestions (JSON field paths).
-  const input = useEditor((s) => {
-    const edge = s.graph.edges.find((e) => e.target === node.id);
+/** The document coming into a node, e.g. for JSON field path suggestions. */
+export function useInputDocument(nodeId: string) {
+  return useEditor((s) => {
+    const edge = s.graph.edges.find((e) => e.target === nodeId);
     return edge ? (s.results[edge.source]?.outputs[edge.sourcePort] as CmsDocument | undefined) : undefined;
   });
-  const set = (next: SelectorConfig) => editorStore.getState().updateConfig(node.id, next);
+}
+
+export function SelectorEditor({ node }: { node: GraphNode }) {
+  const config = node.config as SelectorConfig;
+  const input = useInputDocument(node.id);
+  return (
+    <SelectorFields
+      config={config}
+      input={input}
+      onChange={(next) => editorStore.getState().updateConfig(node.id, next)}
+      manual={(c, patch) => <ManualSelections node={node} config={c} onChange={(anchors) => patch({ anchors })} />}
+    />
+  );
+}
+
+/** The fields for every selector mode. `manual` renders the hand-made selections (left out where they make no sense). */
+export function SelectorFields({
+  config,
+  input,
+  onChange,
+  manual,
+  modes = SELECTOR_MODES,
+}: {
+  config: SelectorConfig;
+  input?: CmsDocument;
+  onChange: (next: SelectorConfig) => void;
+  manual?: (config: Extract<SelectorConfig, { mode: 'manual' }>, patch: (p: Partial<SelectorConfig>) => void) => ReactNode;
+  modes?: { value: SelectorMode; label: string }[];
+}) {
+  const listId = useId();
+  const set = onChange;
   const patch = (p: Partial<SelectorConfig>) => set({ ...config, ...p } as SelectorConfig);
 
   return (
@@ -35,7 +63,7 @@ export function SelectorEditor({ node }: { node: GraphNode }) {
       <SelectField
         label="Select by"
         value={config.mode}
-        options={MODES}
+        options={modes}
         onChange={(mode) => set(mode === config.mode ? config : DEFAULTS[mode])}
       />
       {config.mode === 'css' && (
@@ -101,7 +129,7 @@ export function SelectorEditor({ node }: { node: GraphNode }) {
           </datalist>
         </>
       )}
-      {config.mode === 'manual' && <ManualSelections node={node} config={config} onChange={(anchors) => patch({ anchors })} />}
+      {config.mode === 'manual' && manual?.(config, patch)}
     </>
   );
 }

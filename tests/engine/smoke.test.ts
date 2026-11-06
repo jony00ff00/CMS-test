@@ -19,12 +19,19 @@ describe('engine', () => {
   });
 
   it('stays pure: no React, no DOM APIs, no .tsx files', () => {
-    const banned = [/from ['"]react/, /from ['"]@xyflow/, /\bdocument\./, /\bwindow\./];
+    // The browser globals, not properties that happen to be called document (result.document.tree).
+    const banned = [/from ['"]react/, /from ['"]@xyflow/, /(?<![.\w$])document\./, /(?<![.\w$])window\./];
     for (const file of sourceFiles(engineDir)) {
       // Ignore comments, so prose such as "the document." does not count.
       const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
       for (const pattern of banned) expect(src, `${file} matches ${pattern}`).not.toMatch(pattern);
     }
     expect(readdirSync(engineDir, { recursive: true }).some((f) => String(f).endsWith('.tsx'))).toBe(false);
+  });
+
+  it('the purity check catches browser globals but not properties called document', () => {
+    const banned = /(?<![.\w$])document\./;
+    expect(banned.test('const x = document.querySelector("p");')).toBe(true);
+    expect(banned.test('result.document.tree')).toBe(false);
   });
 });

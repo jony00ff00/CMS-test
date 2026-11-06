@@ -12,6 +12,7 @@ export * from './selectors';
 export * from './ranges';
 export * from './snippets';
 export * from './preview';
+export * from './insert';
 export * from './library';
 export * from './hash';
 export * from './graph';

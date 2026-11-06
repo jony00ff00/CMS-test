@@ -32,7 +32,7 @@ export interface Project {
 
 export function toProjectFile(project: Project, savedAt = new Date()): ProjectFile {
   // Only files that a node still uses.
-  const used = new Set(project.graph.nodes.map((n) => (n.config as { fileId?: string } | undefined)?.fileId).filter(Boolean));
+  const used = new Set(project.graph.nodes.flatMap((n) => fileIdsIn(n.config)));
   return {
     format: PROJECT_FORMAT,
     version: PROJECT_VERSION,
@@ -47,6 +47,13 @@ export function toProjectFile(project: Project, savedAt = new Date()): ProjectFi
       ),
     library: project.library,
   };
+}
+
+/** Every `fileId` in a node's settings, however deep (Document Source: `fileId`; Insert: `content.fileId`). */
+function fileIdsIn(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  if (Array.isArray(value)) return value.flatMap(fileIdsIn);
+  return Object.entries(value).flatMap(([k, v]) => (k === 'fileId' && typeof v === 'string' ? [v] : fileIdsIn(v)));
 }
 
 export const projectToJson = (project: Project) => JSON.stringify(toProjectFile(project), null, 1);

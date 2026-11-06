@@ -1,6 +1,7 @@
 import { nodeRegistry } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { LibraryEditor } from '../library/LibraryEditor';
+import { InsertEditor } from './InsertEditor';
 import { OutputEditor } from './OutputEditor';
 import { ResultPanel } from './ResultPanel';
 import { SelectorEditor } from './SelectorEditor';
@@ -11,6 +12,7 @@ const EDITORS = {
   documentSource: SourceEditor,
   selector: SelectorEditor,
   snippet: SnippetEditor,
+  insert: InsertEditor,
   output: OutputEditor,
 } as const;
 

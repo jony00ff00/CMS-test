@@ -57,7 +57,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `hast-util-select`'s `:scope` gives wrong results on our root; generated CSS paths avoid it.
 - Never read the end of a string built with `+=` in a loop (it copies the string each time); collect parts and join.
 - Large libraries (mammoth, Handlebars, the Markdown parser) are loaded with `import()` only when needed.
-  Keep it that way. The main chunk is about 720 kB (engine + React + React Flow); the build warns above 800 kB.
+  Keep it that way. Libraries needed at start are split into `react`, `flow` and `html` chunks
+  (`codeSplitting.groups` in `vite.config.ts`); list only eagerly loaded libraries there, or a group pulls lazy
+  ones into the start-up download. The app's own chunk is about 135 kB; the build warns above 800 kB per chunk.
 - `graph.ts`: `Graph` (`nodes`, `edges` with `sourcePort` / `targetPort`), `NodeDefinition` (typed `inputs` /
   `outputs`, `defaultConfig`, `evaluate`, optional `dependencies` for things outside the config such as a
   file's hash). `edgeError` / `connect` reject unknown ports, mismatched port types (`document`, `selection`,
@@ -75,10 +77,20 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   value is the HTML inside its block plus any wrappers around that block alone (e.g. `<details>`); text fields
   that are still plain paragraphs go back as text; untouched fields keep their original value exactly (compared
   with a fresh import). Content outside fields and wrappers around several fields are reported as warnings.
+- `insert.ts`: content to insert (`code` as a block or as HTML, `image` / `video` from an uploaded file in the
+  store, `imageUrl` / `videoUrl` by address; YouTube and Vimeo become embeds; only http(s) addresses) and where:
+  `{ mode: 'point', point: { anchor, place } }` (picked in the preview) or `{ mode: 'selector', selector, place }`;
+  places are before / after / start / end. Placement reuses `applySnippet` (prepend / append with a placeholder
+  that is swapped for the built nodes), so overlap and JSON-field rules hold. Block content (video, code, figure)
+  never goes inside a paragraph: it moves next to it, with a warning. Uploaded media become assets
+  (`asset:insert-<hash>`). `insertionPointAt(doc, offset, 'cursor' | 'before' | 'after')` turns a click into a
+  point ("cursor" anchors up to 24 characters before the cursor, from a word boundary). `markInsertionPoint` adds
+  preview-only markers (`data-cms-preview`, which the bridge ignores when it measures text).
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
   `snippet` (`snippet` = the node's own copy, `ref` = `{ id, version }` when it came from the library,
   `params`, `snapToBlock`; default is the library's Callout v1), `output` (`format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
-  preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`.
+  preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
+  `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone).
 
 ## UI (so far)
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
@@ -103,6 +115,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   the preview rendered there with a React portal; still a sandboxed iframe inside). Messages from the
   preview then arrive at that window, so `Preview` listens on the iframe's own window, and the bridge accepts
   messages from `parent.opener` as well as `parent`. Closing or reloading the window brings the preview back.
+- Insert node selected: the preview shows its input with the insertion marker ("Where it goes"), or its output
+  ("Result"). A click in the preview (the bridge reports `caret` offsets) opens "Insert here": At the cursor
+  (not for block content), Before / After this <block>. Its inspector reuses `SelectorFields` from
+  `SelectorEditor.tsx` for the "next to every match" mode. `chooseMediaFile` adds an image or video file.
+  Project files save every `fileId` found anywhere in a node's settings.
 - Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
   shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives
   an element anchor, anything else a text anchor. Highlighting never changes the text, so offsets stay valid.
@@ -146,7 +163,7 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 ## Roadmap
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
-All planned milestones are done. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+All planned milestones are done; since then: resizable / separate-window preview, Insert node. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

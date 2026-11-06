@@ -1,0 +1,257 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildInsertion, buildTextIndex, caretTarget, insertionPointAt, checkUrl, createAnchor, embedUrl, exportJson, GraphEvaluator, importJson, insertContent, markInsertionPoint,
+  mediaType, nodeRegistry, parseHtml, runSelector, serialize, storeFile, type CmsDocument, type Graph, type InsertContent,
+  type InsertWhere,
+} from '../../src/engine';
+import { PNG_BASE64 } from '../../src/samples';
+import { fixture } from './helpers';
+
+const png = storeFile('logo.png', Uint8Array.from(atob(PNG_BASE64), (c) => c.charCodeAt(0)), 'png');
+const mp4 = storeFile('clip.mp4', new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112]), 'mp4');
+const files = { png, mp4 };
+const html = () => parseHtml(fixture('sample.html').toString());
+
+/** A point picked the way the preview does it: the text right before the cursor, inserting after it. */
+function caretAfter(doc: CmsDocument, before: string): InsertWhere {
+  const m = runSelector(doc, { mode: 'regex', pattern: before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }).matches[0].match;
+  return { mode: 'point', point: { anchor: createAnchor(doc, m), place: 'after' } };
+}
+function block(doc: CmsDocument, selector: string, place: 'before' | 'after' | 'start' | 'end', n = 0): InsertWhere {
+  return { mode: 'point', point: { anchor: createAnchor(doc, runSelector(doc, { mode: 'css', selector }).matches[n].match), place } };
+}
+const body = async (doc: CmsDocument, where: InsertWhere, content: InsertContent) => {
+  const r = await insertContent(doc, where, content, files);
+  return { ...r, html: serialize(r.document) };
+};
+
+describe('building insertions', () => {
+  it('says what is missing before anything can be inserted', () => {
+    expect(buildInsertion({ kind: 'code', code: ' ', render: 'block' }, files)).toEqual({ waiting: 'Write the code to insert' });
+    expect(buildInsertion({ kind: 'image', alt: '' }, files)).toEqual({ waiting: 'Choose an image file' });
+    expect(buildInsertion({ kind: 'video' }, files)).toEqual({ waiting: 'Choose a video file' });
+    expect(buildInsertion({ kind: 'imageUrl', url: '', alt: '' }, files)).toEqual({ waiting: 'Enter the address of the image or video' });
+    expect(buildInsertion({ kind: 'image', fileId: 'gone', alt: '' }, files)).toMatchObject({ waiting: expect.stringMatching(/no longer in the project/) });
+  });
+
+  it('refuses the wrong kind of file and addresses that are not web addresses', () => {
+    expect(buildInsertion({ kind: 'image', fileId: 'mp4', alt: '' }, files)).toMatchObject({ error: expect.stringMatching(/^clip\.mp4 is not an image/) });
+    expect(checkUrl('javascript:alert(1)')).toEqual({ error: 'Only http and https addresses can be used' });
+    expect(checkUrl('data:image/png;base64,xx')).toEqual({ error: 'Only http and https addresses can be used' });
+    expect(checkUrl('example.com/a.png')).toEqual({ href: 'https://example.com/a.png' });
+    expect(checkUrl('http://[nope')).toMatchObject({ error: expect.stringMatching(/is not a web address/) });
+  });
+
+  it('recognises image and video files', () => {
+    expect(mediaType('a.JPG')).toEqual({ kind: 'image', contentType: 'image/jpeg' });
+    expect(mediaType('b.webm')).toEqual({ kind: 'video', contentType: 'video/webm' });
+    expect(mediaType('c.pdf')).toBeUndefined();
+  });
+
+  it('embeds YouTube and Vimeo links', () => {
+    for (const url of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://youtu.be/dQw4w9WgXcQ?t=3', 'https://m.youtube.com/shorts/dQw4w9WgXcQ']) {
+      expect(embedUrl(url), url).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+    }
+    expect(embedUrl('https://vimeo.com/76979871')).toBe('https://player.vimeo.com/video/76979871');
+    expect(embedUrl('https://example.com/movie.mp4')).toBeUndefined();
+  });
+});
+
+describe('inserting at a picked point', () => {
+  it('puts an image right at the cursor', async () => {
+    const doc = html();
+    const r = await body(doc, caretAfter(doc, 'costs nothing'), { kind: 'imageUrl', url: 'https://example.com/free.png', alt: 'Free' });
+    expect(r.html).toContain('<p>The basic plan costs nothing<img src="https://example.com/free.png" alt="Free" class="cms-insert" loading="lazy">. The pro');
+    expect(r.inserted).toBe(1);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('puts an uploaded image in the page as an asset', async () => {
+    const doc = html();
+    const r = await insertContent(doc, block(doc, 'h2', 'after'), { kind: 'image', fileId: 'png', alt: 'Logo', caption: 'Our logo', width: 64 }, files);
+    const page = serialize(r.document, { inlineAssets: true });
+    expect(page).toContain('<h2>Getting started</h2><figure class="cms-figure"><img src="data:image/png;base64,');
+    expect(page).toContain('alt="Logo" class="cms-insert" width="64"><figcaption>Our logo</figcaption></figure><p>Plant');
+    expect(Object.keys(r.document.assets)).toEqual([`insert-${png.hash}`]);
+    expect(serialize(r.document, { fullDocument: true })).toContain('.cms-figure{');
+  });
+
+  it('wraps a linked image in its link, and refuses unsafe links', async () => {
+    const doc = html();
+    const ok = await body(doc, caretAfter(doc, 'costs nothing'), { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A', href: 'https://x.test/' });
+    expect(ok.html).toContain('costs nothing<a href="https://x.test/"><img src="https://x.test/a.png"');
+    const bad = await body(doc, caretAfter(doc, 'costs nothing'), { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A', href: 'javascript:x()' });
+    expect(bad.html).not.toContain('<a');
+    expect(bad.warnings).toEqual(['The link "javascript:x()" is not a web address, so the image is not linked']);
+  });
+
+  it('puts videos and code blocks after the paragraph, not inside it', async () => {
+    const doc = html();
+    const video = await body(doc, caretAfter(doc, 'costs nothing'), { kind: 'video', fileId: 'mp4', autoplay: true, loop: true });
+    expect(video.html).toContain('The pro plan adds snippets.</p><video src="asset:insert-');
+    expect(video.html).toMatch(/<video src="asset:[^"]+" controls playsinline class="cms-insert" autoplay muted loop><\/video><blockquote>/);
+    expect(video.warnings).toEqual(['This content cannot go inside a paragraph, so it goes after it']);
+
+    const code = await body(doc, block(doc, 'h2', 'end', 1), { kind: 'code', code: 'npm run build', language: 'shell', render: 'block' });
+    expect(code.html).toContain('<h2>Pricing</h2><pre class="cms-insert-code" data-language="shell"><code class="language-shell">npm run build</code></pre>');
+  });
+
+  it('inserts at the start or end inside a container', async () => {
+    const doc = html();
+    const r = await body(doc, block(doc, 'ol', 'end'), { kind: 'code', code: '<li>Export the page</li>', render: 'html' });
+    expect(r.html).toContain('<li>Apply a snippet</li><li>Export the page</li></ol>');
+    const s = await body(doc, block(doc, 'blockquote', 'start'), { kind: 'code', code: '<p><b>Motto</b></p>', render: 'html' });
+    expect(s.html).toContain('<blockquote><p><b>Motto</b></p><p>Every node');
+  });
+
+  it('cleans inserted HTML', async () => {
+    const doc = html();
+    const r = await body(doc, block(doc, 'h1', 'after'), { kind: 'code', code: '<div onclick="x()">Hi</div><script>alert(1)</script>', render: 'html' });
+    expect(r.html).toContain('<h1>Field Guide to Node Gardens</h1><div>Hi</div><p>');
+    expect(r.warnings).toEqual(['Removed onclick attribute from <div>', 'Removed <script> element']);
+  });
+
+  it('embeds a YouTube link and warns that the preview may not play it', async () => {
+    const doc = html();
+    const r = await body(doc, block(doc, 'h1', 'after'), { kind: 'videoUrl', url: 'https://youtu.be/dQw4w9WgXcQ', caption: 'Demo' });
+    expect(r.html).toContain('<figure class="cms-figure"><div class="cms-embed"><iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Demo"');
+    expect(r.warnings[0]).toMatch(/may not play in the preview/);
+    const file = await body(doc, block(doc, 'h1', 'after'), { kind: 'videoUrl', url: 'https://example.com/movie.mp4' });
+    expect(file.html).toContain('<video src="https://example.com/movie.mp4" controls playsinline class="cms-insert" preload="metadata"></video>');
+  });
+
+  it('follows the text when the document changes, and asks for attention when it is gone', async () => {
+    const doc = html();
+    const where = caretAfter(doc, 'costs nothing');
+    const edited = parseHtml(fixture('sample.html').toString().replace('<h2>Pricing</h2>', '<p>New paragraph.</p><h2>Pricing</h2>'));
+    const moved = await body(edited, where, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: '' });
+    expect(moved.html).toContain('costs nothing<img src="https://x.test/a.png"');
+
+    const gone = parseHtml(fixture('sample.html').toString().replace('The basic plan costs nothing.', 'Ask us.'));
+    const r = await body(gone, where, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' });
+    expect(r).toMatchObject({ inserted: 0, needsAttention: true });
+    expect(r.warnings[0]).toMatch(/^The insertion point needs attention: /);
+    expect(r.html).toBe(serialize(gone));
+  });
+
+  it('waits for a point to be picked', async () => {
+    const r = await insertContent(html(), { mode: 'point' }, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' }, files);
+    expect(r.waiting).toBe('Click in the preview where the insertion should go');
+  });
+
+  it('never changes the document it is given', async () => {
+    const doc = html();
+    const before = JSON.stringify(doc);
+    await insertContent(doc, caretAfter(doc, 'costs nothing'), { kind: 'image', fileId: 'png', alt: 'x' }, files);
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+});
+
+describe('inserting at every match of a selector', () => {
+  it('inserts next to each match, once per paragraph for block content', async () => {
+    const doc = html();
+    const after = await body(doc, { mode: 'selector', selector: { mode: 'css', selector: 'h2' }, place: 'after' }, { kind: 'code', code: '<hr>', render: 'html' });
+    expect(after.html.match(/<\/h2><hr>/g)).toHaveLength(2);
+    const perParagraph = await body(doc, { mode: 'selector', selector: { mode: 'regex', pattern: 'plan' }, place: 'after' }, { kind: 'video', fileId: 'mp4' });
+    expect(perParagraph.inserted).toBe(1); // both matches are in one paragraph
+    const nothing = await body(doc, { mode: 'selector', selector: { mode: 'css', selector: 'video' }, place: 'after' }, { kind: 'code', code: 'x', render: 'block' });
+    expect(nothing.warnings).toEqual(['"video" matched nothing']);
+  });
+});
+
+describe('JSON sources', () => {
+  it('inserts inside a field, so it is written back with that field', async () => {
+    const doc = await importJson(fixture('sample.json'), { mode: 'fields', fields: [{ path: '$.faq[*].a', format: 'markdown' }] });
+    const r = await insertContent(doc, { mode: 'selector', selector: { mode: 'jsonField', path: '$.faq[0].a' }, place: 'end' }, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'Diagram' }, files);
+    const exported = await exportJson(r.document);
+    expect(exported.changed).toEqual(['$.faq[0].a']);
+    expect((exported.data as { faq: { a: string }[] }).faq[0].a).toBe(
+      '<p>Yes. Map <strong>string fields</strong> with JSONPath.</p><img src="https://x.test/a.png" alt="Diagram" class="cms-insert" loading="lazy">',
+    );
+  });
+});
+
+describe('preview marker', () => {
+  it('marks where the insertion goes, with an element the preview ignores', async () => {
+    const doc = html();
+    const caret = serialize(await markInsertionPoint(doc, caretAfter(doc, 'costs nothing'), false));
+    expect(caret).toContain('costs nothing<span data-cms-preview="" class="cms-insert-caret" title="Insertion goes here"></span>.');
+    const after = serialize(await markInsertionPoint(doc, block(doc, 'h1', 'after'), false));
+    expect(after).toContain('</h1><div data-cms-preview="" class="cms-insert-marker">Insertion goes here</div>');
+  });
+});
+
+describe('Insert node', () => {
+  it('runs in a graph and re-runs when its uploaded file changes', async () => {
+    const source = storeFile('a.html', '<h2>A</h2><p>x</p>', 'src');
+    const graph: Graph = {
+      nodes: [
+        { id: 's', type: 'documentSource', config: { fileId: 'src' } },
+        { id: 'i', type: 'insert', config: { content: { kind: 'image', fileId: 'png', alt: 'Logo' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h2' }, place: 'after' } } },
+        { id: 'o', type: 'output', config: { fullDocument: false } },
+      ],
+      edges: [
+        { id: 'e1', source: 's', sourcePort: 'document', target: 'i', targetPort: 'document' },
+        { id: 'e2', source: 'i', sourcePort: 'document', target: 'o', targetPort: 'document' },
+      ],
+    };
+    const evaluator = new GraphEvaluator(nodeRegistry);
+    const first = await evaluator.evaluate(graph, { files: { src: source, png } });
+    expect(first.results.i.info).toEqual({ what: 'Image', inserted: 1 });
+    expect(first.results.o.outputs.html).toMatch(/^<h2>A<\/h2><img src="data:image\/png;base64,/);
+    const other = storeFile('logo.png', new Uint8Array([137, 80, 78, 71]), 'png');
+    const second = await evaluator.evaluate(graph, { files: { src: source, png: other } });
+    expect(second.ran).toEqual(['i', 'o']);
+  });
+
+  it('waits until there is something to insert', async () => {
+    const graph: Graph = {
+      nodes: [
+        { id: 's', type: 'documentSource', config: { fileId: 'src' } },
+        { id: 'i', type: 'insert', config: nodeRegistry.insert.defaultConfig() },
+      ],
+      edges: [{ id: 'e1', source: 's', sourcePort: 'document', target: 'i', targetPort: 'document' }],
+    };
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files: { src: storeFile('a.html', '<p>x</p>', 'src') } });
+    expect(r.results.i).toMatchObject({ status: 'waiting', message: 'Enter the address of the image or video' });
+  });
+});
+
+describe('picking a point from a cursor', () => {
+  const offsetOf = (doc: CmsDocument, phrase: string) => buildTextIndex(doc.tree).text.indexOf(phrase) + phrase.length;
+
+  it('names the block the cursor is in, also at its very end', () => {
+    const doc = html();
+    expect(caretTarget(doc, offsetOf(doc, 'costs'))).toEqual({ tagName: 'p', name: 'paragraph' });
+    expect(caretTarget(doc, offsetOf(doc, 'Pricing'))).toEqual({ tagName: 'h2', name: 'heading' });
+    expect(caretTarget(doc, offsetOf(doc, 'Select some text'))).toEqual({ tagName: 'li', name: 'list item' });
+  });
+
+  it('inserts at the cursor, before or after the block', async () => {
+    const doc = html();
+    const at = offsetOf(doc, 'costs nothing');
+    const img: InsertContent = { kind: 'imageUrl', url: 'https://x.test/a.png', alt: '' };
+    const cursor = await body(doc, { mode: 'point', point: insertionPointAt(doc, at, 'cursor') }, img);
+    expect(cursor.html).toContain('costs nothing<img');
+    const before = await body(doc, { mode: 'point', point: insertionPointAt(doc, at, 'before') }, img);
+    expect(before.html).toContain('<h2>Pricing</h2><img src="https://x.test/a.png" alt="" class="cms-insert" loading="lazy"><p>The basic');
+    const after = await body(doc, { mode: 'point', point: insertionPointAt(doc, at, 'after') }, img);
+    expect(after.html).toContain('adds snippets.</p><img');
+  });
+
+  it('starts the saved text before the cursor at a word boundary', () => {
+    const doc = html();
+    const point = insertionPointAt(doc, offsetOf(doc, 'Plant a source node first. Then'), 'cursor')!;
+    expect(point.anchor.textQuote?.exact).toBe('source node first. Then');
+  });
+
+  it('works at the start of a block, using the text after the cursor', async () => {
+    const doc = html();
+    const start = buildTextIndex(doc.tree).text.indexOf('The basic');
+    const point = insertionPointAt(doc, start, 'cursor')!;
+    expect(point.place).toBe('before');
+    expect(point.anchor.textQuote?.exact).toBe('The basic plan costs not');
+    const r = await body(doc, { mode: 'point', point }, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: '' });
+    expect(r.html).toContain('<p><img src="https://x.test/a.png" alt="" class="cms-insert" loading="lazy">The basic');
+  });
+});
