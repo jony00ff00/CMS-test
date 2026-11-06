@@ -305,7 +305,7 @@ describe('an Output with several inputs', () => {
       node('sel', 'selector', { mode: 'css', selector: 'h1' }),
       node('snip', 'snippet'),
       node('ins', 'insert', { content: { kind: 'code', code: '<p>Inserted</p>', render: 'html' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h1' }, place: 'after' } }),
-      node('out', 'output', { fullDocument: false }),
+      node('out', 'output', { fullDocument: false, combine: 'append' }),
     ],
     edges: [
       edge('src', 'document', 'sel', 'document'),
@@ -328,7 +328,7 @@ describe('an Output with several inputs', () => {
     );
   });
 
-  it('shows the documents one after another, in connection order, and can reorder them', async () => {
+  it('"one after another" shows the documents in connection order, and they can be reordered', async () => {
     const evaluator = new GraphEvaluator(nodeRegistry);
     const first = await evaluator.evaluate(two(), ctx);
     const html1 = first.results.out.outputs.html as string;
@@ -346,15 +346,122 @@ describe('an Output with several inputs', () => {
   });
 
   it('keeps one title, all styles and each snippet asset once', async () => {
-    const page = await new GraphEvaluator(nodeRegistry).evaluate(setConfig(two(), 'out', { fullDocument: true }), ctx);
+    const page = await new GraphEvaluator(nodeRegistry).evaluate(setConfig(two(), 'out', { fullDocument: true, combine: 'append' }), ctx);
     const html = page.results.out.outputs.html as string;
     expect(html.match(/<title>/g)).toHaveLength(1);
     expect(html.match(/\/\* callout@1 \*\//g)).toHaveLength(1);
     expect(html.match(/\/\* cms-insert@1 \*\//g)).toHaveLength(1);
   });
 
-  it('refuses JSON export with more than one document', async () => {
-    const r = await new GraphEvaluator(nodeRegistry).evaluate(setConfig(two(), 'out', { format: 'json' }), ctx);
+  it('refuses JSON export of documents shown one after another', async () => {
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(setConfig(two(), 'out', { format: 'json', combine: 'append' }), ctx);
     expect(r.results.out).toMatchObject({ status: 'error', message: 'JSON export writes one JSON file, so connect only one document to this Output' });
+  });
+});
+
+describe('combining the changes of several inputs (the default)', () => {
+  const insertAfterH1 = { content: { kind: 'code', code: '<p>Inserted</p>', render: 'html' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h1' }, place: 'after' } };
+  const graph = (order: ('snip' | 'ins')[] = ['snip', 'ins']): Graph => ({
+    nodes: [
+      node('src', 'documentSource', { fileId: 'html' }),
+      node('sel', 'selector', { mode: 'css', selector: 'h2' }),
+      node('snip', 'snippet'),
+      node('ins', 'insert', insertAfterH1),
+      node('out', 'output', { fullDocument: false }),
+    ],
+    edges: [
+      edge('src', 'document', 'sel', 'document'),
+      edge('sel', 'selection', 'snip', 'selection'),
+      edge('src', 'document', 'ins', 'document'),
+      ...order.map((id) => ({ id: `${id}-out`, source: id, sourcePort: 'document', target: 'out', targetPort: 'document' })),
+    ],
+  });
+  const count = (html: string, re: RegExp) => html.match(re)?.length ?? 0;
+
+  it('gives one document with every change', async () => {
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(graph(), ctx);
+    const html = r.results.out.outputs.html as string;
+    expect(count(html, /<h1>/g)).toBe(1);
+    expect(count(html, /<aside class="callout callout-info"><h2>/g)).toBe(2);
+    expect(html).toContain('<h1>Field Guide to Node Gardens</h1><p>Inserted</p>');
+    expect(r.results.out.info).toMatchObject({ combined: 2 });
+  });
+
+  it('keeps each node’s own result, and hides the copies it ran', async () => {
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(graph(), ctx);
+    expect(Object.keys(r.results).sort()).toEqual(['ins', 'out', 'sel', 'snip', 'src']);
+    expect(r.results.ins.outputs.document).toBeDefined();
+    const insOnly = (r.results.ins.outputs.document as { tree: unknown }).tree;
+    expect(JSON.stringify(insOnly)).not.toContain('callout');
+    expect(r.ran.every((id) => !id.includes('~'))).toBe(true);
+  });
+
+  it('applies the changes in input order, and caches like any node', async () => {
+    const evaluator = new GraphEvaluator(nodeRegistry);
+    await evaluator.evaluate(graph(), ctx);
+    expect((await evaluator.evaluate(graph(), ctx)).ran).toEqual([]);
+    const reversed = await evaluator.evaluate(graph(['ins', 'snip']), ctx);
+    const html = reversed.results.out.outputs.html as string;
+    expect(count(html, /<h1>/g)).toBe(1);
+    expect(html).toContain('<p>Inserted</p>');
+    expect(count(html, /<aside class="callout/g)).toBe(2);
+  });
+
+  it('re-runs a shared Selector on the changed document', async () => {
+    const shared: Graph = {
+      nodes: [
+        node('src', 'documentSource', { fileId: 'html' }),
+        node('sel', 'selector', { mode: 'css', selector: 'h2' }),
+        node('a', 'snippet', { snippet: { ...DEFAULT_SNIPPET, id: 'a', template: '<section class="a">{{content}}</section>', params: [], css: undefined } }),
+        node('b', 'snippet', { snippet: { ...DEFAULT_SNIPPET, id: 'b', template: '<div class="b">{{content}}</div>', params: [], css: undefined } }),
+        node('out', 'output', { fullDocument: false }),
+      ],
+      edges: [
+        edge('src', 'document', 'sel', 'document'),
+        edge('sel', 'selection', 'a', 'selection'),
+        edge('sel', 'selection', 'b', 'selection'),
+        { id: 'x', source: 'a', sourcePort: 'document', target: 'out', targetPort: 'document' },
+        { id: 'y', source: 'b', sourcePort: 'document', target: 'out', targetPort: 'document' },
+      ],
+    };
+    const html = (await new GraphEvaluator(nodeRegistry).evaluate(shared, ctx)).results.out.outputs.html as string;
+    expect(count(html, /<div class="b"><section class="a"><h2>|<section class="a"><div class="b"><h2>/g)).toBe(2);
+  });
+
+  it('shows documents from different sources one after another', async () => {
+    const g: Graph = {
+      nodes: [node('h', 'documentSource', { fileId: 'html' }), node('j', 'documentSource', { fileId: 'json' }), node('out', 'output', { fullDocument: false })],
+      edges: [
+        { id: 'a', source: 'h', sourcePort: 'document', target: 'out', targetPort: 'document' },
+        { id: 'b', source: 'j', sourcePort: 'document', target: 'out', targetPort: 'document' },
+      ],
+    };
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(g, ctx);
+    expect(r.results.out.info).toMatchObject({ documents: 2 });
+    expect(r.results.out.info.combined).toBeUndefined();
+  });
+
+  it('can export combined changes of a JSON source as JSON', async () => {
+    const g: Graph = {
+      nodes: [
+        node('src', 'documentSource', { fileId: 'json', json: { mode: 'fields', fields: [{ path: '$.faq[*].a', format: 'markdown' }] } }),
+        node('sel', 'selector', { mode: 'jsonField', path: '$.faq[0].a' }),
+        node('snip', 'snippet'),
+        node('ins', 'insert', { content: { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' }, where: { mode: 'selector', selector: { mode: 'jsonField', path: '$.faq[1].a' }, place: 'end' } }),
+        node('out', 'output', { format: 'json' }),
+      ],
+      edges: [
+        edge('src', 'document', 'sel', 'document'),
+        edge('sel', 'selection', 'snip', 'selection'),
+        edge('src', 'document', 'ins', 'document'),
+        { id: 'a', source: 'snip', sourcePort: 'document', target: 'out', targetPort: 'document' },
+        { id: 'b', source: 'ins', sourcePort: 'document', target: 'out', targetPort: 'document' },
+      ],
+    };
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(g, ctx);
+    expect(r.results.out.status).toBe('ok');
+    const data = JSON.parse(r.results.out.outputs.json as string);
+    expect(data.faq[0].a).toMatch(/^<aside class="callout callout-info">/);
+    expect(data.faq[1].a).toMatch(/<img src="https:\/\/x\.test\/a\.png" alt="A" class="cms-insert" loading="lazy" style="width:100%">$/);
   });
 });

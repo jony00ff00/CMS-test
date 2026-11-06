@@ -91,12 +91,20 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   preview-only markers (`data-cms-preview`, which the bridge ignores when it measures text).
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
   `snippet` (`snippet` = the node's own copy, `ref` = `{ id, version }` when it came from the library,
-  `params`, `snapToBlock`; default is the library's Callout v1), `output` (input `document` takes several connections; they are combined one after another with
-  `combineDocuments` in `combine.ts`, and JSON export then refuses; `format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
+  `params`, `snapToBlock`; default is the library's Callout v1), `output` (input `document` takes several connections. `combine: 'merge'` (default, `mergesInputs`) applies every
+  input's changes to one document: `planMerges` in `merge.ts` finds the latest document all inputs share and runs
+  hidden copies (`<output>~<i>~<id>`) of each later input's nodes on the previous input's result, so selectors and
+  points re-resolve on the changed text; the copies' results are dropped, `info.combined` is set. Inputs with no
+  shared document, and `combine: 'append'`, go one after another (`combineDocuments` in `combine.ts`); JSON export
+  refuses only in that case; `format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
   preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
   `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone).
 
 ## UI (so far)
+- Nodes can be named (`GraphNode.name`, `renameNode`, one undo step while typing; never re-evaluates). Show nodes
+  with `nodeLabel(node)` (`src/ui/node-label.ts`): the name, or the id. Rename in the inspector's Name field or by
+  double-clicking a node's title on the canvas (`NodeTitle` in `CmsNode.tsx`; the input is `nodrag` and stops key
+  events so Backspace does not delete the node).
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
   app). Holds `graph`, `files`, `selectedId`, `results`, `notice`. Changes to the graph or files re-evaluate
   after 150 ms; position-only changes do not. Stale evaluations are dropped. `whenIdle()` for tests.

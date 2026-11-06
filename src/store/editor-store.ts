@@ -44,6 +44,8 @@ export interface EditorState {
   moveNode(id: string, position: { x: number; y: number }): void;
   /** Replace a node's config, or derive the new config from the old one. */
   updateConfig<C>(id: string, update: C | ((config: C) => C)): void;
+  /** Give a node a name (empty: back to its id). */
+  renameNode(id: string, name: string): void;
   /** Add a connection. Returns the reason when it is not allowed (and shows it). */
   connect(edge: EdgeCandidate): string | undefined;
   select(id?: string): void;
@@ -223,6 +225,15 @@ export function createEditorStore(options: EditorOptions = {}) {
       const { graph } = get();
       // Moving changes nothing the engine looks at, but positions are part of the saved graph.
       set({ graph: { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, position } : n)) } });
+    },
+
+    renameNode(id, name) {
+      const { graph } = get();
+      const node = graph.nodes.find((n) => n.id === id);
+      const next = name.trim() ? name : undefined;
+      if (!node || node.name === next) return;
+      groupKey = `name:${id}`; // typing a name is one undo step
+      set({ graph: { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, name: next } : n)) } });
     },
 
     updateConfig(id, update) {

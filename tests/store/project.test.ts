@@ -218,3 +218,35 @@ describe('project files and Insert nodes', () => {
     expect(project.files[img.id]?.hash).toBe(img.hash);
   });
 });
+
+describe('naming nodes', () => {
+  it('renames a node without re-running anything, as one undo step', async () => {
+    const store = createEditorStore({ storage: null, evaluateDelay: 1, undoGrouping: 1000 });
+    store.getState().loadExample('html');
+    await store.getState().whenIdle();
+    const results = store.getState().results;
+    store.temporal.getState().clear();
+    for (const name of ['P', 'Pr', 'Pricing callouts']) store.getState().renameNode('snippet-3', name);
+    expect(store.getState().graph.nodes.find((n) => n.id === 'snippet-3')?.name).toBe('Pricing callouts');
+    await store.getState().whenIdle();
+    expect(store.getState().results).toBe(results);
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+    store.getState().undo();
+    expect(store.getState().graph.nodes.find((n) => n.id === 'snippet-3')?.name).toBeUndefined();
+  });
+
+  it('an empty name goes back to the id; names are saved in project files', () => {
+    const store = createEditorStore({ storage: null });
+    store.getState().addNode('selector');
+    store.getState().renameNode('selector-1', 'Headings');
+    const { project } = parseProject(store.getState().exportProject());
+    expect(project.graph.nodes[0].name).toBe('Headings');
+    store.getState().renameNode('selector-1', '   ');
+    expect(store.getState().graph.nodes[0].name).toBeUndefined();
+  });
+
+  it('drops names that are not text from project files', () => {
+    const text = JSON.stringify({ format: 'node-cms-project', version: 1, graph: { nodes: [{ id: 'a', type: 'selector', name: 42, config: {} }], edges: [] } });
+    expect(parseProject(text).project.graph.nodes[0].name).toBeUndefined();
+  });
+});

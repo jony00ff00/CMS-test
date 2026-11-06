@@ -4,6 +4,7 @@ import {
 } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { ParamValues, SnippetFields } from '../inspector/SnippetFields';
+import { nodeLabel } from '../node-label';
 
 const TRY_ON = '<p>Some <strong>example</strong> text to try the snippet on.</p>';
 const TRY_CSS = 'body{font-family:system-ui,sans-serif;margin:.75rem;font-size:14px}';
@@ -61,7 +62,7 @@ export function LibraryEditor({ id }: { id: string }) {
               return (
                 <li key={n.id}>
                   <button type="button" className="link" onClick={() => store.select(n.id)}>
-                    {n.id}
+                    {nodeLabel(n)}
                   </button>{' '}
                   <span className="muted small">v{ref.version}</span>
                   {ref.version < latest.version && <span className="update-pill">update available</span>}

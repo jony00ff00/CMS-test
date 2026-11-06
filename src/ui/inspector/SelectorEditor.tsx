@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import type { Anchor, CmsDocument, GraphNode, ResolveStatus, Selection, SelectorConfig, SelectorMode } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
+import { nodeLabel } from '../node-label';
 import { CheckboxField, SelectField, TextField } from './fields';
 
 export const SELECTOR_MODES: { value: SelectorMode; label: string }[] = [
@@ -159,7 +160,7 @@ function ManualSelections({
     <div className="field">
       <span className="field-label">Saved selections</span>
       {config.anchors.length === 0 ? (
-        <p className="muted">None yet. Select text in the preview, then choose “Add to {node.id}”.</p>
+        <p className="muted">None yet. Select text in the preview, then choose “Add to {nodeLabel(node)}”.</p>
       ) : (
         <ol className="anchors" aria-label="Saved selections">
           {config.anchors.map((a) => {

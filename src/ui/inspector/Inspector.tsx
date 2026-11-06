@@ -1,6 +1,7 @@
 import { nodeRegistry } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { LibraryEditor } from '../library/LibraryEditor';
+import { TextField } from './fields';
 import { InsertEditor } from './InsertEditor';
 import { OutputEditor } from './OutputEditor';
 import { ResultPanel } from './ResultPanel';
@@ -60,6 +61,13 @@ export function Inspector() {
       </div>
       {/* key: a fresh editor for each node, so local state never leaks between nodes */}
       <div className="inspector-body" key={node.id}>
+        <TextField
+          label="Name"
+          value={node.name ?? ''}
+          placeholder={`${def?.label ?? node.type} (${node.id})`}
+          hint="Shown on the canvas and in the preview. Double-click a node's title to rename it there."
+          onChange={(name) => editorStore.getState().renameNode(node.id, name)}
+        />
         {Editor ? <Editor node={node} /> : <p className="error-text">Unknown node type "{node.type}"</p>}
       </div>
       <ResultPanel result={result} />

@@ -1,5 +1,6 @@
 // The node graph: node definitions, typed ports, validation, ordering and cached evaluation.
 import { hashBytes, hashValue } from './hash';
+import { planMerges } from './merge';
 import type { SourceFile } from './source';
 
 /** What travels along an edge. Edges only connect ports of the same type. */
@@ -45,6 +46,11 @@ export interface NodeDefinition<Config = unknown> {
   defaultConfig(): Config;
   /** Extra things the result depends on besides config and inputs (e.g. the content hash of a file). */
   dependencies?(config: Config, ctx: EvalContext): unknown;
+  /**
+   * For nodes with a `multiple` input: when this returns true, several inputs that come from the same document
+   * are combined by applying each input's changes in turn (see merge.ts), and the node gets one document.
+   */
+  mergesInputs?(config: Config): boolean;
   /** Must not change its inputs or config. Inputs are keyed by input port name. */
   evaluate(inputs: Record<string, unknown>, config: Config, ctx: EvalContext): Promise<NodeOutput>;
 }
@@ -54,6 +60,8 @@ export type NodeRegistry = Record<string, NodeDefinition<any>>;
 export interface GraphNode {
   id: string;
   type: string;
+  /** A name the user gave the node. Only for display: it never changes results. */
+  name?: string;
   config: unknown;
   position?: { x: number; y: number };
 }
@@ -257,7 +265,10 @@ export class GraphEvaluator {
    * so a change re-runs that node and the nodes after it, and nothing else.
    * Independent branches run at the same time.
    */
-  async evaluate(graph: Graph, ctx: EvalContext): Promise<GraphResult> {
+  async evaluate(userGraph: Graph, ctx: EvalContext): Promise<GraphResult> {
+    // Inputs that are combined run through hidden copies of their nodes (see merge.ts).
+    const plan = planMerges(userGraph, this.registry);
+    const graph = plan.graph;
     const order = topologicalSort(graph);
     const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
     const pending = new Map<string, Promise<NodeResult>>();
@@ -277,7 +288,12 @@ export class GraphEvaluator {
       );
     }
     await Promise.all(pending.values());
-    return { results, ran };
+    for (const id of plan.hidden) delete results[id];
+    for (const [id, count] of Object.entries(plan.merged)) {
+      const r = results[id];
+      if (r) results[id] = { ...r, info: { ...r.info, combined: count } };
+    }
+    return { results, ran: ran.filter((id) => !plan.hidden.has(id)) };
   }
 
   private async run(node: GraphNode, incoming: GraphEdge[], upstream: NodeResult[], ctx: EvalContext, ran: string[]): Promise<NodeResult> {

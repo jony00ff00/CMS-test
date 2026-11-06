@@ -6,6 +6,7 @@ import {
   type Selection, type SelectorConfig,
 } from '../../engine';
 import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
+import { nodeLabel } from '../node-label';
 import { BRIDGE_SOURCE, withBridge, type BridgeMessage } from './bridge';
 import { openPreviewWindow, type PreviewWindow } from './preview-window';
 import { PreviewResizer } from './PreviewResizer';
@@ -44,7 +45,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
     if (showResult) {
       const result = s.results[selected.id];
       const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
-      return { label: `Result of ${selected.id}`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, message: result?.message ?? 'Waiting…' };
+      return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, message: result?.message ?? 'Waiting…' };
     }
     const input = inputOf(s, selected.id, 'document');
     const built = buildInsertion(config.content, s.files);
@@ -52,7 +53,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
     const block = 'nodes' in built ? built.block : config.content.kind === 'video' || config.content.kind === 'videoUrl' || config.content.kind === 'code';
     const placed = config.where.mode === 'selector' || !!config.where.point;
     return {
-      label: `Input of ${selected.id} · ${placed ? 'the marker shows where the insertion goes; click to move it' : 'click where the insertion should go'}`,
+      label: `Input of ${nodeLabel(selected)} · ${placed ? 'the marker shows where the insertion goes; click to move it' : 'click where the insertion should go'}`,
       doc: input?.doc,
       from: input?.from,
       insert: { nodeId: selected.id, where: config.where, block },
@@ -66,7 +67,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
     const selection = result?.status === 'ok' ? (result.outputs.selection as Selection) : undefined;
     const count = selection?.matches.length ?? 0;
     return {
-      label: `Input of ${selected.id} · ${count} match${count === 1 ? '' : 'es'} highlighted`,
+      label: `Input of ${nodeLabel(selected)} · ${count} match${count === 1 ? '' : 'es'} highlighted`,
       doc: input?.doc,
       from: input?.from,
       selection,
@@ -77,7 +78,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
   if (selected && (selected.type === 'documentSource' || selected.type === 'snippet')) {
     const result = s.results[selected.id];
     const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
-    return { label: `Output of ${selected.id}`, doc, from: { nodeId: selected.id, port: 'document' }, message: result?.message ?? 'Waiting…' };
+    return { label: `Output of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, message: result?.message ?? 'Waiting…' };
   }
   const outputs = s.graph.nodes.filter((n) => n.type === 'output');
   const output = outputs.find((n) => n.id === selected?.id) ?? outputs[0];
@@ -87,7 +88,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
   // With several documents combined, selected text cannot be traced back to one of them.
   const input = count === 1 ? inputOf(s, output.id, 'document') : undefined;
   return {
-    label: count > 1 ? `${output.id} · ${count} documents, one after another` : output.id,
+    label: count > 1 ? `${nodeLabel(output)} · ${count} inputs combined` : nodeLabel(output),
     html: result?.status === 'ok' ? (result.outputs.html as string) : undefined,
     doc: input?.doc,
     from: input?.from,
@@ -256,7 +257,7 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
             <span className="quote">“{short}”</span>
             {source.manualSelectorId && (
               <button type="button" onClick={() => save('existing')}>
-                Add to {source.manualSelectorId}
+                Add to {nodeLabel(s.graph.nodes.find((n) => n.id === source.manualSelectorId), source.manualSelectorId)}
               </button>
             )}
             <button type="button" onClick={() => save('new')}>

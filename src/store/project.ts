@@ -94,6 +94,8 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
     if (!ok) warnings.push(`A node of unknown type "${String(n?.type)}" was left out`);
     return ok;
   });
+  // A name must be text; anything else is dropped.
+  for (const n of nodes) if (n.name !== undefined && typeof n.name !== 'string') delete n.name;
   const ids = new Set<string>();
   const unique = nodes.filter((n) => (ids.has(n.id) ? (warnings.push(`A second node "${n.id}" was left out`), false) : ids.add(n.id)));
   const graph: Graph = { nodes: unique, edges: [] };

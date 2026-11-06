@@ -15,7 +15,7 @@ async function connect(page: Page, from: string, fromPort: string, to: string, t
   await page.mouse.up();
 }
 
-async function fitView(page: Page) {
+export async function fitView(page: Page) {
   await page.locator('.react-flow__controls-fitview').click();
   const viewport = page.locator('.react-flow__viewport');
   let last = '';
@@ -163,35 +163,42 @@ test('an uploaded image with a caption is kept after a reload', async ({ page })
   await expect(preview(page).locator('figure img[alt="Logo"]')).toHaveAttribute('src', /^data:image\/png;base64,/);
 });
 
-test('an Output can take several documents, shown in an order you choose', async ({ page }) => {
-  await setUp(page);
+test('an Output combines the changes of several inputs into one document', async ({ page }) => {
+  // The HTML example's Snippet goes into output-4. Add an Insert node fed by the same source, into the same Output.
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  await page.getByRole('complementary', { name: 'Node palette' }).getByRole('button', { name: /^Insert/ }).click();
+  await fitView(page);
+  await connect(page, 'documentSource-1', 'document', 'insert-5', 'document');
+  await connect(page, 'insert-5', 'document', 'output-4', 'document');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(5);
+  await node(page, 'insert-5').click();
   await inspector(page).getByLabel('Insert', { exact: true }).selectOption('code');
   await inspector(page).getByLabel('Show it as').selectOption('html');
   await inspector(page).locator('.cm-content[aria-label="Code"]').click();
   await page.keyboard.insertText('<p class="from-insert">Added by the Insert node</p>');
   await inspector(page).getByLabel('Place it').selectOption('selector');
   await inspector(page).getByLabel('CSS selector').fill('h1');
+  await expect(node(page, 'output-4')).toContainText('2 combined');
 
-  // The first Output already has the Snippet; connect the Insert node to it as well.
-  await connect(page, 'insert-5', 'document', 'output-4', 'document');
-  await expect(page.locator('.react-flow__edge')).toHaveCount(6);
-  await expect(node(page, 'output-4')).toContainText('2 documents');
   await node(page, 'output-4').click();
+  const result = preview(page);
+  await expect(result.locator('h1')).toHaveCount(1);
+  await expect(result.locator('aside.callout h2')).toHaveText(['Getting started', 'Pricing']);
+  await expect(result.locator('h1 + p.from-insert')).toHaveText('Added by the Insert node');
+  await page.screenshot({ path: 'test-results/output-combined.png' });
+
   const order = inspector(page).getByRole('list', { name: 'Documents in page order' });
   await expect(order.getByRole('listitem')).toHaveText([/Snippet · snippet-3/, /Insert · insert-5/]);
-  await expect(previewText(page)).resolves.toMatch(/^[\s\S]*Getting started[\s\S]*Added by the Insert node/);
-  await page.screenshot({ path: 'test-results/output-two-documents.png' });
-
   await inspector(page).getByRole('button', { name: 'Move insert-5 up' }).click();
   await expect(order.getByRole('listitem')).toHaveText([/Insert · insert-5/, /Snippet · snippet-3/]);
-  await expect
-    .poll(async () => {
-      const text = await previewText(page);
-      return text.indexOf('Added by the Insert node') < text.indexOf('Getting started');
-    })
-    .toBe(true);
-  // JSON export needs one document.
-  await expect(inspector(page)).toContainText('With several documents connected, only a web page can be made.');
+  await expect(result.locator('h1 + p.from-insert')).toHaveCount(1);
+  await expect(result.locator('aside.callout')).toHaveCount(2);
+
+  // "One after another" shows each document in full instead.
+  await inspector(page).getByLabel('Combine the documents').selectOption('append');
+  await expect(result.locator('h1')).toHaveCount(2);
+  await expect(node(page, 'output-4')).toContainText('2 documents');
+  await expect(inspector(page)).toContainText('Documents shown one after another can only be made into a web page.');
 });
 
 test('the width of an insertion takes any CSS unit', async ({ page }) => {

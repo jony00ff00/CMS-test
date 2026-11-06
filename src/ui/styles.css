@@ -172,7 +172,10 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
 .cms-node header { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem 0.2rem; }
-.cms-node-title { font-weight: 600; font-size: 0.85rem; }
+.cms-node-title { font-weight: 600; font-size: 0.85rem; display: grid; min-width: 0; overflow-wrap: anywhere; cursor: text; }
+.cms-node-type { font-weight: 400; font-size: 0.7rem; color: var(--muted); }
+.cms-node header { gap: 0.4rem; }
+.node-name-input { font: 600 0.85rem system-ui, sans-serif; width: 100%; padding: 0.1rem 0.3rem; border: 1px solid var(--accent); border-radius: 4px; }
 .cms-node-summary { padding: 0 0.6rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cms-node-message { padding: 0.2rem 0.6rem 0; color: var(--muted); font-size: 0.75rem; }
 .cms-node.status-error .cms-node-message { color: var(--danger); }

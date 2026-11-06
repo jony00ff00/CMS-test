@@ -5,6 +5,11 @@ import { exportJson } from '../json-export';
 import type { CmsDocument } from '../types';
 
 export interface OutputConfig {
+  /**
+   * Several connected documents: "merge" (default) applies every input's changes to one document (when they come
+   * from the same source); "append" shows the documents one after another.
+   */
+  combine?: 'merge' | 'append';
   /** "html" (default): a web page. "json": the JSON source file with the changed fields written back. */
   format?: 'html' | 'json';
   /** A complete page with title, styles and snippet scripts (default), or just the body content. */
@@ -23,6 +28,7 @@ export const output: NodeDefinition<OutputConfig> = {
   inputs: [{ name: 'document', type: 'document', label: 'Document', multiple: true }],
   outputs: [{ name: 'html', type: 'html', label: 'HTML' }],
   defaultConfig: () => ({ format: 'html', fullDocument: true, inlineAssets: true }),
+  mergesInputs: (config) => (config.combine ?? 'merge') === 'merge',
   async evaluate(inputs, config): Promise<NodeOutput> {
     const docs = inputs.document as CmsDocument[];
     const doc = combineDocuments(docs);

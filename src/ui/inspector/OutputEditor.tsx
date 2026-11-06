@@ -1,6 +1,7 @@
 import { nodeRegistry, type CmsDocument, type GraphNode, type NodeResult, type OutputConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { download } from '../download';
+import { nodeLabel } from '../node-label';
 import { CheckboxField, SelectField } from './fields';
 
 export function OutputEditor({ node }: { node: GraphNode }) {
@@ -14,9 +15,10 @@ export function OutputEditor({ node }: { node: GraphNode }) {
     return s.results[edge.source]?.outputs[edge.sourcePort] as CmsDocument | undefined;
   });
   const several = incoming.length > 1;
+  const appended = several && config.combine === 'append';
   const update = (patch: Partial<OutputConfig>) => editorStore.getState().updateConfig<OutputConfig>(node.id, (c) => ({ ...c, ...patch }));
   const format = config.format ?? 'html';
-  const jsonPossible = !several && input?.meta.json?.mapping.mode === 'fields';
+  const jsonPossible = !appended && (several || input?.meta.json?.mapping.mode === 'fields');
   const ok = result?.status === 'ok';
   const baseName = (input?.meta.fileName ?? 'output').replace(/\.[^.]+$/, '');
 
@@ -30,11 +32,25 @@ export function OutputEditor({ node }: { node: GraphNode }) {
     <>
       {several && (
         <div className="field">
-          <span className="field-label">Documents, in page order</span>
+          <SelectField
+            label="Combine the documents"
+            value={config.combine ?? 'merge'}
+            options={[
+              { value: 'merge', label: 'Apply all their changes to one document' },
+              { value: 'append', label: 'Show them one after another' },
+            ]}
+            hint={
+              (config.combine ?? 'merge') === 'merge'
+                ? 'Each input’s changes are applied in this order. Documents from different sources are shown one after another.'
+                : 'Each document is shown in full, in this order.'
+            }
+            onChange={(combine) => update({ combine })}
+          />
+          <span className="field-label">{(config.combine ?? 'merge') === 'merge' ? 'Order the changes are applied in' : 'Documents, in page order'}</span>
           <ol className="input-order" aria-label="Documents in page order">
             {incoming.map((e, i) => {
               const source = graph.nodes.find((n) => n.id === e.source);
-              const label = source ? `${nodeRegistry[source.type]?.label ?? source.type} · ${source.id}` : e.source;
+              const label = source ? `${nodeRegistry[source.type]?.label ?? source.type} · ${nodeLabel(source)}` : e.source;
               return (
                 <li key={e.id}>
                   <span>{label}</span>
@@ -54,7 +70,6 @@ export function OutputEditor({ node }: { node: GraphNode }) {
               );
             })}
           </ol>
-          <p className="hint">The page shows these one after another.</p>
         </div>
       )}
       <SelectField
@@ -65,8 +80,8 @@ export function OutputEditor({ node }: { node: GraphNode }) {
           { value: 'json', label: 'JSON file (changed fields written back)' },
         ]}
         hint={
-          several
-            ? 'With several documents connected, only a web page can be made.'
+          appended
+            ? 'Documents shown one after another can only be made into a web page.'
             : format === 'json'
             ? 'Only the mapped fields change; everything else in the file stays as it was.'
             : input?.meta.json && !jsonPossible

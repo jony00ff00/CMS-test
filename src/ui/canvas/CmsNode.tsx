@@ -1,7 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { describeInsertion, nodeRegistry, refStatus, type GraphNode, type InsertNodeConfig, type NodeResult, type SelectorConfig, type SnippetNodeConfig } from '../../engine';
-import { useEditor } from '../../store/editor-store';
+import { editorStore, useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
 
@@ -21,7 +21,7 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
   return (
     <div className={`cms-node cms-node-${node.type} status-${status}${selected ? ' is-selected' : ''}`} data-testid={`node-${id}`}>
       <header>
-        <span className="cms-node-title">{def.label}</span>
+        <NodeTitle id={id} name={node.name} label={def.label} />
         <span className={`status-pill status-${status}`} title={result?.message}>
           {STATUS_LABEL[status]}
         </span>
@@ -71,6 +71,48 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
 
 export const CmsNode = memo(CmsNodeView);
 
+/** The node's name (or its type), with the type below a given name. Double-click to rename. */
+function NodeTitle({ id, name, label }: { id: string; name?: string; label: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  if (editing) {
+    const done = (save: boolean) => {
+      if (save) editorStore.getState().renameNode(id, draft);
+      setEditing(false);
+    };
+    return (
+      <input
+        className="node-name-input nodrag"
+        aria-label={`Name of ${id}`}
+        autoFocus
+        value={draft}
+        placeholder={label}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => done(true)}
+        onKeyDown={(e) => {
+          e.stopPropagation(); // keep Backspace from deleting the node
+          if (e.key === 'Enter') done(true);
+          if (e.key === 'Escape') done(false);
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      className="cms-node-title"
+      title="Double-click to rename"
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setDraft(name ?? '');
+        setEditing(true);
+      }}
+    >
+      {name?.trim() || label}
+      {name?.trim() && <span className="cms-node-type">{label}</span>}
+    </span>
+  );
+}
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 'es'}`;
 
 function summarize(node: GraphNode, result: NodeResult | undefined): string {
@@ -102,7 +144,8 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
       if (typeof info.bytes !== 'number') return 'Nothing to show yet';
-      return `${typeof info.documents === 'number' ? `${info.documents} documents · ` : ''}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
+      const several = typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : '';
+      return `${several}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
     default:
       return '';
   }
