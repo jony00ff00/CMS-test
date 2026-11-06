@@ -1,5 +1,8 @@
+import type React from 'react';
 import { nodeRegistry } from '../../engine';
-import { editorStore, useEditor } from '../../store/editor-store';
+import { editorStore, selectedNodeIds, useEditor } from '../../store/editor-store';
+import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
+import { nodeLabel } from '../node-label';
 import { LibraryEditor } from '../library/LibraryEditor';
 import { TextField } from './fields';
 import { ConnectorEditor } from './ConnectorEditor';
@@ -29,6 +32,7 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
   const node = useEditor((s) => s.graph.nodes.find((n) => n.id === s.selectedId));
   const result = useEditor((s) => (s.selectedId ? s.results[s.selectedId] : undefined));
   const openSnippetId = useEditor((s) => s.openSnippetId);
+  const selection = useEditor((s) => selectedNodeIds(s).join(' '));
 
   if (openSnippetId) {
     return (
@@ -47,6 +51,8 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
       </aside>
     );
   }
+
+  if (selection.includes(' ')) return <MultiSelection ids={selection.split(' ')} minimise={minimise} />;
 
   if (!node) {
     return (
@@ -89,6 +95,45 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
         {Editor ? <Editor node={node} /> : <p className="error-text">Unknown node type "{node.type}"</p>}
       </div>
       <ResultPanel result={result} />
+    </aside>
+  );
+}
+
+/** Several nodes selected: which ones, and what can be done with all of them. */
+function MultiSelection({ ids, minimise }: { ids: string[]; minimise: React.ReactNode }) {
+  const nodes = useEditor((s) => s.graph.nodes);
+  const mainId = useEditor((s) => s.selectedId);
+  const store = editorStore.getState();
+  const picked = ids.map((id) => nodes.find((n) => n.id === id)).filter((n) => n !== undefined);
+  return (
+    <aside className="panel inspector" aria-label="Inspector">
+      <div className="inspector-head">
+        <h2>{picked.length} nodes selected</h2>
+        <span className="inspector-head-actions">
+          <button type="button" className="ghost danger" title="Delete these nodes and their connections (Backspace)" onClick={() => store.removeElements(ids, [])}>
+            Delete {picked.length} nodes
+          </button>
+          {minimise}
+        </span>
+      </div>
+      <ul className="multi-selection" aria-label="Selected nodes">
+        {picked.map((n) => (
+          <li key={n.id}>
+            <span className="swatch" style={{ background: NODE_COLORS[n.type] ?? UNKNOWN_NODE_COLOR }} aria-hidden="true" />
+            <button type="button" className="link" title="Select only this node" onClick={() => store.select(n.id)}>
+              {nodeLabel(n)}
+            </button>
+            <span className="muted small">
+              {nodeRegistry[n.type]?.label ?? n.type}
+              {n.id === mainId ? ' · shown in the preview' : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="muted small">
+        Shift-, Ctrl- or Cmd-click a node to add it or take it out; drag one of them to move them all. Click a name to
+        edit that node alone.
+      </p>
     </aside>
   );
 }

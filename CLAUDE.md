@@ -195,6 +195,14 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
   app). Holds `graph`, `files`, `selectedId`, `results`, `notice`. Changes to the graph or files re-evaluate
   after 150 ms; position-only changes do not. Stale evaluations are dropped. `whenIdle()` for tests.
+- Several nodes can be selected: Shift / Ctrl / Cmd + click (`multiSelectionKeyCode`), or a Shift-drag selection
+  box. React Flow decides; its `select` changes go to `changeSelection(added, removed)`. Store: `selectedId` is the
+  main node (inspector, preview; the last one added), `selectedIds` every selected node, counted only while it holds
+  `selectedId` (so setting `selectedId` anywhere else selects that node alone); read with `selectedNodeIds(state)`
+  (a new array: in a selector, join it into a string). A plain click calls `select(id)` (just that node). Dragging
+  moves all of them: `moveNodes` (one undo step). With several selected the inspector shows `MultiSelection`
+  (the list, "Delete N nodes"). The minimap draws the connections (`MiniMapNode.tsx`: the first node's component
+  draws every edge as a bezier between its handles, under all boxes, `.minimap-edge.edge-<type>`).
 - `src/ui/canvas`: React Flow canvas. Nodes live in local state (React Flow stores measured sizes on them) and
   are synced from the store; positions go back on drag end. `isValidConnection` uses `edgeError`;
   `onConnectEnd` shows why a drop on a wrong handle was refused. `CmsNode` renders any node type from its

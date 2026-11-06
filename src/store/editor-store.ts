@@ -18,10 +18,23 @@ export interface Notice {
   text: string;
 }
 
+/** Every selected node that still exists: the multi-selection, or just the main one. */
+export function selectedNodeIds(s: Pick<EditorState, 'graph' | 'selectedId' | 'selectedIds'>): string[] {
+  if (!s.selectedId) return [];
+  const ids = s.selectedIds?.includes(s.selectedId) ? s.selectedIds : [s.selectedId];
+  return ids.filter((id) => s.graph.nodes.some((n) => n.id === id));
+}
+
 export interface EditorState {
   graph: Graph;
   files: Record<string, StoredFile>;
+  /** The node the inspector and the preview follow (the last one clicked). */
   selectedId?: string;
+  /**
+   * Every selected node when several are (Shift / Ctrl / Cmd + click, or a selection box). Only counts while it
+   * holds `selectedId`: setting `selectedId` to another node alone makes it the only one. Read with `selectedNodeIds`.
+   */
+  selectedIds?: string[];
   results: Record<string, NodeResult>;
   evaluating: boolean;
   /** Set when evaluating the whole graph failed (individual node problems are in `results`). */
@@ -47,13 +60,18 @@ export interface EditorState {
   /** Remove nodes and connections together, as one undo step. */
   removeElements(nodeIds: string[], edgeIds: string[]): void;
   moveNode(id: string, position: { x: number; y: number }): void;
+  /** Move several nodes as one undo step (dragging a multi-selection). */
+  moveNodes(positions: Record<string, { x: number; y: number }>): void;
   /** Replace a node's config, or derive the new config from the old one. */
   updateConfig<C>(id: string, update: C | ((config: C) => C)): void;
   /** Give a node a name (empty: back to its id). */
   renameNode(id: string, name: string): void;
   /** Add a connection. Returns the reason when it is not allowed (and shows it). */
   connect(edge: EdgeCandidate): string | undefined;
+  /** Select only this node (or nothing). */
   select(id?: string): void;
+  /** Add nodes to the selection and take some out; the last one added becomes the main one. */
+  changeSelection(added: string[], removed: string[]): void;
 
   openSnippet(id?: string): void;
   /** Save a snippet as the next version of its id. Returns the saved version. */
@@ -249,6 +267,12 @@ export function createEditorStore(options: EditorOptions = {}) {
       set({ graph: { ...graph, edges: graph.edges.filter((e) => !gone.has(e.id)) } });
     },
 
+    moveNodes(positions) {
+      const { graph } = get();
+      if (!Object.keys(positions).length) return;
+      set({ graph: { ...graph, nodes: graph.nodes.map((n) => (positions[n.id] ? { ...n, position: positions[n.id] } : n)) } });
+    },
+
     moveNode(id, position) {
       const { graph } = get();
       // Moving changes nothing the engine looks at, but positions are part of the saved graph.
@@ -294,7 +318,16 @@ export function createEditorStore(options: EditorOptions = {}) {
     },
 
     select(id) {
-      if (get().selectedId !== id || get().openSnippetId) set({ selectedId: id, openSnippetId: undefined });
+      const { selectedId, selectedIds, openSnippetId } = get();
+      if (selectedId !== id || openSnippetId || (selectedIds?.length ?? 0) > 1) set({ selectedId: id, selectedIds: undefined, openSnippetId: undefined });
+    },
+
+    changeSelection(added, removed) {
+      const state = get();
+      const gone = new Set(removed);
+      const ids = [...selectedNodeIds(state).filter((id) => !gone.has(id) && !added.includes(id)), ...added.filter((id) => !gone.has(id))];
+      const main = added.filter((id) => !gone.has(id)).at(-1) ?? (state.selectedId && ids.includes(state.selectedId) ? state.selectedId : ids.at(-1));
+      set({ selectedId: main, selectedIds: ids.length > 1 ? ids : undefined, ...(main !== state.selectedId && { openSnippetId: undefined }) });
     },
 
     openSnippet(id) {

@@ -4,14 +4,17 @@ import {
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { edgeError, nodeRegistry, type EdgeCandidate } from '../../engine';
-import { editorStore, useEditor } from '../../store/editor-store';
+import { editorStore, selectedNodeIds, useEditor } from '../../store/editor-store';
 import { CmsNode, type CmsFlowNode } from './CmsNode';
 import { DeletableEdge } from './DeletableEdge';
+import { MiniMapNode } from './MiniMapNode';
 import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
 import { ProjectToolbar } from './ProjectToolbar';
 import { DRAG_TYPE } from './Palette';
 
 const nodeTypes = { cms: CmsNode };
+/** Hold one of these and click to add a node to the selection (or take it out). */
+const MULTI_SELECT_KEYS = ['Shift', 'Control', 'Meta'];
 const edgeTypes = { deletable: DeletableEdge };
 
 const toCandidate = (c: Connection | Edge): EdgeCandidate => ({
@@ -23,7 +26,8 @@ const toCandidate = (c: Connection | Edge): EdgeCandidate => ({
 
 export function Canvas() {
   const graph = useEditor((s) => s.graph);
-  const selectedId = useEditor((s) => s.selectedId);
+  // A string, so the selector gives the same value until the selection really changes.
+  const selection = useEditor((s) => selectedNodeIds(s).join(' '));
   const evaluating = useEditor((s) => s.evaluating);
   const fitRequest = useEditor((s) => s.fitRequest);
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -33,13 +37,14 @@ export function Canvas() {
   // synced from the store whenever the graph changes.
   const [nodes, setNodes] = useState<CmsFlowNode[]>([]);
   useEffect(() => {
+    const selected = new Set(selection.split(' '));
     setNodes((prev) =>
       graph.nodes.map((n) => {
         const old = prev.find((p) => p.id === n.id);
-        return { ...old, id: n.id, type: 'cms', data: {}, position: n.position ?? { x: 0, y: 0 }, selected: n.id === selectedId };
+        return { ...old, id: n.id, type: 'cms', data: {}, position: n.position ?? { x: 0, y: 0 }, selected: selected.has(n.id) };
       }),
     );
-  }, [graph.nodes, selectedId]);
+  }, [graph.nodes, selection]);
 
   // Fit the view once nodes are measured after loading an example (not when nodes are added one by one:
   // moving the view then would get in the way of dragging).
@@ -79,10 +84,17 @@ export function Canvas() {
   const onNodesChange = useCallback((changes: NodeChange<CmsFlowNode>[]) => {
     setNodes((ns) => applyNodeChanges(changes, ns));
     const state = editorStore.getState();
+    // Dragging several selected nodes moves them all: one undo step when they are dropped.
+    const moved: Record<string, { x: number; y: number }> = {};
+    const added: string[] = [];
+    const removed: string[] = [];
     for (const c of changes) {
-      if (c.type === 'position' && c.position && !c.dragging) state.moveNode(c.id, c.position);
-      if (c.type === 'select' && c.selected) state.select(c.id);
+      if (c.type === 'position' && c.position && !c.dragging) moved[c.id] = c.position;
+      if (c.type === 'select') (c.selected ? added : removed).push(c.id);
     }
+    state.moveNodes(moved);
+    // React Flow decides what a click (with or without Shift / Ctrl / Cmd) or a selection box selects.
+    if (added.length || removed.length) state.changeSelection(added, removed);
     // Removals are handled in onDelete, all at once.
   }, []);
 
@@ -148,7 +160,11 @@ export function Canvas() {
         isValidConnection={isValidConnection}
         onPaneClick={() => editorStore.getState().select(undefined)}
         // Also for a node that is already selected (e.g. to leave the snippet library editor and show it again).
-        onNodeClick={(_e, n) => editorStore.getState().select(n.id)}
+        // With Shift / Ctrl / Cmd the click adds or removes the node (see onNodesChange) instead.
+        onNodeClick={(e, n) => {
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey) editorStore.getState().select(n.id);
+        }}
+        multiSelectionKeyCode={MULTI_SELECT_KEYS}
         onDelete={({ nodes: n, edges: e }) => editorStore.getState().removeElements(n.map((x) => x.id), e.map((x) => x.id))}
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
@@ -158,7 +174,7 @@ export function Canvas() {
       >
         <Background gap={20} />
         <Controls />
-        <MiniMap pannable zoomable className="minimap" style={{ width: 160, height: 100 }} nodeColor={nodeColor} nodeStrokeColor={nodeColor} nodeBorderRadius={3} />
+        <MiniMap pannable zoomable className="minimap" style={{ width: 160, height: 100 }} nodeColor={nodeColor} nodeStrokeColor={nodeColor} nodeBorderRadius={3} nodeComponent={MiniMapNode} />
         <Panel position="top-left" className="canvas-toolbar">
           <ExampleButtons />
           {graph.nodes.length > 0 && (

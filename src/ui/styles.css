@@ -304,3 +304,16 @@ fieldset.where { gap: 0.6rem; }
 .json-preview { max-height: 16rem; overflow: auto; font-size: 0.75rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-editor { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; font-size: 0.8rem; }
 .code-editor .cm-editor.cm-focused { outline: 2px solid var(--accent-soft); }
+
+/* Connections in the minimap, in their output's colour; the same on-screen width at any zoom. */
+.minimap-edge { fill: none; stroke: #94a3b8; stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+.minimap-edge.edge-document { stroke: var(--port-document); }
+.minimap-edge.edge-selection { stroke: var(--port-selection); }
+.minimap-edge.edge-html { stroke: var(--port-html); }
+.minimap-edge.edge-result { stroke: var(--port-result); }
+.minimap-edge.edge-point { stroke: var(--port-point); }
+
+/* Several nodes selected: the inspector lists them. */
+.multi-selection { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
+.multi-selection li { display: flex; align-items: center; gap: 8px; }
+.multi-selection .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
