@@ -96,6 +96,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   read the page: `bridge.ts` is injected and talks over `postMessage` (`source: 'cms-preview'`). It rebuilds
   the engine's text index from the DOM using `BLOCK_TAGS`, so selections come back as engine text offsets
   (an e2e test checks the two agree for HTML, .docx and JSON). Elements marked `data-cms-preview` are ignored.
+- The preview can be resized (`PreviewResizer`: drag with pointer capture so the iframe does not swallow the
+  pointer, arrow keys, Home / End, double-click resets; 120 px to window height − 160; remembered in
+  localStorage `node-cms:preview-height`; `App` sets `--preview-height` on the grid) and opened in its own
+  window (`preview-window.ts`: an about:blank window of the editor's origin, the editor's styles copied in,
+  the preview rendered there with a React portal; still a sandboxed iframe inside). Messages from the
+  preview then arrive at that window, so `Preview` listens on the iframe's own window, and the bridge accepts
+  messages from `parent.opener` as well as `parent`. Closing or reloading the window brings the preview back.
 - Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
   shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives
   an element anchor, anything else a text anchor. Highlighting never changes the text, so offsets stay valid.
