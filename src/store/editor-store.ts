@@ -5,7 +5,7 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import {
   connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type EdgeCandidate, type Graph,
-  type GraphNode, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
+  type GraphNode, type InsertNodeConfig, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
   latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
 } from '../engine';
 import { sampleHtml, sampleJson } from '../samples';
@@ -280,7 +280,13 @@ export function createEditorStore(options: EditorOptions = {}) {
         get().notify('error', result.error);
         return result.error;
       }
-      set({ graph: result.graph });
+      // Connecting a selection to an Insert node means "insert this": switch it to selected content (same undo step).
+      const target = result.graph.nodes.find((n) => n.id === edge.target);
+      let graph = result.graph;
+      if (target?.type === 'insert' && edge.targetPort === 'selection' && (target.config as InsertNodeConfig).content.kind !== 'selection') {
+        graph = { ...graph, nodes: graph.nodes.map((n) => (n === target ? { ...n, config: { ...(n.config as InsertNodeConfig), content: { kind: 'selection' } } } : n)) };
+      }
+      set({ graph });
       return undefined;
     },
 

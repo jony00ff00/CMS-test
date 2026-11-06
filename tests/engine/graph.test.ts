@@ -60,7 +60,7 @@ describe('node registry', () => {
       ['documentSource', [], ['document']],
       ['selector', ['document'], ['selection']],
       ['snippet', ['selection'], ['document']],
-      ['insert', ['document'], ['document']],
+      ['insert', ['document', 'selection'], ['document']],
       ['output', ['document'], ['html', 'result']],
       ['connector', ['result'], ['document']],
     ]);

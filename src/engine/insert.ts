@@ -13,7 +13,9 @@ export type InsertContent =
   | { kind: 'image'; fileId?: string; alt: string; caption?: string; width?: Width; href?: string }
   | { kind: 'video'; fileId?: string; caption?: string; width?: Width; autoplay?: boolean; loop?: boolean; muted?: boolean }
   | { kind: 'imageUrl'; url: string; alt: string; caption?: string; width?: Width; href?: string }
-  | { kind: 'videoUrl'; url: string; caption?: string; width?: Width };
+  | { kind: 'videoUrl'; url: string; caption?: string; width?: Width }
+  /** A copy of what the selection connected to the Insert node's Selection input picked (from any document). */
+  | { kind: 'selection' };
 
 export type InsertKind = InsertContent['kind'];
 
@@ -98,13 +100,14 @@ interface Built {
   /** Block content cannot go inside a paragraph. */
   block: boolean;
   warnings: string[];
+  snippetAssets?: NonNullable<CmsDocument['meta']['snippetAssets']>;
 }
 
 /** The elements to insert. Returns a reason instead when the content is not complete yet. */
 export function buildInsertion(content: InsertContent, files: Record<string, StoredFile>): Built | { waiting: string } | { error: string } {
   const warnings: string[] = [];
   // With a caption, the figure gets the width and the media fills it, so the caption wraps to the same width.
-  const width = cssWidth(content.kind === 'code' ? undefined : content.width);
+  const width = cssWidth('width' in content ? content.width : undefined);
   if (width.warning) warnings.push(width.warning);
   const sized = (media: Element, caption?: string) => {
     // A linked image: size the image, not the link around it.
@@ -193,6 +196,8 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
       if (embed) warnings.push('YouTube and Vimeo videos may not play in the preview (it is sandboxed); they do play in the exported page');
       return { nodes: [figure(media, content.caption).node], assets: [], block: true, warnings };
     }
+    case 'selection':
+      return { waiting: "Connect a selection to the Insert node's Selection input" };
     default:
       return { error: `Unknown kind of insertion "${(content as { kind: string }).kind}"` };
   }
@@ -234,6 +239,80 @@ export function embedUrl(href: string): string | undefined {
     if (vimeo) return `https://player.vimeo.com/video/${vimeo}`;
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Copying a selection
+
+const EXTRACT = 'cms-extract';
+
+const extractSnippet: Snippet = {
+  kind: 'snippet',
+  id: 'cms-extract',
+  name: 'Copy',
+  version: 1,
+  mode: 'wrap',
+  template: `<${EXTRACT}>{{content}}</${EXTRACT}>`,
+  params: [],
+};
+
+/**
+ * A copy of everything a selection picked, in document order (text ranges keep their inline formatting).
+ * The copy loses `data-json-path`: it is not the JSON field itself, and two blocks for one field would confuse
+ * write-back. Images it uses and the snippet CSS / JS of its document come along.
+ */
+export async function copySelection(selection: Selection): Promise<Built> {
+  const warnings = [...selection.warnings];
+  if (selection.matches.length === 0) return { nodes: [], assets: [], block: false, warnings: [...warnings, 'The selection is empty, so nothing was inserted'] };
+  const marked = await applySnippet(selection, extractSnippet);
+  const nodes: ElementContent[] = [];
+  const collect = (children: Nodes[], inside: boolean) => {
+    for (const c of children) {
+      if (c.type !== 'element') {
+        if (inside) nodes.push(structuredClone(c) as ElementContent);
+        continue;
+      }
+      if (c.tagName === EXTRACT) {
+        collect(c.children, true); // nested (overlapping matches): copied once
+        continue;
+      }
+      if (inside) {
+        const copy = structuredClone(c);
+        unwrapMarkers(copy);
+        nodes.push(copy);
+      } else collect(c.children, false);
+    }
+  };
+  collect(marked.document.tree.children as Nodes[], false);
+
+  const doc = selection.document;
+  const assets: Asset[] = [];
+  const visit = (n: ElementContent) => {
+    if (n.type !== 'element') return;
+    delete n.properties.dataJsonPath;
+    const src = n.properties.src;
+    if (typeof src === 'string' && src.startsWith('asset:')) {
+      const a = doc.assets[src.slice('asset:'.length)];
+      if (a && !assets.includes(a)) assets.push(a);
+    }
+    n.children.forEach(visit);
+  };
+  nodes.forEach(visit);
+  return {
+    nodes,
+    assets,
+    block: nodes.some((n) => n.type === 'element' && BLOCK_TAGS.has(n.tagName)),
+    warnings,
+    snippetAssets: doc.meta.snippetAssets,
+  };
+}
+
+function unwrapMarkers(el: Element) {
+  el.children = el.children.flatMap((c) => {
+    if (c.type !== 'element') return [c];
+    unwrapMarkers(c);
+    return c.tagName === EXTRACT ? c.children : [c];
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -352,18 +431,24 @@ export async function insertContent(
   where: InsertWhere,
   content: InsertContent,
   files: Record<string, StoredFile>,
+  selection?: Selection,
 ): Promise<InsertResult> {
-  const built = buildInsertion(content, files);
+  const built = content.kind === 'selection' && selection ? await copySelection(selection) : buildInsertion(content, files);
   if ('waiting' in built) return { document: doc, warnings: [], inserted: 0, needsAttention: false, waiting: built.waiting };
   if ('error' in built) throw new Error(built.error);
   const targets = insertionTargets(doc, where, built.block);
   if (targets.waiting) return { document: doc, warnings: [], inserted: 0, needsAttention: false, waiting: targets.waiting };
   const warnings = [...built.warnings, ...targets.warnings];
+  if (built.nodes.length === 0) return { document: doc, warnings, inserted: 0, needsAttention: targets.needsAttention };
   if (targets.matches.length === 0) return { document: doc, warnings, inserted: 0, needsAttention: targets.needsAttention };
 
   const placed = await place(doc, targets, () => structuredClone(built.nodes));
   const out = placed.document;
   for (const a of built.assets) out.assets = { ...out.assets, [a.id]: a };
+  // Copied content keeps its look: the snippet CSS and JS of the document it came from come along.
+  for (const a of built.snippetAssets ?? []) {
+    if (!(out.meta.snippetAssets ?? []).some((x) => x.key === a.key)) out.meta.snippetAssets = [...(out.meta.snippetAssets ?? []), a];
+  }
   const assets = out.meta.snippetAssets ?? [];
   if (!assets.some((a) => a.key === 'cms-insert@1')) out.meta.snippetAssets = [...assets, { key: 'cms-insert@1', name: 'Insert', css: INSERT_CSS }];
   return { document: out, warnings: [...warnings, ...placed.warnings], inserted: placed.inserted, needsAttention: false };
@@ -405,6 +490,8 @@ export function describeInsertion(content: InsertContent): string {
       return 'Linked image';
     case 'videoUrl':
       return 'Linked video';
+    case 'selection':
+      return 'Selected content';
   }
 }
 

@@ -99,7 +99,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   shared document, and `combine: 'append'`, go one after another (`combineDocuments` in `combine.ts`); JSON export
   refuses only in that case; `format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
   preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
-  `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone);
+  `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone;
+  optional `selection` input (`PortDef.optional`: the node runs without it) used by content `{ kind: 'selection' }`:
+  `copySelection` in `insert.ts` copies what it matched, in document order, via a wrap snippet with a
+  `cms-extract` marker; the copy drops `data-json-path` and brings its images and the source's snippet assets;
+  connecting a selection to an Insert switches it to that kind in `connect`);
   `connector` (input `result`, the port type of Output's `result` output, which carries the finished document;
   passes it on as a `document`, the same object, so snippet assets and JSON meta are kept; no settings).
 
@@ -112,6 +116,12 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   one undo step; also Ctrl/Cmd+D outside fields) and Delete (`removeElements`). Connections use the `deletable`
   edge type (`DeletableEdge.tsx`): a delete button at the middle while selected. In e2e, click a connection by
   position between its handles (a straight one has no height).
+- Node colours: CSS `--node-*` / `--port-*`, and `NODE_COLORS` (`src/ui/node-colors.ts`) for the minimap; keep them
+  the same. Connector is grey.
+- "Save project file…" opens `SaveDialog` (`src/ui/canvas/SaveDialog.tsx`, a `<dialog>`): a file name
+  (`projectFileName`, `.node-cms.json`, remembered in localStorage `node-cms:project-name`), then the browser's own
+  save dialog (`showSaveFilePicker`, to pick the folder; cancelling it keeps our dialog open), or a download where
+  that API is missing. e2e stubs `showSaveFilePicker` (`save-dialog.spec.ts`) or sets it to undefined.
 - Panels can be minimised (`src/ui/panels.tsx`: `useMinimisedPanels`, remembered in localStorage
   `node-cms:minimised-panels`; `MinimiseButton` in each panel's header). A minimised palette or inspector is replaced
   by a 36 px `PanelRail` (the inspector's shows the selected node); grid widths come from `--palette-width` /

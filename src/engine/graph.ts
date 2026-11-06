@@ -16,6 +16,8 @@ export interface PortDef {
    * connections appear in `graph.edges` (see `moveEdge`).
    */
   multiple?: boolean;
+  /** Inputs only: the node also runs without this connection (its value is then `undefined`). */
+  optional?: boolean;
 }
 
 /** A file the user added to the project. Source nodes refer to it by id. */
@@ -324,7 +326,7 @@ export class GraphEvaluator {
         inputs[e.targetPort] = [...((inputs[e.targetPort] as unknown[] | undefined) ?? []), value];
       } else inputs[e.targetPort] = value;
     });
-    const missing = def.inputs.filter((p) => !(p.name in inputs));
+    const missing = def.inputs.filter((p) => !p.optional && !(p.name in inputs));
     if (missing.length) {
       return { ...base, status: 'waiting', message: `Connect the ${missing.map((p) => p.label).join(' and ')} input`, key };
     }

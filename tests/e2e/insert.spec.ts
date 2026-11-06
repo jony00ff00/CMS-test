@@ -250,3 +250,31 @@ async function previewText(page: Page): Promise<string> {
       }),
   );
 }
+
+test('insert content picked by a selection, from the same or another document', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  const palette = page.getByRole('complementary', { name: 'Node palette' });
+  await palette.getByRole('button', { name: /^Insert/ }).click();
+  await palette.getByRole('button', { name: /^Selector/ }).click();
+  await palette.getByRole('button', { name: /^Output/ }).click();
+  await fitView(page);
+  await connect(page, 'snippet-3', 'document', 'insert-5', 'document');
+  await connect(page, 'documentSource-1', 'document', 'selector-6', 'document');
+  await connect(page, 'insert-5', 'document', 'output-7', 'document');
+  // Connecting a selection switches the Insert node to "Selected content".
+  await connect(page, 'selector-6', 'selection', 'insert-5', 'selection');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(7);
+  await expect(node(page, 'insert-5')).toContainText('Selected content');
+
+  await node(page, 'selector-6').click();
+  await inspector(page).getByLabel('CSS selector').fill('h1');
+  await node(page, 'insert-5').click();
+  await expect(inspector(page).getByLabel('Insert', { exact: true })).toHaveValue('selection');
+  await expect(inspector(page)).toContainText('A copy of what selector-6 selects (1 match)');
+  await inspector(page).getByLabel('Place it').selectOption('selector');
+  await expect(node(page, 'insert-5')).toContainText('after each match');
+
+  await node(page, 'output-7').click();
+  await expect(preview(page).locator('h1')).toHaveCount(3);
+  await page.screenshot({ path: 'test-results/insert-selection.png' });
+});

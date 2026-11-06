@@ -41,8 +41,15 @@ test('save a project file and open it again, with a .docx file in it', async ({ 
   await node(page, 'documentSource-1').click();
   await inspector(page).getByLabel('File').setInputFiles(fixture('sample.docx'));
   await expect(node(page, 'documentSource-1')).toContainText('sample.docx');
-  const saved = await downloadText(page, () => page.getByRole('button', { name: 'Save project file' }).click());
-  expect(saved.name).toBe('project.node-cms.json');
+  // Without the browser's save picker (e.g. Firefox, Safari), the dialog names the file and the browser downloads it.
+  await page.evaluate(() => Object.assign(window, { showSaveFilePicker: undefined }));
+  await page.getByRole('button', { name: 'Save project file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save project file' });
+  await dialog.getByLabel('File name').fill('My garden: v2');
+  await expect(dialog).toContainText('Saved as My garden- v2.node-cms.json');
+  const saved = await downloadText(page, () => dialog.getByRole('button', { name: 'Save', exact: true }).click());
+  expect(saved.name).toBe('My garden- v2.node-cms.json');
+  await expect(dialog).toHaveCount(0);
   const project = JSON.parse(saved.text);
   expect(project).toMatchObject({ format: 'node-cms-project', version: 1 });
   expect(project.files).toEqual([expect.objectContaining({ name: 'sample.docx', encoding: 'base64' })]);

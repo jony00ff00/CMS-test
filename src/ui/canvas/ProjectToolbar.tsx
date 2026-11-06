@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore } from 'zustand';
 import { editorStore, useEditor } from '../../store/editor-store';
-import { download } from '../download';
+import { SaveDialog } from './SaveDialog';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 const mod = isMac ? '⌘' : 'Ctrl+';
@@ -12,6 +12,7 @@ export function ProjectToolbar() {
   const canRedo = useStore(editorStore.temporal, (t) => t.futureStates.length > 0);
   const savedAt = useEditor((s) => s.savedAt);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [saving, setSaving] = useState(false);
 
   const open = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -34,11 +35,12 @@ export function ProjectToolbar() {
       <span className="toolbar-gap" />
       <button
         type="button"
-        onClick={() => download('project.node-cms.json', editorStore.getState().exportProject(), 'application/json')}
-        title="Download the graph, its files and the snippet library as one file"
+        onClick={() => setSaving(true)}
+        title="Save the graph, its files and the snippet library as one file"
       >
-        Save project file
+        Save project file…
       </button>
+      {saving && <SaveDialog onClose={() => setSaving(false)} />}
       <button type="button" onClick={() => fileInput.current?.click()}>
         Open project…
       </button>

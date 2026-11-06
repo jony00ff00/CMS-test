@@ -13,7 +13,7 @@
   --port-selection: #d97706;
   --port-html: #059669;
   --port-result: #dc2626;
-  --node-connector: #db2777;
+  --node-connector: #6b7280;
   --node-output: #dc2626;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
@@ -224,7 +224,15 @@ body.preview-window { margin: 0; height: 100vh; }
 .react-flow__edge.edge-result .react-flow__edge-path { stroke: var(--port-result); stroke-dasharray: 6 3; }
 .react-flow__edge .react-flow__edge-path { stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3.5; }
-.minimap { width: 140px; height: 90px; }
+.minimap .react-flow__minimap-svg { display: block; }
+.save-dialog { border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 50px rgb(15 23 42 / 0.25); }
+.save-dialog::backdrop { background: rgb(15 23 42 / 0.35); }
+.save-dialog h3 { margin: 0 0 0.35rem; }
+.save-dialog form { display: grid; gap: 0.6rem; }
+.save-dialog .hint { margin: 0; }
+.file-name-input { display: flex; align-items: center; gap: 0.35rem; }
+.file-name-input input { flex: 1; min-width: 0; }
+.dialog-buttons { justify-content: flex-end; margin-top: 0.4rem; }
 
 /* Snippet library */
 .library { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }

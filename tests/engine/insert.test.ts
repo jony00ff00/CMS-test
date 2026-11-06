@@ -295,3 +295,76 @@ describe('picking a point from a cursor', () => {
     expect(r.html).toContain('<p><img src="https://x.test/a.png" alt="" class="cms-insert" loading="lazy" style="width:100%">The basic');
   });
 });
+
+describe('inserting selected content', () => {
+  const target = parseHtml('<h1>Page</h1><p>First paragraph.</p><p>Last paragraph.</p>');
+  const other = parseHtml('<h2>Note</h2><p>Some <strong>bold</strong> words here.</p><ul><li>one</li></ul>');
+  const after = (selector: string): InsertWhere => ({ mode: 'selector', selector: { mode: 'css', selector }, place: 'after' });
+
+  it('copies the matched elements, in document order, from another document', async () => {
+    const sel = runSelector(other, { mode: 'css', selector: 'ul, h2' });
+    const r = await insertContent(target, after('h1'), { kind: 'selection' }, {}, sel);
+    expect(r.warnings).toEqual([]);
+    expect(serialize(r.document)).toBe('<h1>Page</h1><h2>Note</h2><ul><li>one</li></ul><p>First paragraph.</p><p>Last paragraph.</p>');
+    expect(serialize(other)).toContain('<h2>Note</h2>'); // the original is untouched
+  });
+
+  it('copies selected text with its inline formatting, and may go inside a paragraph', async () => {
+    const sel = runSelector(other, { mode: 'regex', pattern: 'bold words' });
+    const r = await insertContent(target, { mode: 'selector', selector: { mode: 'css', selector: 'p' }, place: 'end' }, { kind: 'selection' }, {}, sel);
+    expect(serialize(r.document)).toContain('<p>First paragraph.<strong>bold</strong> words</p>');
+    expect(r.inserted).toBe(2);
+  });
+
+  it('can copy part of the same document; block content goes next to a paragraph', async () => {
+    const sel = runSelector(target, { mode: 'css', selector: 'h1' });
+    const r = await insertContent(target, { mode: 'selector', selector: { mode: 'css', selector: 'p:last-child' }, place: 'end' }, { kind: 'selection' }, {}, sel);
+    expect(serialize(r.document)).toBe('<h1>Page</h1><p>First paragraph.</p><p>Last paragraph.</p><h1>Page</h1>');
+  });
+
+  it('keeps snippet styles and images, drops JSON field paths from the copy', async () => {
+    const doc = await importJson('{"a":"Hello"}');
+    doc.meta.snippetAssets = [{ key: 'callout@1', name: 'Callout', css: '.callout{}' }];
+    doc.assets = { pic: { id: 'pic', contentType: 'image/png', base64: PNG_BASE64 } };
+    doc.tree.children.push({ type: 'element', tagName: 'img', properties: { src: 'asset:pic', alt: '' }, children: [] });
+    const sel = runSelector(doc, { mode: 'all', scope: 'blocks' });
+    const r = await insertContent(target, after('h1'), { kind: 'selection' }, {}, sel);
+    expect(serialize(r.document)).not.toContain('data-json-path');
+    expect(serialize(r.document)).toContain('Hello');
+    expect(r.document.assets.pic).toBeDefined();
+    expect(r.document.meta.snippetAssets?.map((a) => a.key)).toContain('callout@1');
+  });
+
+  it('warns for an empty selection and waits without one', async () => {
+    const empty = runSelector(other, { mode: 'css', selector: 'table' });
+    const r = await insertContent(target, after('h1'), { kind: 'selection' }, {}, empty);
+    expect(r.inserted).toBe(0);
+    expect(r.warnings.join()).toMatch(/selection is empty/);
+    expect((await insertContent(target, after('h1'), { kind: 'selection' }, {})).waiting).toMatch(/Connect a selection/);
+  });
+
+  it('runs in a graph with the optional Selection input', async () => {
+    const html = storeFile('a.html', '<h1>A</h1><p>Text</p>', 'html');
+    const notes = storeFile('b.html', '<blockquote>Quoted</blockquote>', 'html');
+    const g: Graph = {
+      nodes: [
+        { id: 'a', type: 'documentSource', config: { fileId: 'a' } },
+        { id: 'b', type: 'documentSource', config: { fileId: 'b' } },
+        { id: 'sel', type: 'selector', config: { mode: 'all' } },
+        { id: 'ins', type: 'insert', config: { content: { kind: 'selection' }, where: after('h1') } },
+        { id: 'plain', type: 'insert', config: nodeRegistry.insert.defaultConfig() },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', sourcePort: 'document', target: 'ins', targetPort: 'document' },
+        { id: 'e2', source: 'b', sourcePort: 'document', target: 'sel', targetPort: 'document' },
+        { id: 'e3', source: 'sel', sourcePort: 'selection', target: 'ins', targetPort: 'selection' },
+        { id: 'e4', source: 'a', sourcePort: 'document', target: 'plain', targetPort: 'document' },
+      ],
+    };
+    const { results } = await new GraphEvaluator(nodeRegistry).evaluate(g, { files: { a: html, b: notes } });
+    expect(serialize(results.ins.outputs.document as CmsDocument)).toBe('<h1>A</h1><blockquote>Quoted</blockquote><p>Text</p>');
+    // Without the Selection input connected, an Insert node still runs (here: waiting for an address).
+    expect(results.plain.status).toBe('waiting');
+    expect(results.plain.message).toMatch(/address/i);
+  });
+});

@@ -7,6 +7,7 @@ import { edgeError, nodeRegistry, type EdgeCandidate } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CmsNode, type CmsFlowNode } from './CmsNode';
 import { DeletableEdge } from './DeletableEdge';
+import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
 import { ProjectToolbar } from './ProjectToolbar';
 import { DRAG_SNIPPET } from '../library/LibraryPanel';
 import { DRAG_TYPE } from './Palette';
@@ -68,6 +69,12 @@ export function Canvas() {
         };
       }),
     [graph, selectedEdges],
+  );
+
+  // The minimap shows each node in its type's colour.
+  const nodeColor = useCallback(
+    (n: CmsFlowNode) => NODE_COLORS[graph.nodes.find((g) => g.id === n.id)?.type ?? ''] ?? UNKNOWN_NODE_COLOR,
+    [graph.nodes],
   );
 
   const onNodesChange = useCallback((changes: NodeChange<CmsFlowNode>[]) => {
@@ -152,7 +159,7 @@ export function Canvas() {
       >
         <Background gap={20} />
         <Controls />
-        <MiniMap pannable zoomable className="minimap" />
+        <MiniMap pannable zoomable className="minimap" style={{ width: 160, height: 100 }} nodeColor={nodeColor} nodeStrokeColor={nodeColor} nodeBorderRadius={3} />
         <Panel position="top-left" className="canvas-toolbar">
           <ExampleButtons />
           {graph.nodes.length > 0 && (

@@ -1,9 +1,10 @@
 import type { ChangeEvent } from 'react';
 import {
   blockName, cssWidth, IMAGE_EXTENSIONS, mediaType, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertKind, type InsertNodeConfig,
-  type InsertPlace, type InsertWhere, type SelectorConfig, type Width,
+  type InsertPlace, type InsertWhere, type Selection, type SelectorConfig, type Width,
 } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
+import { nodeLabel } from '../node-label';
 import { CheckboxField, CodeField, SelectField, TextField } from './fields';
 import { SELECTOR_MODES, SelectorFields, useInputDocument } from './SelectorEditor';
 
@@ -13,6 +14,7 @@ const KINDS: { value: InsertKind; label: string }[] = [
   { value: 'video', label: 'Video (upload a file)' },
   { value: 'imageUrl', label: 'Linked image (from a web address)' },
   { value: 'videoUrl', label: 'Linked video (web address, YouTube or Vimeo)' },
+  { value: 'selection', label: 'Selected content (from the Selection input)' },
 ];
 
 const EMPTY: Record<InsertKind, InsertContent> = {
@@ -21,6 +23,7 @@ const EMPTY: Record<InsertKind, InsertContent> = {
   video: { kind: 'video' },
   imageUrl: { kind: 'imageUrl', url: '', alt: '' },
   videoUrl: { kind: 'videoUrl', url: '' },
+  selection: { kind: 'selection' },
 };
 
 const PLACES: { value: InsertPlace; label: string }[] = [
@@ -144,6 +147,8 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
   };
 
   switch (content.kind) {
+    case 'selection':
+      return <SelectionSource nodeId={node.id} />;
     case 'code':
       return (
         <>
@@ -237,4 +242,29 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
         </>
       );
   }
+}
+
+/** Where the content for "Selected content" comes from. */
+function SelectionSource({ nodeId }: { nodeId: string }) {
+  const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'selection'));
+  const source = useEditor((s) => (edge ? s.graph.nodes.find((n) => n.id === edge.source) : undefined));
+  const count = useEditor((s) => {
+    const r = edge ? s.results[edge.source] : undefined;
+    return r?.status === 'ok' ? (r.outputs[edge!.sourcePort] as Selection | undefined)?.matches.length : undefined;
+  });
+  if (!source) {
+    return (
+      <p className="hint warn-text">
+        Connect a Selector's Selection output to this node's Selection input. What it selects is copied here; the
+        Selector can look at this document or another one.
+      </p>
+    );
+  }
+  return (
+    <p className="hint">
+      A copy of what <strong>{nodeLabel(source)}</strong> selects
+      {typeof count === 'number' ? ` (${count} match${count === 1 ? '' : 'es'})` : ''}, in document order, with its
+      formatting and snippet styles. The original stays where it is.
+    </p>
+  );
 }

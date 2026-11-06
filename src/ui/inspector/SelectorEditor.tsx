@@ -23,9 +23,9 @@ const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
 };
 
 /** The document coming into a node, e.g. for JSON field path suggestions. */
-export function useInputDocument(nodeId: string) {
+export function useInputDocument(nodeId: string, port = 'document') {
   return useEditor((s) => {
-    const edge = s.graph.edges.find((e) => e.target === nodeId);
+    const edge = s.graph.edges.find((e) => e.target === nodeId && e.targetPort === port);
     return edge ? (s.results[edge.source]?.outputs[edge.sourcePort] as CmsDocument | undefined) : undefined;
   });
 }
