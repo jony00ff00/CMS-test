@@ -10,7 +10,7 @@ import { nodeLabel } from '../node-label';
 import { BRIDGE_SOURCE, withBridge, type BridgeMessage } from './bridge';
 import { openPreviewWindow, type PreviewWindow } from './preview-window';
 import { PreviewResizer } from './PreviewResizer';
-import { MinimiseButton, RestoreButton } from '../panels';
+import { MinimiseButton, RailButton } from '../panels';
 
 /** What the preview shows, worked out from the selected node. */
 interface PreviewSource {
@@ -130,8 +130,8 @@ interface TextSelection {
 }
 
 export interface PreviewProps {
-  height: number;
-  onHeightChange: (height: number) => void;
+  width: number;
+  onWidthChange: (width: number) => void;
   /** Called when the preview moves to its own window, or back. */
   onDetachedChange: (detached: boolean) => void;
   /** Minimised: only the header bar shows here (a separate window keeps showing the page). */
@@ -139,7 +139,7 @@ export interface PreviewProps {
   onMinimisedChange: (minimised: boolean) => void;
 }
 
-export function Preview({ height, onHeightChange, onDetachedChange, minimised, onMinimisedChange }: PreviewProps) {
+export function Preview({ width, onWidthChange, onDetachedChange, minimised, onMinimisedChange }: PreviewProps) {
   const s = useEditor((state) => state);
   const [showResult, setShowResult] = useState(false);
   useEffect(() => setShowResult(false), [s.selectedId]);
@@ -339,39 +339,41 @@ export function Preview({ height, onHeightChange, onDetachedChange, minimised, o
     </span>
   );
 
-  const toggle = minimised ? (
-    <RestoreButton panel="preview" onClick={() => onMinimisedChange(false)} />
-  ) : (
-    <MinimiseButton panel="preview" onClick={() => onMinimisedChange(true)} />
-  );
 
   return (
     <section className={`preview${popup ? ' is-detached' : ''}${minimised ? ' is-minimised' : ''}`} aria-label="Preview">
-      {!popup && !minimised && <PreviewResizer height={height} onChange={onHeightChange} />}
-      <div className="preview-head">
-        <h2>Preview</h2>
-        <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
-        {!popup && !minimised && page && source.doc && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
-        {!popup && !minimised && insertToggle}
-        {popup ? (
-          <span className="preview-actions">
-            <button type="button" onClick={() => popup.win.focus()}>
-              Show the window
-            </button>
-            <button type="button" onClick={attach}>
-              Bring it back here
-            </button>
-            {toggle}
-          </span>
-        ) : (
-          <span className="preview-actions">
-            <button type="button" className="ghost" onClick={detach} title="Open the preview in a separate window, e.g. on another screen">
-              Open in new window
-            </button>
-            {toggle}
-          </span>
-        )}
-      </div>
+      {minimised ? (
+        <RailButton panel="preview" onRestore={() => onMinimisedChange(false)} note={popup ? 'in its own window' : undefined} />
+      ) : (
+        <>
+          {!popup && <PreviewResizer width={width} onChange={onWidthChange} />}
+          <div className="preview-head">
+            <h2>Preview</h2>
+            <span className="preview-actions">
+              {popup ? (
+                <>
+                  <button type="button" onClick={() => popup.win.focus()}>
+                    Show the window
+                  </button>
+                  <button type="button" onClick={attach}>
+                    Bring it back here
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="ghost" onClick={detach} title="Open the preview in a separate window, e.g. on another screen">
+                  Open in new window
+                </button>
+              )}
+              <MinimiseButton panel="preview" onClick={() => onMinimisedChange(true)} />
+            </span>
+          </div>
+          <div className="preview-meta">
+            <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
+            {!popup && page && source.doc && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+            {!popup && insertToggle}
+          </div>
+        </>
+      )}
       {popup
         ? createPortal(
             <div className="preview preview-in-window" aria-label="Preview" role="region">

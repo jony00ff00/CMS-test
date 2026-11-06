@@ -177,10 +177,12 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   save dialog (`showSaveFilePicker`, to pick the folder; cancelling it keeps our dialog open), or a download where
   that API is missing. e2e stubs `showSaveFilePicker` (`save-dialog.spec.ts`) or sets it to undefined.
 - Panels can be minimised (`src/ui/panels.tsx`: `useMinimisedPanels`, remembered in localStorage
-  `node-cms:minimised-panels`; `MinimiseButton` in each panel's header). A minimised palette or inspector is replaced
-  by a 36 px `PanelRail` (the inspector's shows the selected node); grid widths come from `--palette-width` /
-  `--inspector-width`. A minimised preview stays mounted (it may be showing in its own window) as a header bar
-  without the iframe or resizer; `--preview-height` is then `auto`.
+  `node-cms:minimised-panels`; `MinimiseButton` in each panel's header). Layout: four columns, palette · canvas ·
+  inspector · preview (the preview is the rightmost sidebar). A minimised palette or inspector is replaced by a
+  36 px `PanelRail` (the inspector's shows the selected node); grid widths come from `--palette-width` /
+  `--inspector-width` / `--preview-width`. A minimised preview stays mounted (it may be showing in its own window)
+  as a 36 px strip (`RailButton`, noting "in its own window"); while it is in its own window the column is 240 px.
+  The canvas is a size container: below 860 px wide the project toolbar moves under the example buttons.
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
   app). Holds `graph`, `files`, `selectedId`, `results`, `notice`. Changes to the graph or files re-evaluate
   after 150 ms; position-only changes do not. Stale evaluations are dropped. `whenIdle()` for tests.
@@ -196,9 +198,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   read the page: `bridge.ts` is injected and talks over `postMessage` (`source: 'cms-preview'`). It rebuilds
   the engine's text index from the DOM using `BLOCK_TAGS`, so selections come back as engine text offsets
   (an e2e test checks the two agree for HTML, .docx, JSON and .pptx). Elements marked `data-cms-preview` are ignored.
-- The preview can be resized (`PreviewResizer`: drag with pointer capture so the iframe does not swallow the
-  pointer, arrow keys, Home / End, double-click resets; 120 px to window height − 160; remembered in
-  localStorage `node-cms:preview-height`; `App` sets `--preview-height` on the grid) and opened in its own
+- The preview sidebar can be resized (`PreviewResizer` on its left edge: drag with pointer capture so the iframe
+  does not swallow the pointer, ←/→ (left: wider), Home / End, double-click resets; 260 px to window width − 720,
+  default 440; remembered in localStorage `node-cms:preview-width`; `App` sets `--preview-width` on the grid) and opened in its own
   window (`preview-window.ts`: an about:blank window of the editor's origin, the editor's styles copied in,
   the preview rendered there with a React portal; still a sandboxed iframe inside). Messages from the
   preview then arrive at that window, so `Preview` listens on the iframe's own window, and the bridge accepts
@@ -216,8 +218,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
   shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives
   an element anchor, anything else a text anchor. Highlighting never changes the text, so offsets stay valid.
-- Snippet library UI: `src/ui/library` (`LibraryPanel` under the palette: click opens, drag onto the canvas adds a
-  node; `LibraryEditor` in the inspector when `openSnippetId` is set: edits a draft, "Save as version N+1",
+- Snippet library UI: `src/ui/library` (no list in the left sidebar: a Snippet node's dropdown offers the library's
+  snippets and "Edit in library" opens one; clicking a node, even the selected one, leaves the library editor;
+  `LibraryEditor` in the inspector when `openSnippetId` is set: edits a draft, "Save as version N+1",
   "Used by" with update buttons, a "Try it" preview). Store actions: `saveSnippet`, `createSnippet`,
   `duplicateSnippet`, `deleteSnippet`, `useLibrarySnippet`, `updateNodeSnippet`, `detachSnippet`
   (gives the copy its own id so its CSS is not merged with the library version's), `saveNodeSnippetToLibrary`,
@@ -236,7 +239,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `onDelete`) for the same reason. Keyboard: Ctrl/Cmd+Z, Ctrl+Y / Shift+Cmd+Z, ignored inside fields.
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
-  call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1440×900.
+  call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
+  canvas between the three sidebars is too narrow for reliable drags between handles).
   `tests/e2e/preview.spec.ts` has `selectInPreview` / `selectElementInPreview` / `previewText`. After an
   action that changes highlights, wait for the new highlights before selecting again (the page reloads).
 - The canvas fits the view only after loading an example, never while nodes are added (it would move them

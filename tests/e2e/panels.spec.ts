@@ -38,26 +38,28 @@ test('minimise the side panels and bring them back; the canvas gets the space', 
   expect(Math.round(await canvasWidth(page))).toBe(Math.round(before));
 });
 
-test('minimise the preview to a bar and bring it back', async ({ page }) => {
+test('minimise the preview sidebar to a strip and bring it back', async ({ page }) => {
   const frame = page.locator('iframe[title="Output preview"]');
   await expect(frame).toBeVisible();
   await page.getByRole('button', { name: 'Minimise the preview panel' }).click();
   await expect(frame).toHaveCount(0);
   await expect(page.getByRole('separator', { name: 'Resize the preview' })).toHaveCount(0);
-  expect((await box(page, 'Preview', 'region')).height).toBeLessThan(60);
+  expect(Math.round((await box(page, 'Preview', 'region')).width)).toBe(36);
   await page.screenshot({ path: 'test-results/preview-minimised.png' });
 
   await page.getByRole('button', { name: 'Show the preview panel' }).click();
-  expect(Math.round((await box(page, 'Preview', 'region')).height)).toBe(260);
+  expect(Math.round((await box(page, 'Preview', 'region')).width)).toBe(440);
   await expect(page.frameLocator('iframe[title="Output preview"]').locator('h1')).toBeVisible();
 });
 
-test('a preview in its own window keeps showing while the docked bar is minimised', async ({ page }) => {
+test('a preview in its own window keeps showing while the sidebar is minimised', async ({ page }) => {
   const popupPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Open in new window' }).click();
   const popup = await popupPromise;
   await expect(popup.frameLocator('iframe[title="Output preview"]').locator('h1')).toBeVisible();
   await page.getByRole('button', { name: 'Minimise the preview panel' }).click();
   await expect(popup.frameLocator('iframe[title="Output preview"]').locator('h1')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show the preview panel' })).toContainText('in its own window');
+  await page.getByRole('button', { name: 'Show the preview panel' }).click();
   await expect(page.getByRole('button', { name: 'Bring it back here' })).toBeVisible();
 });

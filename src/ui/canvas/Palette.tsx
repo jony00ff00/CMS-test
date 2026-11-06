@@ -1,6 +1,5 @@
 import { nodeRegistry } from '../../engine';
 import { useEditor } from '../../store/editor-store';
-import { LibraryPanel } from '../library/LibraryPanel';
 import { MinimiseButton } from '../panels';
 
 export const DRAG_TYPE = 'application/x-cms-node';
@@ -34,7 +33,6 @@ export function Palette({ onMinimise }: { onMinimise: () => void }) {
           </li>
         ))}
       </ul>
-      <LibraryPanel />
     </aside>
   );
 }

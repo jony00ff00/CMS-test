@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const node = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
 const previewSection = (page: Page) => page.getByRole('region', { name: 'Preview' });
 const resizer = (page: Page) => page.getByRole('separator', { name: 'Resize the preview' });
-const sectionHeight = async (page: Page) => (await previewSection(page).boundingBox())!.height;
+const sectionWidth = async (page: Page) => (await previewSection(page).boundingBox())!.width;
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => {
@@ -13,55 +13,58 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole('button', { name: 'HTML example' }).click();
 });
 
-test('drag the bar above the preview to resize it; the size is remembered', async ({ page }) => {
-  expect(Math.round(await sectionHeight(page))).toBe(260);
+test('the preview is the sidebar on the right; drag its left edge to resize it; the size is remembered', async ({ page }) => {
+  const box = (await previewSection(page).boundingBox())!;
+  expect(Math.round(box.x + box.width)).toBe(1920); // the rightmost column
+  expect(Math.round(box.height)).toBe(1080);
+  expect(Math.round(await sectionWidth(page))).toBe(440);
   const bar = (await resizer(page).boundingBox())!;
   const x = bar.x + bar.width / 2;
   const y = bar.y + bar.height / 2;
 
-  // Taller: drag up over the canvas.
+  // Wider: drag left over the inspector.
   await page.mouse.move(x, y);
   await page.mouse.down();
-  await page.mouse.move(x, y - 200, { steps: 8 });
+  await page.mouse.move(x - 200, y, { steps: 8 });
   await page.mouse.up();
-  expect(Math.round(await sectionHeight(page))).toBe(460);
+  expect(Math.round(await sectionWidth(page))).toBe(640);
 
-  // Shorter: drag down across the preview's iframe (the pointer must not get lost in it).
+  // Narrower: drag right across the preview's iframe (the pointer must not get lost in it).
   const bar2 = (await resizer(page).boundingBox())!;
-  await page.mouse.move(x, bar2.y + bar2.height / 2);
+  await page.mouse.move(bar2.x + bar2.width / 2, y);
   await page.mouse.down();
-  await page.mouse.move(x, bar2.y + bar2.height / 2 + 120, { steps: 8 });
+  await page.mouse.move(bar2.x + bar2.width / 2 + 120, y, { steps: 8 });
   await page.mouse.up();
-  expect(Math.round(await sectionHeight(page))).toBe(340);
+  expect(Math.round(await sectionWidth(page))).toBe(520);
   await expect(page.frameLocator('iframe[title="Output preview"]').locator('h1')).toBeVisible();
   await page.screenshot({ path: 'test-results/preview-resized.png' });
 
   await page.reload();
-  expect(Math.round(await sectionHeight(page))).toBe(340);
+  expect(Math.round(await sectionWidth(page))).toBe(520);
 
-  // Never so small it disappears, never so big it hides the canvas.
+  // Never so narrow it disappears, never so wide it hides the canvas.
   const bar3 = (await resizer(page).boundingBox())!;
-  await page.mouse.move(x, bar3.y + 4);
+  await page.mouse.move(bar3.x + 4, y);
   await page.mouse.down();
-  await page.mouse.move(x, 890, { steps: 8 });
+  await page.mouse.move(1910, y, { steps: 8 });
   await page.mouse.up();
-  expect(Math.round(await sectionHeight(page))).toBe(120);
+  expect(Math.round(await sectionWidth(page))).toBe(260);
 
   await resizer(page).dblclick();
-  expect(Math.round(await sectionHeight(page))).toBe(260);
+  expect(Math.round(await sectionWidth(page))).toBe(440);
 });
 
 test('resize with the keyboard', async ({ page }) => {
   await resizer(page).focus();
-  await page.keyboard.press('ArrowUp');
-  await page.keyboard.press('ArrowUp');
-  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '300');
-  await page.keyboard.press('Shift+ArrowDown');
-  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '220');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '480');
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '400');
   await page.keyboard.press('Home');
-  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '120');
+  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '260');
   await page.keyboard.press('End');
-  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '740'); // window height 900 − 160
+  await expect(resizer(page)).toHaveAttribute('aria-valuenow', '1200'); // window width 1920 − 720
 });
 
 test('open the preview in its own window, keep editing, and bring it back', async ({ page }) => {
@@ -76,7 +79,7 @@ test('open the preview in its own window, keep editing, and bring it back', asyn
   // The editor gets the space back and says where the preview went.
   await expect(previewSection(page)).toContainText('Showing in its own window.');
   await expect(page.locator('iframe[title="Output preview"]')).toHaveCount(0);
-  expect(await sectionHeight(page)).toBeLessThan(80);
+  expect(Math.round(await sectionWidth(page))).toBe(240);
 
   // Editing in the editor updates the window.
   await node(page, 'selector-2').click();
@@ -118,7 +121,7 @@ test('closing the preview window brings the preview back', async ({ page }) => {
   await expect(popup.frameLocator('iframe[title="Output preview"]').locator('h1')).toBeVisible();
   await popup.close();
   await expect(page.frameLocator('iframe[title="Output preview"]').locator('aside.callout')).toHaveCount(2);
-  expect(Math.round(await sectionHeight(page))).toBe(260);
+  expect(Math.round(await sectionWidth(page))).toBe(440);
 
   // And from the editor's side.
   const [again] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: 'Open in new window' }).click()]);

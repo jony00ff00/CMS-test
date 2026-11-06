@@ -40,8 +40,8 @@ function Chevron({ dir }: { dir: keyof typeof ARROWS }) {
   );
 }
 
-const MINIMISE_DIR = { palette: 'left', inspector: 'right', preview: 'down' } as const;
-const RESTORE_DIR = { palette: 'right', inspector: 'left', preview: 'up' } as const;
+const MINIMISE_DIR = { palette: 'left', inspector: 'right', preview: 'right' } as const;
+const RESTORE_DIR = { palette: 'right', inspector: 'left', preview: 'left' } as const;
 
 /** The button in a panel's header that minimises it. */
 export function MinimiseButton({ panel, onClick }: { panel: PanelName; onClick: () => void }) {
@@ -55,19 +55,26 @@ export function MinimiseButton({ panel, onClick }: { panel: PanelName; onClick: 
 
 /** What a minimised side panel leaves behind: a narrow strip that brings it back. */
 export function PanelRail({ panel, onRestore, note }: { panel: Exclude<PanelName, 'preview'>; onRestore: () => void; note?: string }) {
-  const title = `Show the ${PANEL_TITLES[panel].toLowerCase()} panel`;
   return (
     <aside className={`panel-rail ${panel}`} aria-label={`${PANEL_TITLES[panel]} (minimised)`}>
-      <button type="button" className="panel-rail-button" aria-label={title} title={title} onClick={onRestore}>
-        <Chevron dir={RESTORE_DIR[panel]} />
-        <span className="panel-rail-label">{PANEL_TITLES[panel]}</span>
-        {note && <span className="panel-rail-note">{note}</span>}
-      </button>
+      <RailButton panel={panel} onRestore={onRestore} note={note} />
     </aside>
   );
 }
 
-/** The button that brings a minimised preview back (it stays a slim bar with its header). */
+/** The strip's button: an arrow, the panel's name written downwards, and an optional note. */
+export function RailButton({ panel, onRestore, note }: { panel: PanelName; onRestore: () => void; note?: string }) {
+  const title = `Show the ${PANEL_TITLES[panel].toLowerCase()} panel`;
+  return (
+    <button type="button" className="panel-rail-button" aria-label={title} title={title} onClick={onRestore}>
+      <Chevron dir={RESTORE_DIR[panel]} />
+      <span className="panel-rail-label">{PANEL_TITLES[panel]}</span>
+      {note && <span className="panel-rail-note">{note}</span>}
+    </button>
+  );
+}
+
+/** A button that brings a minimised panel back. */
 export function RestoreButton({ panel, onClick }: { panel: PanelName; onClick: () => void }) {
   const title = `Show the ${PANEL_TITLES[panel].toLowerCase()} panel`;
   return (

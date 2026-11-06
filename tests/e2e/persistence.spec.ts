@@ -25,15 +25,22 @@ test('the project is kept in the browser and opens again after a reload', async 
   await page.getByRole('button', { name: 'HTML example' }).click();
   await node(page, 'selector-2').click();
   await inspector(page).getByLabel('CSS selector').fill('h1');
-  await page.getByRole('region', { name: 'Snippet library' }).getByRole('button', { name: 'New' }).click();
+  // A custom snippet saved to the library: the library is part of what is kept.
+  await node(page, 'snippet-3').click();
+  await inspector(page).getByLabel('Snippet', { exact: true }).selectOption({ label: 'Custom (only this node)' });
+  await inspector(page).getByLabel('Class name').fill('kept');
+  await inspector(page).getByRole('button', { name: 'Save to library' }).click();
   await expect(page.getByText(/Saved in this browser/)).toBeVisible();
   await page.waitForTimeout(800); // let the last change be saved
 
   await page.reload();
   await expect(node(page, 'selector-2')).toContainText('h1 · 1 match');
-  await expect(page.getByRole('region', { name: 'Snippet library' }).getByRole('listitem')).toHaveCount(6);
+  await node(page, 'snippet-3').click();
+  await expect(inspector(page).getByLabel('Snippet', { exact: true })).toHaveValue('kept');
+  await expect(inspector(page).getByLabel('Snippet', { exact: true }).locator('option:not([value^="__"])')).toHaveCount(6);
+  await node(page, 'selector-2').click();
   await node(page, 'output-4').click();
-  await expect(preview(page).locator('aside.callout h1')).toHaveText('Field Guide to Node Gardens');
+  await expect(preview(page).locator('h1.kept')).toHaveText('Field Guide to Node Gardens');
 });
 
 test('save a project file and open it again, with a .docx file in it', async ({ page, browser }) => {
@@ -54,7 +61,7 @@ test('save a project file and open it again, with a .docx file in it', async ({ 
   expect(project).toMatchObject({ format: 'node-cms-project', version: 1 });
   expect(project.files).toEqual([expect.objectContaining({ name: 'sample.docx', encoding: 'base64' })]);
 
-  const other = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+  const other = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
   await other.goto('/');
   await other.getByLabel('Project file').setInputFiles({ name: 'project.node-cms.json', mimeType: 'application/json', buffer: Buffer.from(saved.text) });
   await expect(other.getByRole('status').filter({ hasText: 'Project opened.' })).toBeVisible();

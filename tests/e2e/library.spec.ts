@@ -3,7 +3,15 @@ import { expect, test, type Page } from '@playwright/test';
 const node = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
 const preview = (page: Page) => page.frameLocator('iframe[title="Output preview"]');
 const inspector = (page: Page) => page.getByRole('complementary', { name: 'Inspector' });
-const library = (page: Page) => page.getByRole('region', { name: 'Snippet library' });
+/** The library snippets a Snippet node can use (its dropdown, without "Custom"). */
+const choices = (page: Page) => inspector(page).getByLabel('Snippet', { exact: true }).locator('option:not([value^="__"])');
+/** Open a library snippet for editing, from the HTML example's Snippet node. */
+async function openInLibrary(page: Page, id: string) {
+  await node(page, 'snippet-3').click();
+  if (id !== 'callout') await inspector(page).getByLabel('Snippet', { exact: true }).selectOption(id);
+  await inspector(page).getByRole('button', { name: 'Edit in library' }).click();
+  await expect(inspector(page).getByRole('heading', { name: 'Snippet library' })).toBeVisible();
+}
 
 /** Replace the text of a code field (CodeMirror). */
 async function setCode(page: Page, label: string, text: string) {
@@ -23,11 +31,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('the library starts with five snippets that can be tried out', async ({ page }) => {
-  await expect(library(page).getByRole('listitem')).toHaveCount(5);
-  await expect(library(page)).toContainText('Callout');
-  await expect(library(page)).toContainText('Code block');
-  await library(page).getByRole('button', { name: /^Highlight/ }).click();
-  await expect(inspector(page).getByRole('heading', { name: 'Snippet library' })).toBeVisible();
+  // There is no snippet list in the left sidebar: a Snippet node offers the library's snippets.
+  await expect(page.getByRole('region', { name: 'Snippet library' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  await node(page, 'snippet-3').click();
+  await expect(choices(page)).toHaveText(['Callout', 'Collapsible details', 'Highlight', 'Tooltip', 'Code block']);
+  await openInLibrary(page, 'highlight');
   const example = page.frameLocator('iframe[title="Snippet example"]');
   await expect(example.locator('mark.cms-hl-yellow')).toHaveText('Some example text to try the snippet on.');
   await inspector(page).getByRole('region', { name: 'Try it' }).getByLabel('Colour').selectOption('pink');
@@ -46,11 +55,11 @@ test('switch a Snippet node to another library snippet and set its parameters', 
 
 test('saving a new version shows "update available" until the node is updated', async ({ page }) => {
   await page.getByRole('button', { name: 'HTML example' }).click();
-  await library(page).getByRole('button', { name: /^Callout/ }).click();
+  await openInLibrary(page, 'callout');
   await setCode(page, 'Template', '<aside class="callout callout-{{params.variant}}"><strong>Note</strong>{{content}}</aside>');
   await expect(inspector(page)).toContainText('Unsaved changes');
   await inspector(page).getByRole('button', { name: 'Save as version 2' }).click();
-  await expect(library(page).getByRole('button', { name: /^Callout/ })).toContainText('v2');
+  await expect(inspector(page).locator('.version-pill')).toHaveText('v2');
   await expect(inspector(page).getByRole('region', { name: 'Used by' })).toContainText('snippet-3 v1update available');
   await expect(node(page, 'snippet-3')).toContainText('Update available: v2');
 
@@ -70,7 +79,7 @@ test('saving a new version shows "update available" until the node is updated', 
 
 test('add a parameter to a snippet; it becomes a field on the node', async ({ page }) => {
   await page.getByRole('button', { name: 'HTML example' }).click();
-  await library(page).getByRole('button', { name: /^Callout/ }).click();
+  await openInLibrary(page, 'callout');
   await inspector(page).getByRole('button', { name: 'Add parameter' }).click();
   const param = inspector(page).getByRole('group', { name: 'Parameter param2' });
   await param.getByLabel('Name').fill('title');
@@ -93,12 +102,6 @@ test('add a parameter to a snippet; it becomes a field on the node', async ({ pa
   await expect(preview(page).locator('aside.callout b')).toHaveText(['Remember', 'Remember']);
 });
 
-test('drag a snippet from the library onto the canvas', async ({ page }) => {
-  await library(page).getByRole('button', { name: /^Tooltip/ }).dragTo(page.locator('.react-flow__pane'), { targetPosition: { x: 300, y: 200 } });
-  await expect(page.locator('.react-flow__node')).toHaveCount(1);
-  await expect(page.locator('.react-flow__node')).toContainText('Tooltip v1');
-});
-
 test('edit a snippet in the node only, then save it to the library', async ({ page }) => {
   await page.getByRole('button', { name: 'HTML example' }).click();
   await node(page, 'snippet-3').click();
@@ -111,8 +114,8 @@ test('edit a snippet in the node only, then save it to the library', async ({ pa
 
   await node(page, 'snippet-3').click();
   await inspector(page).getByRole('button', { name: 'Save to library' }).click();
-  await expect(library(page).getByRole('listitem')).toHaveCount(6);
-  await expect(library(page)).toContainText('Warning box');
+  await expect(choices(page)).toHaveCount(6);
+  await expect(choices(page)).toContainText(['Warning box']);
   await expect(node(page, 'snippet-3')).toContainText('Warning box v1');
   await page.screenshot({ path: 'test-results/m7-library.png' });
 });

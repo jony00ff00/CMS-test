@@ -9,7 +9,6 @@ import { CmsNode, type CmsFlowNode } from './CmsNode';
 import { DeletableEdge } from './DeletableEdge';
 import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
 import { ProjectToolbar } from './ProjectToolbar';
-import { DRAG_SNIPPET } from '../library/LibraryPanel';
 import { DRAG_TYPE } from './Palette';
 
 const nodeTypes = { cms: CmsNode };
@@ -126,13 +125,11 @@ export function Canvas() {
   const onDrop = useCallback(
     (e: DragEvent) => {
       const type = e.dataTransfer.getData(DRAG_TYPE);
-      const snippetId = e.dataTransfer.getData(DRAG_SNIPPET);
-      if (!type && !snippetId) return;
+      if (!type) return;
       e.preventDefault();
       const p = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       const at = { x: p.x - 110, y: p.y - 30 };
-      if (snippetId) editorStore.getState().addSnippetNode(snippetId, at);
-      else editorStore.getState().addNode(type, at);
+      editorStore.getState().addNode(type, at);
     },
     [screenToFlowPosition],
   );
@@ -150,6 +147,8 @@ export function Canvas() {
         onConnectEnd={onConnectEnd}
         isValidConnection={isValidConnection}
         onPaneClick={() => editorStore.getState().select(undefined)}
+        // Also for a node that is already selected (e.g. to leave the snippet library editor and show it again).
+        onNodeClick={(_e, n) => editorStore.getState().select(n.id)}
         onDelete={({ nodes: n, edges: e }) => editorStore.getState().removeElements(n.map((x) => x.id), e.map((x) => x.id))}
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
