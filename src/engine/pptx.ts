@@ -6,7 +6,8 @@
 // JSZip and xmldom are loaded on demand (mammoth uses them too, so .docx and .pptx share them).
 import type JSZipType from 'jszip';
 import { parseHtml } from './document';
-import type { CmsDocument, PptxSlideInfo } from './types';
+import { hashBytes } from './hash';
+import type { Asset, CmsDocument, PptxSlideInfo } from './types';
 
 export interface PptxOptions {
   fileName?: string;
@@ -66,7 +67,8 @@ const kid = (el: XmlElement | null | undefined, name: string) => kids(el, name)[
 /** An attribute's value, or undefined when it is missing (xmldom returns "" for missing attributes). */
 const attr = (el: XmlElement | null | undefined, name: string): string | undefined => (el?.hasAttribute(name) ? el.getAttribute(name)! : undefined);
 /** A relationship id (r:id), whatever prefix the file uses for the relationships namespace. */
-const relId = (el: XmlElement | null | undefined): string | undefined => (el?.hasAttributeNS(NS.r, 'id') ? el.getAttributeNS(NS.r, 'id')! : attr(el, 'r:id'));
+const relId = (el: XmlElement | null | undefined, name = 'id'): string | undefined =>
+  el?.hasAttributeNS(NS.r, name) ? el.getAttributeNS(NS.r, name)! : attr(el, `r:${name}`);
 const path = (el: XmlElement | null | undefined, ...names: string[]) => names.reduce<XmlElement | undefined>((e, n) => kid(e, n), el ?? undefined);
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -102,13 +104,36 @@ interface Paragraph {
 }
 
 interface Shape {
-  kind: 'title' | 'subtitle' | 'body' | 'text';
+  /** "block": already rendered (a table, picture, chart, SmartArt). */
+  kind: 'title' | 'subtitle' | 'body' | 'text' | 'block';
   /** For "title": a centred title (title slides). */
   centred?: boolean;
+  /** In a placeholder (comes right after the title in reading order). */
+  placeholder?: boolean;
   y: number;
   x: number;
   paragraphs: Paragraph[];
+  html?: string;
 }
+
+/** What reading a slide needs from the package. */
+interface SlideContext {
+  slide: number;
+  layoutTypes: Map<string, string>;
+  rels: Map<string, Rel>;
+  warnings: string[];
+  xml: (part: string) => Promise<XmlElement | undefined>;
+  partRels: (part: string) => Promise<Map<string, Rel>>;
+  bytes: (part: string) => Promise<Uint8Array | undefined>;
+  assets: Record<string, Asset>;
+}
+
+/** Picture types browsers show, by file extension. */
+const PICTURE_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp', svg: 'image/svg+xml',
+};
+/** 1 px = 9525 EMU (English Metric Units, PowerPoint's unit). */
+const EMU_PER_PX = 9525;
 
 export async function importPptx(data: ArrayBuffer | Uint8Array, options: PptxOptions = {}): Promise<CmsDocument> {
   const name = options.fileName ?? 'the .pptx file';
@@ -127,6 +152,8 @@ export async function importPptx(data: ArrayBuffer | Uint8Array, options: PptxOp
     throw new Error(`Could not read ${name}: it is not a valid .pptx file`);
   }
   const warnings: string[] = [];
+  const assets: Record<string, Asset> = {};
+  const bytesOf = async (part: string) => zip.file(part)?.async('uint8array');
   const parser = new DOMParser({ errorHandler: { warning: () => {} } });
   const xmlCache = new Map<string, XmlElement | undefined>();
   const xml = async (part: string): Promise<XmlElement | undefined> => {
@@ -184,7 +211,16 @@ export async function importPptx(data: ArrayBuffer | Uint8Array, options: PptxOp
     const slideRels = await rels(part);
     const layoutPart = [...slideRels.values()].find((r) => r.type === 'slideLayout')?.target;
     const layout = await layoutInfo(layoutPart);
-    const shapes = readShapes(path(slide, 'cSld', 'spTree'), layout.types, slideRels, warnings, number);
+    const shapes = await readShapes(path(slide, 'cSld', 'spTree'), {
+      slide: number,
+      layoutTypes: layout.types,
+      rels: slideRels,
+      warnings,
+      xml,
+      partRels: rels,
+      bytes: bytesOf,
+      assets,
+    });
     const title = shapes.find((s) => s.kind === 'title');
     const titleText = title ? plain(title.paragraphs.map((p) => p.html).join(' ')) : '';
     const included = (!hidden || !!options.includeHidden) && (!range.slides || range.slides.has(number));
@@ -210,6 +246,7 @@ export async function importPptx(data: ArrayBuffer | Uint8Array, options: PptxOp
   const doc = parseHtml(html.join('\n'), { fileName: options.fileName, origin: 'pptx' });
   doc.meta.title = slidesInfo.find((s) => s.included && s.title)?.title ?? doc.meta.title;
   doc.meta.warnings.push(...warnings);
+  doc.assets = assets;
   doc.meta.pptx = { slideCount: slideParts.length, slides: slidesInfo };
   return doc;
 }
@@ -227,52 +264,217 @@ function descendants(el: XmlElement | undefined, name: string): XmlElement[] {
   return out;
 }
 
-/** The shapes with text on a slide (groups read through), with their position for reading order. */
-function readShapes(tree: XmlElement | undefined, layoutTypes: Map<string, string>, slideRels: Map<string, Rel>, warnings: string[], slide: number): Shape[] {
+/** The content on a slide (groups read through), with each shape's position for reading order. */
+async function readShapes(tree: XmlElement | undefined, ctx: SlideContext): Promise<Shape[]> {
   const shapes: Shape[] = [];
-  const unsupported = new Set<string>();
-  const visit = (container: XmlElement | undefined) => {
+  const visit = async (container: XmlElement | undefined) => {
     for (const el of kids(container)) {
       switch (el.localName) {
         case 'grpSp':
-          visit(el);
+          await visit(el);
           break;
         case 'sp': {
           const ph = path(el, 'nvSpPr', 'nvPr', 'ph');
-          const type = ph ? (attr(ph, 'type') ?? layoutTypes.get(attr(ph, 'idx') ?? '') ?? 'body') : undefined;
+          const type = ph ? (attr(ph, 'type') ?? ctx.layoutTypes.get(attr(ph, 'idx') ?? '') ?? 'body') : undefined;
           if (type && SKIPPED_PLACEHOLDERS.has(type)) break;
           const txBody = kid(el, 'txBody');
           if (!txBody) break;
           const kind: Shape['kind'] =
             type === 'title' || type === 'ctrTitle' ? 'title' : type === 'subTitle' ? 'subtitle' : type ? 'body' : 'text';
-          const off = path(el, 'spPr', 'xfrm', 'off');
-          const paragraphs = readParagraphs(txBody, kind === 'body', slideRels);
+          const paragraphs = readParagraphs(txBody, kind === 'body', ctx.rels);
           if (!paragraphs.some((p) => plain(p.html).trim())) break;
-          shapes.push({ kind, centred: type === 'ctrTitle', y: Number(attr(off, 'y') ?? 0), x: Number(attr(off, 'x') ?? 0), paragraphs });
+          shapes.push({ kind, centred: type === 'ctrTitle', ...position(path(el, 'spPr', 'xfrm')), paragraphs });
+          break;
+        }
+        case 'pic': {
+          const html = await readPicture(el, ctx);
+          if (html) shapes.push({ kind: 'block', placeholder: !!path(el, 'nvPicPr', 'nvPr', 'ph'), ...position(path(el, 'spPr', 'xfrm')), paragraphs: [], html });
           break;
         }
         case 'graphicFrame': {
-          const uri = attr(path(el, 'graphic', 'graphicData'), 'uri') ?? '';
-          unsupported.add(uri.includes('table') ? 'table' : uri.includes('chart') ? 'chart' : uri.includes('diagram') ? 'SmartArt' : 'embedded object');
+          const html = await readGraphicFrame(el, ctx);
+          if (html) shapes.push({ kind: 'block', placeholder: !!path(el, 'nvGraphicFramePr', 'nvPr', 'ph'), ...position(kid(el, 'xfrm')), paragraphs: [], html });
           break;
         }
-        case 'pic':
-          unsupported.add('picture');
-          break;
         default:
           break;
       }
     }
   };
-  visit(tree);
-  // Pictures and tables come in the next step (P2); say what was left out until then.
-  for (const what of unsupported) warnings.push(`Slide ${slide}: a ${what} is not imported yet`);
+  await visit(tree);
   return shapes;
+}
+
+const position = (xfrm: XmlElement | undefined) => {
+  const off = kid(xfrm, 'off');
+  return { x: Number(attr(off, 'x') ?? 0), y: Number(attr(off, 'y') ?? 0) };
+};
+
+/** A picture: stored as an asset (once per image), with its alt text, size and link. */
+async function readPicture(pic: XmlElement, ctx: SlideContext): Promise<string | undefined> {
+  const props = path(pic, 'nvPicPr', 'cNvPr');
+  const nvPr = path(pic, 'nvPicPr', 'nvPr');
+  if (kid(nvPr, 'videoFile') || kid(nvPr, 'audioFile') || kids(path(nvPr, 'extLst')).some((e) => descendants(e, 'media').length)) {
+    ctx.warnings.push(`Slide ${ctx.slide}: a ${kid(nvPr, 'audioFile') ? 'sound' : 'video'} is not imported yet`);
+    return undefined;
+  }
+  const rel = ctx.rels.get(relId(path(pic, 'blipFill', 'blip'), 'embed') ?? '');
+  if (!rel || rel.external) {
+    ctx.warnings.push(`Slide ${ctx.slide}: a picture ${rel?.external ? 'linked from outside the file' : 'without image data'} was left out`);
+    return undefined;
+  }
+  const ext = rel.target.split('.').pop()?.toLowerCase() ?? '';
+  const type = PICTURE_TYPES[ext];
+  if (!type) {
+    ctx.warnings.push(`Slide ${ctx.slide}: a .${ext} picture was left out (browsers cannot show ${ext.toUpperCase()} images)`);
+    return undefined;
+  }
+  const data = await ctx.bytes(rel.target);
+  if (!data) {
+    ctx.warnings.push(`Slide ${ctx.slide}: a picture's file is missing from the deck`);
+    return undefined;
+  }
+  const id = `pptx-${hashBytes(data)}`;
+  ctx.assets[id] ??= { id, contentType: type, base64: toBase64(data) };
+  const alt = attr(props, 'descr') ?? attr(props, 'title') ?? '';
+  const cx = Number(attr(path(pic, 'spPr', 'xfrm', 'ext'), 'cx') ?? 0);
+  const width = cx > 0 ? ` width="${Math.round(cx / EMU_PER_PX)}"` : '';
+  let img = `<img src="asset:${id}" alt="${escapeHtml(alt)}"${width}>`;
+  const link = ctx.rels.get(relId(kid(props, 'hlinkClick')) ?? '');
+  if (link?.external && /^(https?:|mailto:)/i.test(link.target)) img = `<a href="${escapeHtml(link.target)}">${img}</a>`;
+  return `<figure class="slide-picture">${img}</figure>`;
+}
+
+/** Tables, charts (as a table of their data), SmartArt (as a list); other objects are reported. */
+async function readGraphicFrame(frame: XmlElement, ctx: SlideContext): Promise<string | undefined> {
+  const data = path(frame, 'graphic', 'graphicData');
+  const uri = attr(data, 'uri') ?? '';
+  if (kid(data, 'tbl')) return renderTable(kid(data, 'tbl')!, ctx.rels);
+  if (uri.endsWith('/chart')) {
+    const part = ctx.rels.get(relId(kid(data, 'chart')) ?? '')?.target;
+    const chart = part ? await ctx.xml(part) : undefined;
+    const html = chart ? renderChart(chart) : undefined;
+    ctx.warnings.push(`Slide ${ctx.slide}: a chart ${html ? 'is shown as a table of its data' : 'could not be read and was left out'}`);
+    return html;
+  }
+  if (uri.endsWith('/diagram')) {
+    const part = ctx.rels.get(relId(kid(data, 'relIds'), 'dm') ?? '')?.target;
+    const model = part ? await ctx.xml(part) : undefined;
+    const html = model ? renderSmartArt(model, part ? await ctx.partRels(part) : new Map()) : undefined;
+    ctx.warnings.push(`Slide ${ctx.slide}: SmartArt ${html ? 'is shown as a list of its text' : 'has no text and was left out'}`);
+    return html;
+  }
+  ctx.warnings.push(`Slide ${ctx.slide}: an embedded object was left out`);
+  return undefined;
+}
+
+function cellContent(tc: XmlElement, rels: Map<string, Rel>): string {
+  const paragraphs = readParagraphs(kid(tc, 'txBody') ?? tc, false, rels).filter((p) => plain(p.html).trim());
+  // One plain paragraph goes straight into the cell; more keep their paragraphs and lists.
+  if (paragraphs.length === 1 && paragraphs[0].list === 'none') return paragraphs[0].html;
+  return renderParagraphs(paragraphs, 'text');
+}
+
+/** A table, with merged cells as colspan / rowspan and the first row as headers when the table says so. */
+function renderTable(tbl: XmlElement, rels: Map<string, Rel>): string {
+  const header = attr(kid(tbl, 'tblPr'), 'firstRow') === '1';
+  const rows = kids(tbl, 'tr').map((tr, r) => {
+    const th = header && r === 0;
+    const cells = kids(tr, 'tc')
+      // Cells covered by a merged cell are listed too, marked hMerge / vMerge: they are not separate cells.
+      .filter((tc) => attr(tc, 'hMerge') !== '1' && attr(tc, 'vMerge') !== '1')
+      .map((tc) => {
+        const span = [
+          Number(attr(tc, 'gridSpan') ?? 1) > 1 ? ` colspan="${attr(tc, 'gridSpan')}"` : '',
+          Number(attr(tc, 'rowSpan') ?? 1) > 1 ? ` rowspan="${attr(tc, 'rowSpan')}"` : '',
+        ].join('');
+        const tag = th ? 'th' : 'td';
+        return `<${tag}${span}>${cellContent(tc, rels)}</${tag}>`;
+      });
+    return `<tr>${cells.join('')}</tr>`;
+  });
+  const [first, ...rest] = rows;
+  return header
+    ? `<table><thead>${first ?? ''}</thead><tbody>${rest.join('')}</tbody></table>`
+    : `<table><tbody>${rows.join('')}</tbody></table>`;
+}
+
+const texts = (el: XmlElement | undefined) => descendants(el, 't').map((t) => t.textContent ?? '').join('');
+
+/** A chart's title and cached data (categories × series) as a table. */
+function renderChart(chartSpace: XmlElement): string | undefined {
+  const chart = kid(chartSpace, 'chart');
+  const title = texts(kid(chart, 'title')).trim();
+  const series = descendants(kid(chart, 'plotArea'), 'ser');
+  if (series.length === 0) return title ? `<figure class="slide-chart"><figcaption>${escapeHtml(title)}</figcaption></figure>` : undefined;
+  const points = (el: XmlElement | undefined) => {
+    const out = new Map<number, string>();
+    for (const pt of descendants(el, 'pt')) out.set(Number(attr(pt, 'idx') ?? 0), kid(pt, 'v')?.textContent ?? '');
+    return out;
+  };
+  const names = series.map((ser, i) => descendants(kid(ser, 'tx'), 'v')[0]?.textContent ?? `Series ${i + 1}`);
+  const cats = points(kid(series[0], 'cat'));
+  const values = series.map((ser) => points(kid(ser, 'val') ?? kid(ser, 'yVal')));
+  const count = Math.max(cats.size, ...values.map((v) => (v.size ? Math.max(...v.keys()) + 1 : 0)));
+  const rows = Array.from({ length: count }, (_, i) =>
+    `<tr><th>${escapeHtml(cats.get(i) ?? String(i + 1))}</th>${values.map((v) => `<td>${escapeHtml(v.get(i) ?? '')}</td>`).join('')}</tr>`,
+  );
+  return (
+    `<figure class="slide-chart"><table><thead><tr><th></th>${names.map((n) => `<th>${escapeHtml(n)}</th>`).join('')}</tr></thead>` +
+    `<tbody>${rows.join('')}</tbody></table>${title ? `<figcaption>${escapeHtml(title)}</figcaption>` : ''}</figure>`
+  );
+}
+
+/** SmartArt's text, nested as the diagram's own hierarchy (its "parent of" connections). */
+function renderSmartArt(model: XmlElement, rels: Map<string, Rel>): string | undefined {
+  const pts = kids(kid(model, 'ptLst'), 'pt');
+  const textOf = new Map<string, string>();
+  let root: string | undefined;
+  for (const pt of pts) {
+    const type = attr(pt, 'type') ?? 'node';
+    const id = attr(pt, 'modelId') ?? '';
+    if (type === 'doc') root = id;
+    if (type !== 'node' && type !== 'asst') continue;
+    const html = readParagraphs(kid(pt, 't') ?? pt, false, rels)
+      .map((p) => p.html)
+      .filter((h) => plain(h).trim())
+      .join('<br>');
+    textOf.set(id, html);
+  }
+  const children = new Map<string, { id: string; ord: number }[]>();
+  for (const cxn of kids(kid(model, 'cxnLst'), 'cxn')) {
+    if ((attr(cxn, 'type') ?? 'parOf') !== 'parOf') continue;
+    const src = attr(cxn, 'srcId') ?? '';
+    children.set(src, [...(children.get(src) ?? []), { id: attr(cxn, 'destId') ?? '', ord: Number(attr(cxn, 'srcOrd') ?? 0) }]);
+  }
+  const list = (parent: string, depth: number): string => {
+    if (depth > 20) return '';
+    const items = (children.get(parent) ?? [])
+      .sort((a, b) => a.ord - b.ord)
+      .filter((c) => textOf.has(c.id))
+      .map((c) => {
+        const inner = list(c.id, depth + 1);
+        return textOf.get(c.id) || inner ? `<li>${textOf.get(c.id) ?? ''}${inner}</li>` : '';
+      })
+      .filter(Boolean);
+    return items.length ? `<ul>${items.join('')}</ul>` : '';
+  };
+  const html = root ? list(root, 0) : '';
+  // No hierarchy to follow: every text in order.
+  const flat = [...textOf.values()].filter((h) => plain(h).trim());
+  if (html) return `<div class="slide-smartart">${html}</div>`;
+  return flat.length ? `<div class="slide-smartart"><ul>${flat.map((h) => `<li>${h}</li>`).join('')}</ul></div>` : undefined;
+}
+
+function toBase64(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += 8192) parts.push(String.fromCharCode(...bytes.subarray(i, i + 8192)));
+  return btoa(parts.join(''));
 }
 
 /** Title first, then the other placeholders, then other shapes; each group top to bottom, left to right. */
 function order(shapes: Shape[]): Shape[] {
-  const rank = (s: Shape) => (s.kind === 'title' ? 0 : s.kind === 'subtitle' || s.kind === 'body' ? 1 : 2);
+  const rank = (s: Shape) => (s.kind === 'title' ? 0 : s.kind === 'subtitle' || s.kind === 'body' || s.placeholder ? 1 : 2);
   return [...shapes].sort((a, b) => rank(a) - rank(b) || a.y - b.y || a.x - b.x);
 }
 
@@ -324,6 +526,7 @@ function renderRun(r: XmlElement, slideRels: Map<string, Rel>): string {
 const plain = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 
 function renderShape(shape: Shape): string {
+  if (shape.kind === 'block') return shape.html ?? '';
   if (shape.kind === 'title') {
     const tag = shape.centred ? 'h1' : 'h2';
     return `<${tag}>${shape.paragraphs.map((p) => p.html).filter((h) => plain(h).trim()).join('<br>')}</${tag}>`;

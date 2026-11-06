@@ -72,7 +72,10 @@ export function sampleJson(): string {
   );
 }
 
-/** A sample slide deck (written as tests/fixtures/sample.pptx). 12 slides, so slide 10 must sort after slide 2. */
+/**
+ * A sample slide deck (written as tests/fixtures/sample.pptx). 12 text slides, so slide 10 must sort after slide 2,
+ * then a table, a picture and a chart (`extras`, slides 13–15).
+ */
 export const SAMPLE_DECK = {
   title: SAMPLE_CONTENT.title,
   subtitle: 'A short tour in slides',
@@ -84,4 +87,9 @@ export const SAMPLE_DECK = {
     ...Array.from({ length: 5 }, (_, i) => ({ title: `Topic ${i + 1}`, bullets: [`Point ${i + 1}`], notes: '' })),
     { title: 'Thanks', bullets: [], notes: 'Questions?', link: { text: 'Read the docs', url: 'https://example.com/docs' } },
   ],
+  extras: {
+    table: { title: 'Nodes', rows: SAMPLE_CONTENT.table, merged: 'Everything else' },
+    picture: { title: 'Our logo', alt: 'Logo', link: 'https://example.com/' },
+    chart: { title: 'Growth', name: 'Gardens', categories: ['2024', '2025', '2026'], values: [3, 7, 12] },
+  },
 };

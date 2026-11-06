@@ -35,8 +35,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Runs keep bold / italic / underline / strike / sup / sub and http(s) / mailto links. Notes → `<aside
   class="speaker-notes">`. Options `includeNotes` (true), `includeHidden` (false), `slides` (`parseSlideRange`,
   "1-5, 8"). `meta.pptx` lists every slide (number, title, hidden, included, layout). xmldom returns "" for
-  missing attributes: read them with `attr()`. Tables, pictures, charts and SmartArt warn ("not imported yet",
-  P2). .ppt / password-protected files (OLE header) get a plain error.
+  missing attributes: read them with `attr()` (and `relId()` for r:id / r:embed / r:dm). Tables → `<table>` (`firstRow`
+  → `<thead>` / `<th>`, `gridSpan` / `rowSpan` → colspan / rowspan, `hMerge` / `vMerge` cells skipped; one plain
+  paragraph goes straight into the cell). Pictures → `<figure class="slide-picture"><img src="asset:pptx-<hash>"
+  alt width></figure>` (alt from `descr`, link from the picture's `hlinkClick`, one asset per distinct image; EMF /
+  WMF / TIFF, external and missing files warn). Charts → `<figure class="slide-chart">` with a table of the cached
+  data (categories × series) and the title as caption, with a warning. SmartArt → `<div class="slide-smartart">`
+  nested list following the data model's `parOf` connections. Videos, sounds and OLE objects warn (P6).
+  Picture / table placeholders rank with the other placeholders in reading order. .ppt / password-protected files
+  (OLE header) get a plain error.
 - `json.ts`: `parseJson` (own error scanner gives line, column and a plain reason in every browser),
   `discoverPaths` (every string field, with a suggested format), `mapJsonToDocument` / `importJson` (async).
   Field mode: each matched string becomes a block with `data-json-path`, read as `text`, `html` or `markdown`;
@@ -208,7 +215,7 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 ## Roadmap
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
-All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1
+All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P2
 (of P1 text · P2 tables, pictures, groups · P3 source options and slide preview · P4 Slide selector · P5 slide-deck
 Output · P6 layout and media). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).

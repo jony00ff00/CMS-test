@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTextIndex, GraphEvaluator, importPptx, importSource, nodeRegistry, parseSlideRange, runSelector, serialize, storeFile,
 } from '../../src/engine';
-import { SAMPLE_DECK } from '../../src/samples';
+import { PNG_BASE64, SAMPLE_DECK } from '../../src/samples';
 import { fixture } from './helpers';
 
 const sample = () => new Uint8Array(fixture('sample.pptx'));
@@ -67,13 +67,29 @@ describe('importing the sample deck', () => {
     const doc = await importPptx(sample(), { fileName: 'sample.pptx' });
     const sections = doc.tree.children.filter((n) => n.type === 'element' && n.tagName === 'section');
     expect(doc.meta.origin).toBe('pptx');
-    expect(doc.meta.pptx?.slideCount).toBe(SAMPLE_DECK.slides.length + 1);
+    expect(doc.meta.pptx?.slideCount).toBe(SAMPLE_DECK.slides.length + 4);
     expect(sections.map((s) => (s as { properties: { dataSlide?: string } }).properties.dataSlide)).toEqual(
-      ['1', '2', '3', '4', '5', '7', '8', '9', '10', '11', '12'],
+      ['1', '2', '3', '4', '5', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
     );
     expect(doc.meta.pptx?.slides.find((s) => s.number === 6)).toMatchObject({ title: 'Hidden extra', hidden: true, included: false });
     expect(doc.meta.title).toBe(SAMPLE_DECK.title);
-    expect(doc.meta.warnings).toEqual([]);
+    expect(doc.meta.warnings).toEqual(['Slide 15: a chart is shown as a table of its data']);
+  });
+
+  it('brings tables (with merged cells), linked pictures and charts', async () => {
+    const doc = await importPptx(sample());
+    const html = serialize(doc);
+    expect(html).toContain('<tr><td><strong>Node</strong></td><td><strong>Input</strong></td><td><strong>Output</strong></td></tr>');
+    expect(html).toContain('<tr><td colspan="3">Everything else</td></tr>');
+    const [id] = Object.keys(doc.assets);
+    expect(id).toMatch(/^pptx-/);
+    expect(doc.assets[id]).toMatchObject({ contentType: 'image/png', base64: PNG_BASE64 });
+    expect(html).toContain(`<figure class="slide-picture"><a href="https://example.com/"><img src="asset:${id}" alt="Logo" width="192"></a></figure>`);
+    expect(html).toContain(
+      '<figure class="slide-chart"><table><thead><tr><th></th><th>Gardens</th></tr></thead><tbody><tr><th>2024</th><td>3</td></tr><tr><th>2025</th><td>7</td></tr><tr><th>2026</th><td>12</td></tr></tbody></table><figcaption>Growth</figcaption></figure>',
+    );
+    // The picture works in the exported page.
+    expect(serialize(doc, { fullDocument: true, inlineAssets: true })).toContain(`src="data:image/png;base64,${PNG_BASE64}"`);
   });
 
   it('turns titles into headings, bullets into nested lists and numbered bullets into <ol>', async () => {
@@ -116,7 +132,7 @@ describe('importing the sample deck', () => {
       edges: [{ id: 'e', source: 'src', sourcePort: 'document', target: 'sel', targetPort: 'document' }],
     };
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files: { deck: file } });
-    expect(results.src.info).toMatchObject({ file: 'deck.pptx', format: 'pptx', slides: 4, slideCount: 12, hiddenSlides: 1 });
+    expect(results.src.info).toMatchObject({ file: 'deck.pptx', format: 'pptx', slides: 4, slideCount: 15, hiddenSlides: 1 });
     expect(results.sel.info.matches).toBe(4); // the sample's first slide uses a plain title, so <h2>
     // Heading sections work too: a slide title selects its slide's content.
     const section = runSelector(results.src.outputs.document as never, { mode: 'heading', text: 'Pricing' });
@@ -213,17 +229,96 @@ describe('importing hand-made decks', () => {
     expect(serialize(await importPptx(deck))).toContain('<h2>T</h2><aside class="speaker-notes"><p>Say hello</p></aside>');
   });
 
-  it('warns about content that is not imported yet', async () => {
+  it('reads table headers, row spans and lists in cells', async () => {
+    const tc = (inner: string, extra = '') => `<a:tc${extra}><a:txBody><a:bodyPr/>${inner}</a:txBody></a:tc>`;
     const deck = await makeDeck([
       {
         file: 'slide1.xml',
         shapes:
-          '<p:graphicFrame><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"/></a:graphic></p:graphicFrame><p:pic/>',
+          '<p:graphicFrame><p:nvGraphicFramePr/><p:xfrm><a:off x="0" y="0"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1"/>' +
+          `<a:tr>${tc(para('Name'))}${tc(para('Notes'), ' gridSpan="2"')}${tc('', ' hMerge="1"')}</a:tr>` +
+          `<a:tr>${tc(para('Tall'), ' rowSpan="2"')}${tc(para('a') + para('b'))}${tc('<a:p><a:pPr><a:buChar char="•"/></a:pPr><a:r><a:t>x</a:t></a:r></a:p>')}</a:tr>` +
+          `<a:tr>${tc('', ' vMerge="1"')}${tc(para('c'))}${tc(para('d'))}</a:tr>` +
+          '</a:tbl></a:graphicData></a:graphic></p:graphicFrame>',
       },
     ]);
-    const doc = await importPptx(deck);
-    expect(doc.meta.warnings).toEqual(['Slide 1: a chart is not imported yet', 'Slide 1: a picture is not imported yet']);
-    expect(serialize(doc)).toBe('<section class="slide" data-slide="1" data-layout="Title and Content"></section>');
+    expect(serialize(await importPptx(deck))).toContain(
+      '<table><thead><tr><th>Name</th><th colspan="2">Notes</th></tr></thead><tbody>' +
+        '<tr><td rowspan="2">Tall</td><td><p>a</p><p>b</p></td><td><ul><li>x</li></ul></td></tr><tr><td>c</td><td>d</td></tr></tbody></table>',
+    );
+  });
+
+  it('shows SmartArt as a nested list of its text', async () => {
+    const pt = (id: string, text?: string, type?: string) =>
+      `<dgm:pt modelId="${id}"${type ? ` type="${type}"` : ''}>${text ? `<dgm:t><a:bodyPr/><a:p><a:r><a:t>${text}</a:t></a:r></a:p></dgm:t>` : ''}</dgm:pt>`;
+    const cxn = (src: string, dest: string, ord: number, type?: string) => `<dgm:cxn modelId="c${src}${dest}" srcId="${src}" destId="${dest}" srcOrd="${ord}"${type ? ` type="${type}"` : ''}/>`;
+    const deck = await makeDeck([
+      {
+        file: 'slide1.xml',
+        shapes:
+          '<p:graphicFrame><p:nvGraphicFramePr/><p:xfrm><a:off x="0" y="0"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram"><dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rD"/></a:graphicData></a:graphic></p:graphicFrame>',
+        links: {},
+      },
+    ]);
+    const zip = await JSZip.loadAsync(deck);
+    zip.file(
+      'ppt/diagrams/data1.xml',
+      `<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><dgm:ptLst>${pt('0', undefined, 'doc')}${pt('2', 'Second')}${pt('1', 'First')}${pt('3', 'Child')}${pt('9', 'hidden', 'pres')}</dgm:ptLst><dgm:cxnLst>${cxn('0', '2', 1)}${cxn('0', '1', 0)}${cxn('1', '3', 0)}${cxn('0', '9', 2, 'presOf')}</dgm:cxnLst></dgm:dataModel>`,
+    );
+    const rels = await zip.file('ppt/slides/_rels/slide1.xml.rels')!.async('string');
+    zip.file('ppt/slides/_rels/slide1.xml.rels', rels.replace('</Relationships>', `<Relationship Id="rD" Type="${REL}/diagramData" Target="../diagrams/data1.xml"/></Relationships>`));
+    const doc = await importPptx(await zip.generateAsync({ type: 'uint8array' }));
+    expect(serialize(doc)).toContain('<div class="slide-smartart"><ul><li>First<ul><li>Child</li></ul></li><li>Second</li></ul></div>');
+    expect(doc.meta.warnings).toEqual(['Slide 1: SmartArt is shown as a list of its text']);
+  });
+
+  it('explains what it leaves out: videos, unsupported picture types, missing files, other objects', async () => {
+    const pic = (embed: string, nvPr = '') =>
+      `<p:pic><p:nvPicPr><p:cNvPr id="3" name="p"/><p:cNvPicPr/><p:nvPr>${nvPr}</p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="${embed}"/></p:blipFill><p:spPr/></p:pic>`;
+    const deck = await makeDeck([
+      {
+        file: 'slide1.xml',
+        shapes:
+          pic('rE') + pic('rM') + pic('rV', '<a:videoFile r:link="rV"/>') + pic('rX') +
+          '<p:graphicFrame><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/presentationml/2006/ole"/></a:graphic></p:graphicFrame>',
+      },
+    ]);
+    const zip = await JSZip.loadAsync(deck);
+    const rels = await zip.file('ppt/slides/_rels/slide1.xml.rels')!.async('string');
+    zip.file(
+      'ppt/slides/_rels/slide1.xml.rels',
+      rels.replace(
+        '</Relationships>',
+        `<Relationship Id="rE" Type="${REL}/image" Target="../media/a.emf"/><Relationship Id="rM" Type="${REL}/image" Target="../media/missing.png"/><Relationship Id="rX" Type="${REL}/image" Target="https://example.com/x.png" TargetMode="External"/></Relationships>`,
+      ),
+    );
+    zip.file('ppt/media/a.emf', new Uint8Array([1, 2, 3]));
+    const doc = await importPptx(await zip.generateAsync({ type: 'uint8array' }));
+    expect(doc.meta.warnings).toEqual([
+      'Slide 1: a .emf picture was left out (browsers cannot show EMF images)',
+      "Slide 1: a picture's file is missing from the deck",
+      'Slide 1: a video is not imported yet',
+      'Slide 1: a picture linked from outside the file was left out',
+      'Slide 1: an embedded object was left out',
+    ]);
+    expect(Object.keys(doc.assets)).toEqual([]);
+  });
+
+  it('stores a picture used twice once, and puts picture placeholders after the title', async () => {
+    const pic = (y: number, ph = '') =>
+      `<p:pic><p:nvPicPr><p:cNvPr id="3" name="p" descr="Dot"/><p:cNvPicPr/><p:nvPr>${ph}</p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rP"/></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="${y}"/><a:ext cx="95250" cy="95250"/></a:xfrm></p:spPr></p:pic>`;
+    const deck = await makeDeck([
+      { file: 'slide1.xml', shapes: sp({ x: 0, y: 10, paras: para('Text box first') }) + pic(500, '<p:ph type="pic" idx="1"/>') + sp({ ph: 'title', y: 900, paras: para('Title') }) + pic(20) },
+    ]);
+    const zip = await JSZip.loadAsync(deck);
+    const rels = await zip.file('ppt/slides/_rels/slide1.xml.rels')!.async('string');
+    zip.file('ppt/slides/_rels/slide1.xml.rels', rels.replace('</Relationships>', `<Relationship Id="rP" Type="${REL}/image" Target="../media/dot.png"/></Relationships>`));
+    zip.file('ppt/media/dot.png', Uint8Array.from(atob(PNG_BASE64), (c) => c.charCodeAt(0)));
+    const doc = await importPptx(await zip.generateAsync({ type: 'uint8array' }));
+    expect(Object.keys(doc.assets)).toHaveLength(1);
+    const html = serialize(doc);
+    const img = '<figure class="slide-picture"><img src="asset:' + Object.keys(doc.assets)[0] + '" alt="Dot" width="10"></figure>';
+    expect(html).toBe(`<section class="slide" data-slide="1" data-layout="Title and Content"><h2>Title</h2>${img}<p>Text box first</p>${img}</section>`);
   });
 
   it('explains old .ppt files, password-protected files and files that are not decks', async () => {

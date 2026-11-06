@@ -91,6 +91,24 @@ async function pptx(): Promise<Buffer> {
     }
     if (s.notes) slide.addNotes(s.notes);
   }
+  const { table, picture, chart } = SAMPLE_DECK.extras;
+  const tableSlide = pres.addSlide({ masterName: 'TITLE_AND_CONTENT' });
+  tableSlide.addText(table.title, { placeholder: 'title' });
+  tableSlide.addTable(
+    [
+      ...table.rows.map((r, i) => r.map((text) => ({ text, options: { bold: i === 0 } }))),
+      [{ text: table.merged, options: { colspan: 3 } }],
+    ],
+    { x: 0.5, y: 1.5, w: 9 },
+  );
+  const pictureSlide = pres.addSlide({ masterName: 'TITLE_AND_CONTENT' });
+  pictureSlide.addText(picture.title, { placeholder: 'title' });
+  pictureSlide.addImage({ data: `image/png;base64,${PNG_BASE64}`, x: 1, y: 1.5, w: 2, h: 2, altText: picture.alt, hyperlink: { url: picture.link } });
+  const chartSlide = pres.addSlide({ masterName: 'TITLE_AND_CONTENT' });
+  chartSlide.addText(chart.title, { placeholder: 'title' });
+  chartSlide.addChart(pres.ChartType.bar, [{ name: chart.name, labels: chart.categories, values: chart.values }], {
+    x: 1, y: 1.5, w: 8, h: 3.5, showTitle: true, title: chart.title,
+  });
   return (await pres.write({ outputType: 'nodebuffer' })) as Buffer;
 }
 
