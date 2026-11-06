@@ -63,7 +63,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `graph.ts`: `Graph` (`nodes`, `edges` with `sourcePort` / `targetPort`), `NodeDefinition` (typed `inputs` /
   `outputs`, `defaultConfig`, `evaluate`, optional `dependencies` for things outside the config such as a
   file's hash). `edgeError` / `connect` reject unknown ports, mismatched port types (`document`, `selection`,
-  `html`), a second connection into one input, self-loops and loops. `topologicalSort`, `downstreamOf`,
+  `html`), a second connection into one input (unless the port has `multiple: true`, which then gets an array in
+  edge order; reorder with `moveEdge`), the same connection twice, self-loops and loops. `topologicalSort`, `downstreamOf`,
   `validateGraph` (for loaded files). `GraphEvaluator.evaluate(graph, { files })` → per-node `NodeResult`
   (`ok` / `waiting` / `error` / `blocked`, outputs, warnings, info, `cached`) and `ran`. A node's cache key
   hashes its type, config, dependencies and the keys of its inputs, so a change re-runs only that node and
@@ -80,7 +81,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `insert.ts`: content to insert (`code` as a block or as HTML, `image` / `video` from an uploaded file in the
   store, `imageUrl` / `videoUrl` by address; YouTube and Vimeo become embeds; only http(s) addresses) and where:
   `{ mode: 'point', point: { anchor, place } }` (picked in the preview) or `{ mode: 'selector', selector, place }`;
-  places are before / after / start / end. Placement reuses `applySnippet` (prepend / append with a placeholder
+  places are before / after / start / end. Widths (`cssWidth`): any CSS length with a unit, a plain number means
+  px, empty means 100%, anything else warns and uses 100%; applied as `style` (on the figure when captioned,
+  the media then fills it; on the image, not the link, for linked images). Placement reuses `applySnippet` (prepend / append with a placeholder
   that is swapped for the built nodes), so overlap and JSON-field rules hold. Block content (video, code, figure)
   never goes inside a paragraph: it moves next to it, with a warning. Uploaded media become assets
   (`asset:insert-<hash>`). `insertionPointAt(doc, offset, 'cursor' | 'before' | 'after')` turns a click into a
@@ -88,7 +91,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   preview-only markers (`data-cms-preview`, which the bridge ignores when it measures text).
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
   `snippet` (`snippet` = the node's own copy, `ref` = `{ id, version }` when it came from the library,
-  `params`, `snapToBlock`; default is the library's Callout v1), `output` (`format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
+  `params`, `snapToBlock`; default is the library's Callout v1), `output` (input `document` takes several connections; they are combined one after another with
+  `combineDocuments` in `combine.ts`, and JSON export then refuses; `format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
   preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
   `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone).
 

@@ -10,12 +10,35 @@ import type { Anchor, Asset, CmsDocument, Match, Selection, Snippet } from './ty
 
 export type InsertContent =
   | { kind: 'code'; code: string; language?: string; /** "block": shown as code. "html": added to the page as HTML. */ render: 'block' | 'html' }
-  | { kind: 'image'; fileId?: string; alt: string; caption?: string; width?: number; href?: string }
-  | { kind: 'video'; fileId?: string; caption?: string; width?: number; autoplay?: boolean; loop?: boolean; muted?: boolean }
-  | { kind: 'imageUrl'; url: string; alt: string; caption?: string; width?: number; href?: string }
-  | { kind: 'videoUrl'; url: string; caption?: string; width?: number };
+  | { kind: 'image'; fileId?: string; alt: string; caption?: string; width?: Width; href?: string }
+  | { kind: 'video'; fileId?: string; caption?: string; width?: Width; autoplay?: boolean; loop?: boolean; muted?: boolean }
+  | { kind: 'imageUrl'; url: string; alt: string; caption?: string; width?: Width; href?: string }
+  | { kind: 'videoUrl'; url: string; caption?: string; width?: Width };
 
 export type InsertKind = InsertContent['kind'];
+
+/** A CSS width such as "320px", "20em", "50%" or "auto". A plain number (or "320") means pixels. Empty means 100%. */
+export type Width = string | number;
+
+const UNITS = ['px', '%', 'em', 'rem', 'vw', 'vh', 'vmin', 'vmax', 'svw', 'svh', 'dvw', 'dvh', 'ch', 'ex', 'lh', 'cm', 'mm', 'in', 'pt', 'pc'];
+
+/** The width to use, and a warning when what was typed is not a width (then 100% is used). */
+export function cssWidth(input: Width | undefined): { value: string; warning?: string } {
+  const full = { value: '100%' };
+  if (input === undefined || input === '') return full;
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && input > 0 ? { value: `${input}px` } : { ...full, warning: `${input} is not a width; using 100%` };
+  }
+  const t = input.trim().toLowerCase();
+  if (!t) return full;
+  if (t === 'auto') return { value: 'auto' };
+  const m = /^(\d+(?:\.\d+)?|\.\d+)\s*([a-z%]*)$/.exec(t);
+  if (!m) return { ...full, warning: `"${input}" is not a width (use for example 320px, 20em or 50%); using 100%` };
+  const unit = m[2] || 'px';
+  if (!UNITS.includes(unit)) return { ...full, warning: `"${m[2]}" is not a unit (use ${UNITS.slice(0, 6).join(', ')}, …); using 100%` };
+  if (Number(m[1]) === 0) return { ...full, warning: 'A width of 0 would hide it; using 100%' };
+  return { value: `${Number(m[1])}${unit}` };
+}
 
 /** before / after: next to the target. start / end: inside it, as its first / last content. */
 export type InsertPlace = 'before' | 'after' | 'start' | 'end';
@@ -80,12 +103,22 @@ interface Built {
 /** The elements to insert. Returns a reason instead when the content is not complete yet. */
 export function buildInsertion(content: InsertContent, files: Record<string, StoredFile>): Built | { waiting: string } | { error: string } {
   const warnings: string[] = [];
+  // With a caption, the figure gets the width and the media fills it, so the caption wraps to the same width.
+  const width = cssWidth(content.kind === 'code' ? undefined : content.width);
+  if (width.warning) warnings.push(width.warning);
+  const sized = (media: Element, caption?: string) => {
+    // A linked image: size the image, not the link around it.
+    const target = media.tagName === 'a' && media.children[0]?.type === 'element' ? media.children[0] : media;
+    target.properties.style = caption?.trim() ? 'width:100%' : `width:${width.value}`;
+    return media;
+  };
   const figure = (media: Element, caption?: string): { node: Element; block: boolean } =>
     caption?.trim()
-      ? { node: el('figure', { className: ['cms-figure'] }, [media, el('figcaption', {}, [text(caption.trim())])]), block: true }
-      : { node: media, block: false };
-  const width = (w?: number) => (w && w > 0 ? { width: Math.round(w) } : {});
-
+      ? {
+          node: el('figure', { className: ['cms-figure'], style: `width:${width.value}` }, [sized(media, caption), el('figcaption', {}, [text(caption.trim())])]),
+          block: true,
+        }
+      : { node: sized(media), block: false };
   switch (content.kind) {
     case 'code': {
       if (!content.code.trim()) return { waiting: 'Write the code to insert' };
@@ -115,7 +148,7 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
       }
       const asset: Asset = { id: `insert-${file.hash}`, contentType: type.contentType, base64: toBase64(file.data) };
       if (content.kind === 'image') {
-        let media: Element = el('img', { src: `asset:${asset.id}`, alt: content.alt, className: ['cms-insert'], ...width(content.width) });
+        let media: Element = el('img', { src: `asset:${asset.id}`, alt: content.alt, className: ['cms-insert'] });
         if (content.href?.trim()) media = linked(media, content.href, warnings);
         const f = figure(media, content.caption);
         if (!content.alt.trim()) warnings.push('The image has no alternative text');
@@ -129,14 +162,13 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
         ...(content.autoplay ? { autoPlay: true, muted: true } : {}),
         ...(content.muted ? { muted: true } : {}),
         ...(content.loop ? { loop: true } : {}),
-        ...width(content.width),
       });
       return { nodes: [figure(video, content.caption).node], assets: [asset], block: true, warnings };
     }
     case 'imageUrl': {
       const url = checkUrl(content.url);
       if ('waiting' in url || 'error' in url) return url;
-      let media: Element = el('img', { src: url.href, alt: content.alt, className: ['cms-insert'], loading: 'lazy', ...width(content.width) });
+      let media: Element = el('img', { src: url.href, alt: content.alt, className: ['cms-insert'], loading: 'lazy' });
       if (content.href?.trim()) media = linked(media, content.href, warnings);
       if (!content.alt.trim()) warnings.push('The image has no alternative text');
       const f = figure(media, content.caption);
@@ -147,7 +179,7 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
       if ('waiting' in url || 'error' in url) return url;
       const embed = embedUrl(url.href);
       const media = embed
-        ? el('div', { className: ['cms-embed'], ...(content.width ? { style: `width:${Math.round(content.width)}px` } : {}) }, [
+        ? el('div', { className: ['cms-embed'] }, [
             el('iframe', {
               src: embed,
               title: content.caption?.trim() || 'Video',
@@ -157,7 +189,7 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
               referrerPolicy: 'strict-origin-when-cross-origin',
             }),
           ])
-        : el('video', { src: url.href, controls: true, playsInline: true, className: ['cms-insert'], preload: 'metadata', ...width(content.width) });
+        : el('video', { src: url.href, controls: true, playsInline: true, className: ['cms-insert'], preload: 'metadata' });
       if (embed) warnings.push('YouTube and Vimeo videos may not play in the preview (it is sandboxed); they do play in the exported page');
       return { nodes: [figure(media, content.caption).node], assets: [], block: true, warnings };
     }

@@ -6,7 +6,7 @@ import { createStore } from 'zustand/vanilla';
 import {
   connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type EdgeCandidate, type Graph,
   type GraphNode, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
-  latestVersion, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
+  latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
 } from '../engine';
 import { sampleHtml, sampleJson } from '../samples';
 import { seedLibrary } from '../snippets/seed';
@@ -37,6 +37,8 @@ export interface EditorState {
   addNode(type: string, position?: { x: number; y: number }): string;
   removeNodes(ids: string[]): void;
   removeEdges(ids: string[]): void;
+  /** Move a connection earlier (-1) or later (+1) among those into the same input (an Output's documents). */
+  moveInput(edgeId: string, delta: -1 | 1): void;
   /** Remove nodes and connections together, as one undo step. */
   removeElements(nodeIds: string[], edgeIds: string[]): void;
   moveNode(id: string, position: { x: number; y: number }): void;
@@ -203,6 +205,11 @@ export function createEditorStore(options: EditorOptions = {}) {
         },
         selectedId: selectedId && nodes.has(selectedId) ? undefined : selectedId,
       });
+    },
+
+    moveInput(edgeId, delta) {
+      const graph = moveEdge(get().graph, edgeId, delta);
+      if (graph !== get().graph) set({ graph });
     },
 
     removeEdges(ids) {

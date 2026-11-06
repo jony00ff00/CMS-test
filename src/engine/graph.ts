@@ -9,6 +9,11 @@ export interface PortDef {
   name: string;
   type: PortType;
   label: string;
+  /**
+   * Inputs only: accepts any number of connections. The node then gets an array of values, in the order the
+   * connections appear in `graph.edges` (see `moveEdge`).
+   */
+  multiple?: boolean;
 }
 
 /** A file the user added to the project. Source nodes refer to it by id. */
@@ -85,9 +90,9 @@ export function edgeError(graph: Graph, edge: EdgeCandidate, registry: NodeRegis
   if (!out) return `${sourceDef.label} has no output "${edge.sourcePort}"`;
   if (!inp) return `${targetDef.label} has no input "${edge.targetPort}"`;
   if (out.type !== inp.type) return `Cannot connect a ${out.type} output to a ${inp.type} input`;
-  if (graph.edges.some((e) => e.id !== edge.id && e.target === edge.target && e.targetPort === edge.targetPort)) {
-    return `${targetDef.label} input "${inp.label}" is already connected`;
-  }
+  const others = graph.edges.filter((e) => e.id !== edge.id && e.target === edge.target && e.targetPort === edge.targetPort);
+  if (!inp.multiple && others.length) return `${targetDef.label} input "${inp.label}" is already connected`;
+  if (others.some((e) => e.source === edge.source && e.sourcePort === edge.sourcePort)) return 'These two are already connected';
   if (reaches(graph, edge.target, edge.source)) return 'This connection would create a loop';
   return undefined;
 }
@@ -161,6 +166,21 @@ export function topologicalSort(graph: Graph): string[] {
     throw new Error(`The graph has a loop through ${stuck.join(', ')}`);
   }
   return order;
+}
+
+/** Move a connection earlier (-1) or later (+1) among the connections into the same input. Never changes `graph`. */
+export function moveEdge(graph: Graph, edgeId: string, delta: -1 | 1): Graph {
+  const edge = graph.edges.find((e) => e.id === edgeId);
+  if (!edge) return graph;
+  const siblings = graph.edges.filter((e) => e.target === edge.target && e.targetPort === edge.targetPort);
+  const i = siblings.indexOf(edge);
+  const other = siblings[i + delta];
+  if (!other) return graph;
+  const edges = [...graph.edges];
+  const a = edges.indexOf(edge);
+  const b = edges.indexOf(other);
+  [edges[a], edges[b]] = [edges[b], edges[a]];
+  return { ...graph, edges };
 }
 
 /** Ids of the nodes that depend on `nodeId`, directly or not. */
@@ -271,7 +291,8 @@ export class GraphEvaluator {
     } catch (err) {
       return { ...base, status: 'error', message: (err as Error).message, key: '' };
     }
-    const inputKeys = incoming.map((e, i) => `${e.targetPort}<-${upstream[i].key}:${e.sourcePort}`).sort();
+    // In edge order: for inputs that take several connections, the order matters.
+    const inputKeys = incoming.map((e, i) => `${e.targetPort}<-${upstream[i].key}:${e.sourcePort}`);
     const key = hashValue({ type: node.type, config: node.config, dependencies, inputs: inputKeys });
 
     const failed = upstream.find((r) => r.status === 'error' || r.status === 'blocked');
@@ -281,7 +302,10 @@ export class GraphEvaluator {
 
     const inputs: Record<string, unknown> = {};
     incoming.forEach((e, i) => {
-      inputs[e.targetPort] = upstream[i].outputs[e.sourcePort];
+      const value = upstream[i].outputs[e.sourcePort];
+      if (def.inputs.find((p) => p.name === e.targetPort)?.multiple) {
+        inputs[e.targetPort] = [...((inputs[e.targetPort] as unknown[] | undefined) ?? []), value];
+      } else inputs[e.targetPort] = value;
     });
     const missing = def.inputs.filter((p) => !(p.name in inputs));
     if (missing.length) {

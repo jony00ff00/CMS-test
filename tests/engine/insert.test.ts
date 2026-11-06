@@ -57,11 +57,51 @@ describe('building insertions', () => {
   });
 });
 
+describe('widths', () => {
+  it('accepts any CSS unit, treats a plain number as pixels, and defaults to 100%', async () => {
+    const { cssWidth } = await import('../../src/engine');
+    expect(cssWidth(undefined)).toEqual({ value: '100%' });
+    expect(cssWidth('')).toEqual({ value: '100%' });
+    expect(cssWidth('  ')).toEqual({ value: '100%' });
+    expect(cssWidth(320)).toEqual({ value: '320px' });
+    expect(cssWidth('320')).toEqual({ value: '320px' });
+    expect(cssWidth('12.5em')).toEqual({ value: '12.5em' });
+    expect(cssWidth('2.5 REM')).toEqual({ value: '2.5rem' });
+    expect(cssWidth('50%')).toEqual({ value: '50%' });
+    expect(cssWidth('40vw')).toEqual({ value: '40vw' });
+    expect(cssWidth('.5in')).toEqual({ value: '0.5in' });
+    expect(cssWidth('auto')).toEqual({ value: 'auto' });
+  });
+
+  it('warns and uses 100% for anything that is not a width', async () => {
+    const { cssWidth } = await import('../../src/engine');
+    expect(cssWidth('wide')).toEqual({ value: '100%', warning: '"wide" is not a width (use for example 320px, 20em or 50%); using 100%' });
+    expect(cssWidth('10furlongs')).toMatchObject({ value: '100%', warning: expect.stringMatching(/^"furlongs" is not a unit/) });
+    expect(cssWidth('0')).toMatchObject({ value: '100%', warning: 'A width of 0 would hide it; using 100%' });
+    expect(cssWidth('calc(100% - 2em)')).toMatchObject({ value: '100%', warning: expect.any(String) });
+    expect(cssWidth(-5)).toMatchObject({ value: '100%' });
+  });
+
+  it('puts the width on the image, the figure (with a caption) or the image inside a link', async () => {
+    const doc = html();
+    const where = block(doc, 'h1', 'after');
+    const plain = await body(doc, where, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A', width: '20em' });
+    expect(plain.html).toContain('<img src="https://x.test/a.png" alt="A" class="cms-insert" loading="lazy" style="width:20em">');
+    const captioned = await body(doc, where, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A', width: '50%', caption: 'Hi' });
+    expect(captioned.html).toContain('<figure class="cms-figure" style="width:50%"><img src="https://x.test/a.png" alt="A" class="cms-insert" loading="lazy" style="width:100%"><figcaption>Hi</figcaption>');
+    const linked = await body(doc, where, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A', width: 240, href: 'https://x.test/' });
+    expect(linked.html).toContain('<a href="https://x.test/"><img src="https://x.test/a.png" alt="A" class="cms-insert" loading="lazy" style="width:240px"></a>');
+    const bad = await body(doc, where, { kind: 'videoUrl', url: 'https://x.test/v.mp4', width: 'big' });
+    expect(bad.html).toContain('style="width:100%"');
+    expect(bad.warnings).toEqual(['"big" is not a width (use for example 320px, 20em or 50%); using 100%']);
+  });
+});
+
 describe('inserting at a picked point', () => {
   it('puts an image right at the cursor', async () => {
     const doc = html();
     const r = await body(doc, caretAfter(doc, 'costs nothing'), { kind: 'imageUrl', url: 'https://example.com/free.png', alt: 'Free' });
-    expect(r.html).toContain('<p>The basic plan costs nothing<img src="https://example.com/free.png" alt="Free" class="cms-insert" loading="lazy">. The pro');
+    expect(r.html).toContain('<p>The basic plan costs nothing<img src="https://example.com/free.png" alt="Free" class="cms-insert" loading="lazy" style="width:100%">. The pro');
     expect(r.inserted).toBe(1);
     expect(r.warnings).toEqual([]);
   });
@@ -70,8 +110,8 @@ describe('inserting at a picked point', () => {
     const doc = html();
     const r = await insertContent(doc, block(doc, 'h2', 'after'), { kind: 'image', fileId: 'png', alt: 'Logo', caption: 'Our logo', width: 64 }, files);
     const page = serialize(r.document, { inlineAssets: true });
-    expect(page).toContain('<h2>Getting started</h2><figure class="cms-figure"><img src="data:image/png;base64,');
-    expect(page).toContain('alt="Logo" class="cms-insert" width="64"><figcaption>Our logo</figcaption></figure><p>Plant');
+    expect(page).toContain('<h2>Getting started</h2><figure class="cms-figure" style="width:64px"><img src="data:image/png;base64,');
+    expect(page).toContain('alt="Logo" class="cms-insert" style="width:100%"><figcaption>Our logo</figcaption></figure><p>Plant');
     expect(Object.keys(r.document.assets)).toEqual([`insert-${png.hash}`]);
     expect(serialize(r.document, { fullDocument: true })).toContain('.cms-figure{');
   });
@@ -89,7 +129,7 @@ describe('inserting at a picked point', () => {
     const doc = html();
     const video = await body(doc, caretAfter(doc, 'costs nothing'), { kind: 'video', fileId: 'mp4', autoplay: true, loop: true });
     expect(video.html).toContain('The pro plan adds snippets.</p><video src="asset:insert-');
-    expect(video.html).toMatch(/<video src="asset:[^"]+" controls playsinline class="cms-insert" autoplay muted loop><\/video><blockquote>/);
+    expect(video.html).toMatch(/<video src="asset:[^"]+" controls playsinline class="cms-insert" autoplay muted loop style="width:100%"><\/video><blockquote>/);
     expect(video.warnings).toEqual(['This content cannot go inside a paragraph, so it goes after it']);
 
     const code = await body(doc, block(doc, 'h2', 'end', 1), { kind: 'code', code: 'npm run build', language: 'shell', render: 'block' });
@@ -114,10 +154,10 @@ describe('inserting at a picked point', () => {
   it('embeds a YouTube link and warns that the preview may not play it', async () => {
     const doc = html();
     const r = await body(doc, block(doc, 'h1', 'after'), { kind: 'videoUrl', url: 'https://youtu.be/dQw4w9WgXcQ', caption: 'Demo' });
-    expect(r.html).toContain('<figure class="cms-figure"><div class="cms-embed"><iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Demo"');
+    expect(r.html).toContain('<figure class="cms-figure" style="width:100%"><div class="cms-embed" style="width:100%"><iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Demo"');
     expect(r.warnings[0]).toMatch(/may not play in the preview/);
     const file = await body(doc, block(doc, 'h1', 'after'), { kind: 'videoUrl', url: 'https://example.com/movie.mp4' });
-    expect(file.html).toContain('<video src="https://example.com/movie.mp4" controls playsinline class="cms-insert" preload="metadata"></video>');
+    expect(file.html).toContain('<video src="https://example.com/movie.mp4" controls playsinline class="cms-insert" preload="metadata" style="width:100%"></video>');
   });
 
   it('follows the text when the document changes, and asks for attention when it is gone', async () => {
@@ -166,7 +206,7 @@ describe('JSON sources', () => {
     const exported = await exportJson(r.document);
     expect(exported.changed).toEqual(['$.faq[0].a']);
     expect((exported.data as { faq: { a: string }[] }).faq[0].a).toBe(
-      '<p>Yes. Map <strong>string fields</strong> with JSONPath.</p><img src="https://x.test/a.png" alt="Diagram" class="cms-insert" loading="lazy">',
+      '<p>Yes. Map <strong>string fields</strong> with JSONPath.</p><img src="https://x.test/a.png" alt="Diagram" class="cms-insert" loading="lazy" style="width:100%">',
     );
   });
 });
@@ -234,7 +274,7 @@ describe('picking a point from a cursor', () => {
     const cursor = await body(doc, { mode: 'point', point: insertionPointAt(doc, at, 'cursor') }, img);
     expect(cursor.html).toContain('costs nothing<img');
     const before = await body(doc, { mode: 'point', point: insertionPointAt(doc, at, 'before') }, img);
-    expect(before.html).toContain('<h2>Pricing</h2><img src="https://x.test/a.png" alt="" class="cms-insert" loading="lazy"><p>The basic');
+    expect(before.html).toContain('<h2>Pricing</h2><img src="https://x.test/a.png" alt="" class="cms-insert" loading="lazy" style="width:100%"><p>The basic');
     const after = await body(doc, { mode: 'point', point: insertionPointAt(doc, at, 'after') }, img);
     expect(after.html).toContain('adds snippets.</p><img');
   });
@@ -252,6 +292,6 @@ describe('picking a point from a cursor', () => {
     expect(point.place).toBe('before');
     expect(point.anchor.textQuote?.exact).toBe('The basic plan costs not');
     const r = await body(doc, { mode: 'point', point }, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: '' });
-    expect(r.html).toContain('<p><img src="https://x.test/a.png" alt="" class="cms-insert" loading="lazy">The basic');
+    expect(r.html).toContain('<p><img src="https://x.test/a.png" alt="" class="cms-insert" loading="lazy" style="width:100%">The basic');
   });
 });

@@ -1,3 +1,4 @@
+import { combineDocuments } from '../combine';
 import { serialize } from '../document';
 import type { NodeDefinition, NodeOutput } from '../graph';
 import { exportJson } from '../json-export';
@@ -18,14 +19,17 @@ export const output: NodeDefinition<OutputConfig> = {
   type: 'output',
   label: 'Output',
   description: 'Shows the result and exports it as HTML or JSON',
-  inputs: [{ name: 'document', type: 'document', label: 'Document' }],
+  // Several documents can come in (e.g. from an Insert and a Snippet): they are shown one after another.
+  inputs: [{ name: 'document', type: 'document', label: 'Document', multiple: true }],
   outputs: [{ name: 'html', type: 'html', label: 'HTML' }],
   defaultConfig: () => ({ format: 'html', fullDocument: true, inlineAssets: true }),
   async evaluate(inputs, config): Promise<NodeOutput> {
-    const doc = inputs.document as CmsDocument;
+    const docs = inputs.document as CmsDocument[];
+    const doc = combineDocuments(docs);
     // The page is always made: the preview shows it, also when exporting JSON.
     const html = serialize(doc, { fullDocument: config.fullDocument ?? true, inlineAssets: config.inlineAssets ?? true });
     if (config.format === 'json') {
+      if (docs.length > 1) throw new Error('JSON export writes one JSON file, so connect only one document to this Output');
       const result = await exportJson(doc, { assets: config.jsonAssets });
       return {
         outputs: { html, json: result.json, document: doc },
@@ -33,6 +37,8 @@ export const output: NodeDefinition<OutputConfig> = {
         info: { format: 'json', changed: result.changed.length, bytes: new TextEncoder().encode(result.json).length },
       };
     }
-    return { outputs: { html, document: doc }, info: { bytes: new TextEncoder().encode(html).length } };
+    const info: Record<string, number> = { bytes: new TextEncoder().encode(html).length };
+    if (docs.length > 1) info.documents = docs.length;
+    return { outputs: { html, document: doc }, info };
   },
 };

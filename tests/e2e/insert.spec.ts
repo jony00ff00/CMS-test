@@ -162,3 +162,84 @@ test('an uploaded image with a caption is kept after a reload', async ({ page })
   await expect(preview(page).locator('figure figcaption')).toHaveText('Our logo');
   await expect(preview(page).locator('figure img[alt="Logo"]')).toHaveAttribute('src', /^data:image\/png;base64,/);
 });
+
+test('an Output can take several documents, shown in an order you choose', async ({ page }) => {
+  await setUp(page);
+  await inspector(page).getByLabel('Insert', { exact: true }).selectOption('code');
+  await inspector(page).getByLabel('Show it as').selectOption('html');
+  await inspector(page).locator('.cm-content[aria-label="Code"]').click();
+  await page.keyboard.insertText('<p class="from-insert">Added by the Insert node</p>');
+  await inspector(page).getByLabel('Place it').selectOption('selector');
+  await inspector(page).getByLabel('CSS selector').fill('h1');
+
+  // The first Output already has the Snippet; connect the Insert node to it as well.
+  await connect(page, 'insert-5', 'document', 'output-4', 'document');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(6);
+  await expect(node(page, 'output-4')).toContainText('2 documents');
+  await node(page, 'output-4').click();
+  const order = inspector(page).getByRole('list', { name: 'Documents in page order' });
+  await expect(order.getByRole('listitem')).toHaveText([/Snippet · snippet-3/, /Insert · insert-5/]);
+  await expect(previewText(page)).resolves.toMatch(/^[\s\S]*Getting started[\s\S]*Added by the Insert node/);
+  await page.screenshot({ path: 'test-results/output-two-documents.png' });
+
+  await inspector(page).getByRole('button', { name: 'Move insert-5 up' }).click();
+  await expect(order.getByRole('listitem')).toHaveText([/Insert · insert-5/, /Snippet · snippet-3/]);
+  await expect
+    .poll(async () => {
+      const text = await previewText(page);
+      return text.indexOf('Added by the Insert node') < text.indexOf('Getting started');
+    })
+    .toBe(true);
+  // JSON export needs one document.
+  await expect(inspector(page)).toContainText('With several documents connected, only a web page can be made.');
+});
+
+test('the width of an insertion takes any CSS unit', async ({ page }) => {
+  await setUp(page);
+  await inspector(page).getByLabel('Image address').fill('https://example.com/flower.png');
+  await inspector(page).getByLabel('Alternative text').fill('A flower');
+  await clickAfter(page, 'Field Guide to Node Gardens');
+  await page.getByRole('dialog', { name: 'Insert here' }).getByRole('button', { name: 'After this heading' }).click();
+  await page.getByRole('button', { name: 'Result', exact: true }).click();
+  const img = preview(page).locator('img[alt="A flower"]');
+  await expect(img).toHaveAttribute('style', 'width:100%');
+
+  const width = inspector(page).getByLabel('Width');
+  for (const [typed, used] of [['50%', '50%'], ['320', '320px'], ['12.5em', '12.5em'], ['2rem', '2rem']]) {
+    await width.fill(typed);
+    await expect(img).toHaveAttribute('style', `width:${used}`);
+  }
+  await expect(inspector(page)).toContainText('Using 2rem.');
+  await width.fill('wide');
+  await expect(inspector(page)).toContainText('"wide" is not a width');
+  await expect(img).toHaveAttribute('style', 'width:100%');
+  await width.fill('');
+  await expect(img).toHaveAttribute('style', 'width:100%');
+});
+
+test('the Output node is red', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  await expect(node(page, 'output-4').locator('.cms-node')).toHaveCSS('border-top-color', 'rgb(220, 38, 38)');
+  await expect(page.getByRole('complementary', { name: 'Node palette' }).getByRole('button', { name: /^Output/ })).toHaveCSS(
+    'border-left-color',
+    'rgb(220, 38, 38)',
+  );
+});
+
+/** The preview page's text, as the preview measures it. */
+async function previewText(page: Page): Promise<string> {
+  await expect(preview(page).locator('body')).not.toBeEmpty();
+  return page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        const frame = document.querySelector<HTMLIFrameElement>('iframe[title="Output preview"]')!;
+        addEventListener('message', function on(e) {
+          if (e.data?.source === 'cms-preview' && e.data.type === 'text') {
+            removeEventListener('message', on);
+            resolve(e.data.text);
+          }
+        });
+        frame.contentWindow!.postMessage({ source: 'cms-preview', type: 'get-text' }, '*');
+      }),
+  );
+}

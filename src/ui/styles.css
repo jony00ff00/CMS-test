@@ -12,6 +12,7 @@
   --port-document: #2563eb;
   --port-selection: #d97706;
   --port-html: #059669;
+  --node-output: #dc2626;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
   color: var(--text);
@@ -57,7 +58,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-documentSource { border-left-color: var(--port-document); }
 .palette-selector { border-left-color: var(--port-selection); }
 .palette-snippet { border-left-color: #7c3aed; }
-.palette-output { border-left-color: var(--port-html); }
+.palette-output { border-left-color: var(--node-output); }
 .palette-insert { border-left-color: #0d9488; }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
@@ -166,7 +167,7 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-documentSource { border-top-color: var(--port-document); }
 .cms-node-selector { border-top-color: var(--port-selection); }
 .cms-node-snippet { border-top-color: #7c3aed; }
-.cms-node-output { border-top-color: var(--port-html); }
+.cms-node-output { border-top-color: var(--node-output); }
 .cms-node-insert { border-top-color: #0d9488; }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
@@ -225,6 +226,8 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .segmented button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
 .segmented button[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .segmented + .preview-actions { margin-left: 0.6rem; }
+.input-order { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.25rem; }
+.input-order li { display: grid; grid-template-columns: 1fr auto auto; gap: 0.25rem; align-items: center; }
 .point-summary { margin: 0; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
 fieldset.where { gap: 0.6rem; }
 .project-toolbar { display: grid; justify-items: end; gap: 0.25rem; }

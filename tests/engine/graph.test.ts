@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  connect, DEFAULT_SNIPPET, downstreamOf, edgeError, GraphEvaluator, hashValue, nodeRegistry, stableStringify, storeFile,
+  connect, DEFAULT_SNIPPET, downstreamOf, edgeError, GraphEvaluator, hashValue, moveEdge, nodeRegistry, stableStringify, storeFile,
   topologicalSort, validateGraph, type EvalContext, type Graph, type GraphNode, type NodeRegistry,
 } from '../../src/engine';
 import { fixture } from './helpers';
@@ -295,5 +295,66 @@ describe('evaluation', () => {
     await new GraphEvaluator(nodeRegistry).evaluate(g, ctx);
     expect(JSON.stringify(g)).toBe(before);
     expect(JSON.stringify(Object.keys(ctx.files))).toBe(files);
+  });
+});
+
+describe('an Output with several inputs', () => {
+  const two = (): Graph => ({
+    nodes: [
+      node('src', 'documentSource', { fileId: 'html' }),
+      node('sel', 'selector', { mode: 'css', selector: 'h1' }),
+      node('snip', 'snippet'),
+      node('ins', 'insert', { content: { kind: 'code', code: '<p>Inserted</p>', render: 'html' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h1' }, place: 'after' } }),
+      node('out', 'output', { fullDocument: false }),
+    ],
+    edges: [
+      edge('src', 'document', 'sel', 'document'),
+      edge('sel', 'selection', 'snip', 'selection'),
+      edge('src', 'document', 'ins', 'document'),
+      { id: 'a', source: 'snip', sourcePort: 'document', target: 'out', targetPort: 'document' },
+      { id: 'b', source: 'ins', sourcePort: 'document', target: 'out', targetPort: 'document' },
+    ],
+  });
+
+  it('accepts several connections, but not the same one twice', () => {
+    expect(validateGraph(two(), nodeRegistry)).toEqual([]);
+    expect(edgeError(two(), { source: 'ins', sourcePort: 'document', target: 'out', targetPort: 'document' }, nodeRegistry)).toBe(
+      'These two are already connected',
+    );
+    expect(nodeRegistry.output.inputs[0].multiple).toBe(true);
+    // Other inputs still take one connection.
+    expect(edgeError(two(), { source: 'ins', sourcePort: 'document', target: 'sel', targetPort: 'document' }, nodeRegistry)).toBe(
+      'Selector input "Document" is already connected',
+    );
+  });
+
+  it('shows the documents one after another, in connection order, and can reorder them', async () => {
+    const evaluator = new GraphEvaluator(nodeRegistry);
+    const first = await evaluator.evaluate(two(), ctx);
+    const html1 = first.results.out.outputs.html as string;
+    expect(html1.indexOf('<aside class="callout callout-info"><h1>')).toBeLessThan(html1.indexOf('<p>Inserted</p>'));
+    expect(html1.match(/<h1>/g)).toHaveLength(2);
+    expect(first.results.out.info).toMatchObject({ documents: 2 });
+
+    const swapped = moveEdge(two(), 'a', 1);
+    expect(swapped.edges.filter((e) => e.target === 'out').map((e) => e.id)).toEqual(['b', 'a']);
+    const second = await evaluator.evaluate(swapped, ctx);
+    expect(second.ran).toEqual(['out']);
+    const html2 = second.results.out.outputs.html as string;
+    expect(html2.indexOf('<p>Inserted</p>')).toBeLessThan(html2.indexOf('<aside class="callout'));
+    expect(moveEdge(swapped, 'a', 1)).toEqual(swapped); // already last
+  });
+
+  it('keeps one title, all styles and each snippet asset once', async () => {
+    const page = await new GraphEvaluator(nodeRegistry).evaluate(setConfig(two(), 'out', { fullDocument: true }), ctx);
+    const html = page.results.out.outputs.html as string;
+    expect(html.match(/<title>/g)).toHaveLength(1);
+    expect(html.match(/\/\* callout@1 \*\//g)).toHaveLength(1);
+    expect(html.match(/\/\* cms-insert@1 \*\//g)).toHaveLength(1);
+  });
+
+  it('refuses JSON export with more than one document', async () => {
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(setConfig(two(), 'out', { format: 'json' }), ctx);
+    expect(r.results.out).toMatchObject({ status: 'error', message: 'JSON export writes one JSON file, so connect only one document to this Output' });
   });
 });

@@ -101,7 +101,8 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     }
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
-      return typeof info.bytes === 'number' ? `${(info.bytes / 1024).toFixed(1)} kB of HTML` : 'Nothing to show yet';
+      if (typeof info.bytes !== 'number') return 'Nothing to show yet';
+      return `${typeof info.documents === 'number' ? `${info.documents} documents · ` : ''}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
     default:
       return '';
   }

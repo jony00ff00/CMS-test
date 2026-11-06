@@ -83,9 +83,11 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
   const output = outputs.find((n) => n.id === selected?.id) ?? outputs[0];
   if (!output) return { label: '', message: 'Add an Output node to see the result.' };
   const result = s.results[output.id];
-  const input = inputOf(s, output.id, 'document');
+  const count = s.graph.edges.filter((e) => e.target === output.id && e.targetPort === 'document').length;
+  // With several documents combined, selected text cannot be traced back to one of them.
+  const input = count === 1 ? inputOf(s, output.id, 'document') : undefined;
   return {
-    label: output.id,
+    label: count > 1 ? `${output.id} · ${count} documents, one after another` : output.id,
     html: result?.status === 'ok' ? (result.outputs.html as string) : undefined,
     doc: input?.doc,
     from: input?.from,

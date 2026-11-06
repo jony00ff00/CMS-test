@@ -1,6 +1,7 @@
 // Pure TypeScript engine: no React, no DOM APIs. See CLAUDE.md.
 export * from './types';
 export * from './document';
+export * from './combine';
 export * from './docx';
 export * from './json';
 export * from './json-export';

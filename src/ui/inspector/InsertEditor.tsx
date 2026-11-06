@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react';
 import {
-  blockName, IMAGE_EXTENSIONS, mediaType, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertKind, type InsertNodeConfig,
-  type InsertPlace, type InsertWhere, type SelectorConfig,
+  blockName, cssWidth, IMAGE_EXTENSIONS, mediaType, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertKind, type InsertNodeConfig,
+  type InsertPlace, type InsertWhere, type SelectorConfig, type Width,
 } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CheckboxField, CodeField, SelectField, TextField } from './fields';
@@ -123,9 +123,25 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
     }
     editorStore.getState().chooseMediaFile(node.id, chosen.name, new Uint8Array(await chosen.arrayBuffer()));
   };
-  const width = (w: number | undefined, set: (w: number | undefined) => void) => (
-    <TextField label="Width in pixels" value={w ? String(w) : ''} placeholder="As large as fits" onChange={(v) => set(Number(v) > 0 ? Number(v) : undefined)} />
-  );
+  const width = (w: Width | undefined, set: (w: string | undefined) => void) => {
+    const parsed = cssWidth(w);
+    return (
+      <TextField
+        label="Width"
+        value={w === undefined ? '' : String(w)}
+        placeholder="100%"
+        hint={
+          parsed.warning ?? (
+            <>
+              Any CSS unit: <code>320px</code>, <code>20em</code>, <code>2.5rem</code>, <code>50%</code>… A number alone is pixels; empty is 100%.
+              {w !== undefined && w !== '' && <> Using <code>{parsed.value}</code>.</>}
+            </>
+          )
+        }
+        onChange={(v) => set(v.trim() ? v : undefined)}
+      />
+    );
+  };
 
   switch (content.kind) {
     case 'code':
