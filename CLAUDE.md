@@ -42,7 +42,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   WMF / TIFF, external and missing files warn). Charts → `<figure class="slide-chart">` with a table of the cached
   data (categories × series) and the title as caption, with a warning. SmartArt → `<div class="slide-smartart">`
   nested list following the data model's `parOf` connections. Videos, sounds and OLE objects warn (P6).
-  Picture / table placeholders rank with the other placeholders in reading order. .ppt / password-protected files
+  Picture / table placeholders rank with the other placeholders in reading order. `slideStyles` (default true) adds
+  `SLIDE_CSS` to `meta.styles` (cards, "Slide N" / "Notes" labels from `::before`, so the text index is unchanged);
+  `formatSlideRange` writes [1,2,3,5] as "1-3, 5". .ppt / password-protected files
   (OLE header) get a plain error.
 - `json.ts`: `parseJson` (own error scanner gives line, column and a plain reason in every browser),
   `discoverPaths` (every string field, with a suggested format), `mapJsonToDocument` / `importJson` (async).
@@ -159,7 +161,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   shows the first Output's page. Always `<iframe sandbox="allow-scripts">` via `srcdoc`, so the editor cannot
   read the page: `bridge.ts` is injected and talks over `postMessage` (`source: 'cms-preview'`). It rebuilds
   the engine's text index from the DOM using `BLOCK_TAGS`, so selections come back as engine text offsets
-  (an e2e test checks the two agree for HTML, .docx and JSON). Elements marked `data-cms-preview` are ignored.
+  (an e2e test checks the two agree for HTML, .docx, JSON and .pptx). Elements marked `data-cms-preview` are ignored.
 - The preview can be resized (`PreviewResizer`: drag with pointer capture so the iframe does not swallow the
   pointer, arrow keys, Home / End, double-click resets; 120 px to window height − 160; remembered in
   localStorage `node-cms:preview-height`; `App` sets `--preview-height` on the grid) and opened in its own
@@ -167,6 +169,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   the preview rendered there with a React portal; still a sandboxed iframe inside). Messages from the
   preview then arrive at that window, so `Preview` listens on the iframe's own window, and the bridge accepts
   messages from `parent.opener` as well as `parent`. Closing or reloading the window brings the preview back.
+- Document Source with a .pptx: a "Slides" fieldset (`SlideOptions` in `SourceEditor.tsx`): notes, include hidden,
+  look like slides, "Which slides" text, and a checklist of the deck's slides (from `meta.pptx`) that writes the
+  range (all ticked → no range, so new slides come in too; hidden ones are disabled unless included).
 - Insert node selected: the preview shows its input with the insertion marker ("Where it goes"), or its output
   ("Result"). A click in the preview (the bridge reports `caret` offsets) opens "Insert here": At the cursor
   (not for block content), Before / After this <block>. Its inspector reuses `SelectorFields` from
@@ -215,7 +220,7 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 ## Roadmap
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
-All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P2
+All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P3
 (of P1 text · P2 tables, pictures, groups · P3 source options and slide preview · P4 Slide selector · P5 slide-deck
 Output · P6 layout and media). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).

@@ -17,7 +17,29 @@ export interface PptxOptions {
   includeHidden?: boolean;
   /** Which slides, by their number in the deck, e.g. "1-5, 8". Empty: all. */
   slides?: string;
+  /** Add `SLIDE_CSS`, so slides look like slides (cards with a number), in the preview and the exported page. Default true. */
+  slideStyles?: boolean;
 }
+
+/**
+ * Slides as cards with their number, notes in a muted box, simple table and picture styles. The labels come from
+ * CSS (`::before`), so they are not part of the text: selections and offsets are the same with or without them.
+ */
+export const SLIDE_CSS = [
+  'section.slide{position:relative;box-sizing:border-box;max-width:960px;margin:1.25rem auto;padding:2.4rem 2rem 1.5rem;border:1px solid #d8dbe2;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgb(15 23 42/.08)}',
+  'section.slide::before{content:"Slide " attr(data-slide);position:absolute;top:.75rem;left:2rem;font:600 .7rem/1 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7a7f8a}',
+  'section.slide[data-hidden]::before{content:"Slide " attr(data-slide) " \\00b7  hidden"}',
+  'section.slide>h1:first-child,section.slide>h2:first-child{margin-top:0}',
+  'section.slide .subtitle{font-size:1.15em;color:#555}',
+  '.speaker-notes{margin-top:1.25rem;padding:.6rem .8rem;border-radius:6px;background:#f6f7f9;color:#555;font-size:.9em}',
+  '.speaker-notes::before{content:"Notes";display:block;margin-bottom:.25rem;font:600 .7rem/1.2 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7a7f8a}',
+  '.speaker-notes p{margin:.25rem 0}',
+  'section.slide table{border-collapse:collapse;margin:.75rem 0}',
+  'section.slide th,section.slide td{border:1px solid #d8dbe2;padding:.35rem .6rem;text-align:left;vertical-align:top}',
+  'section.slide th{background:#f6f7f9}',
+  'section.slide figure{margin:.75rem 0}section.slide img{max-width:100%;height:auto}',
+  '.slide-chart figcaption{margin-top:.3rem;font-size:.85em;color:#555}',
+].join('\n');
 
 const NS = {
   p: 'http://schemas.openxmlformats.org/presentationml/2006/main',
@@ -48,6 +70,19 @@ export function parseSlideRange(input: string | undefined, count: number): { sli
   }
   if (slides.size === 0 && warnings.length === 0) warnings.push('No slides chosen');
   return { slides, warnings };
+}
+
+/** The other way round: [1, 2, 3, 5, 7, 8] → "1-3, 5, 7-8". */
+export function formatSlideRange(numbers: number[]): string {
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    parts.push(j > i ? `${sorted[i]}-${sorted[j]}` : `${sorted[i]}`);
+    i = j;
+  }
+  return parts.join(', ');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -247,6 +282,7 @@ export async function importPptx(data: ArrayBuffer | Uint8Array, options: PptxOp
   doc.meta.title = slidesInfo.find((s) => s.included && s.title)?.title ?? doc.meta.title;
   doc.meta.warnings.push(...warnings);
   doc.assets = assets;
+  if (options.slideStyles ?? true) doc.meta.styles.push(SLIDE_CSS);
   doc.meta.pptx = { slideCount: slideParts.length, slides: slidesInfo };
   return doc;
 }

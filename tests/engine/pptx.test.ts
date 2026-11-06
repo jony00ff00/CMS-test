@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import {
-  buildTextIndex, GraphEvaluator, importPptx, importSource, nodeRegistry, parseSlideRange, runSelector, serialize, storeFile,
+  buildTextIndex, formatSlideRange, GraphEvaluator, importPptx, importSource, nodeRegistry, parseSlideRange, SLIDE_CSS, runSelector, serialize, storeFile,
 } from '../../src/engine';
 import { PNG_BASE64, SAMPLE_DECK } from '../../src/samples';
 import { fixture } from './helpers';
@@ -331,7 +331,24 @@ describe('importing hand-made decks', () => {
   });
 });
 
+describe('slide styles', () => {
+  it('adds the slide look to the page by default, as CSS only (the text stays the same)', async () => {
+    const styled = await importPptx(sample());
+    const plainDoc = await importPptx(sample(), { slideStyles: false });
+    expect(styled.meta.styles).toContain(SLIDE_CSS);
+    expect(plainDoc.meta.styles).not.toContain(SLIDE_CSS);
+    expect(serialize(styled, { fullDocument: true })).toContain('section.slide::before{content:"Slide " attr(data-slide)');
+    expect(buildTextIndex(styled.tree).text).toBe(buildTextIndex(plainDoc.tree).text);
+  });
+});
+
 describe('slide ranges', () => {
+  it('writes ranges compactly', () => {
+    expect(formatSlideRange([8, 1, 2, 3, 5, 7, 2])).toBe('1-3, 5, 7-8');
+    expect(formatSlideRange([])).toBe('');
+    expect([...parseSlideRange(formatSlideRange([1, 2, 4, 9, 10]), 10).slides!]).toEqual([1, 2, 4, 9, 10]);
+  });
+
   it('reads numbers and ranges', () => {
     expect([...parseSlideRange('1-3, 5;7 9–8', 10).slides!]).toEqual([1, 2, 3, 5, 7, 8, 9]);
     expect(parseSlideRange('', 10).slides).toBeUndefined();

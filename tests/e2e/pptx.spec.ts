@@ -45,3 +45,43 @@ test('tables, pictures and charts from a deck show in the preview', async ({ pag
   await slide(13).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/pptx-table-picture-chart.png' });
 });
+
+test('choose slides, notes and hidden slides in the Document Source', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  await node(page, 'documentSource-1').click();
+  await inspector(page).getByLabel('File').setInputFiles(fixture('sample.pptx'));
+  const list = inspector(page).getByRole('list', { name: 'Slides in the deck' });
+  await expect(list.getByRole('listitem')).toHaveCount(15);
+  const tick = (n: number) => list.getByRole('listitem').nth(n - 1).getByRole('checkbox');
+  await expect(tick(6)).toBeDisabled(); // hidden
+  await expect(list.getByRole('listitem').nth(5)).toContainText('Hidden extra');
+
+  // Untick slide 2: the range is written for you.
+  await tick(2).uncheck();
+  await expect(inspector(page).getByLabel('Which slides')).toHaveValue('1, 3-5, 7-15');
+  await expect(node(page, 'documentSource-1')).toContainText('13 of 15 slides');
+  await expect(preview(page).locator('section.slide[data-slide="2"]')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/pptx-slide-options.png' });
+
+  // Hidden slides can be included; then ticking slide 2 again includes everything: no range needed.
+  await inspector(page).getByLabel('Include hidden slides').check();
+  await expect(tick(6)).toBeEnabled();
+  await tick(6).check();
+  await tick(2).check();
+  await expect(inspector(page).getByLabel('Which slides')).toHaveValue('');
+  await expect(preview(page).locator('section.slide')).toHaveCount(15);
+  await expect(preview(page).locator('section.slide[data-hidden]')).toHaveCount(1);
+
+  // Type a range; turn notes and the slide look off.
+  await inspector(page).getByLabel('Which slides').fill('13-15');
+  await expect(preview(page).locator('section.slide')).toHaveCount(3);
+  await expect(list.getByRole('listitem').nth(0).getByRole('checkbox')).not.toBeChecked();
+  await inspector(page).getByLabel('Which slides').fill('2-5');
+  await expect(preview(page).locator('aside.speaker-notes')).toHaveCount(3);
+  await inspector(page).getByLabel('Speaker notes').uncheck();
+  await expect(preview(page).locator('aside.speaker-notes')).toHaveCount(0);
+  const card = preview(page).locator('section.slide').first();
+  await expect(card).toHaveCSS('border-top-style', 'solid');
+  await inspector(page).getByLabel('Look like slides').uncheck();
+  await expect(card).toHaveCSS('border-top-style', 'none');
+});

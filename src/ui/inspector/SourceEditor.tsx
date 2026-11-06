@@ -1,11 +1,12 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import {
-  ACCEPTED_EXTENSIONS, defaultJsonMapping, detectFormat, discoverPaths, parseJson, queryJsonPaths, type DocumentSourceConfig,
+  ACCEPTED_EXTENSIONS, defaultJsonMapping, detectFormat, discoverPaths, parseJson, formatSlideRange, parseSlideRange, queryJsonPaths, type CmsDocument,
+  type DocumentSourceConfig, type PptxSlideInfo,
   type GraphNode, type JsonFieldFormat, type JsonFieldMapping, type JsonMapping, type StoredFile,
 } from '../../engine';
 import { sampleHtml, sampleJson } from '../../samples';
 import { editorStore, useEditor } from '../../store/editor-store';
-import { CheckboxField, SelectField, TextAreaField } from './fields';
+import { CheckboxField, SelectField, TextAreaField, TextField } from './fields';
 
 const FORMATS: { value: JsonFieldFormat; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -56,6 +57,7 @@ export function SourceEditor({ node }: { node: GraphNode }) {
         </p>
       </div>
       {format === 'json' && file && <JsonMappingEditor file={file} mapping={config.json} onChange={(json) => update({ json })} />}
+      {format === 'pptx' && <SlideOptions nodeId={node.id} options={config.pptx ?? {}} onChange={(pptx) => update({ pptx })} />}
       {format === 'docx' && (
         <TextAreaField
           label="Word style rules"
@@ -236,4 +238,66 @@ const rank = (order: string[], path: string) => {
 function defaultTemplate(data: unknown): string {
   const keys = data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : [];
   return keys.includes('title') ? '<h1>{{title}}</h1>\n' : '<pre>{{json this}}</pre>\n';
+}
+
+type SlideOptionsConfig = NonNullable<DocumentSourceConfig['pptx']>;
+
+/** Notes, hidden slides, which slides (typed, or ticked in the list of the deck's slides), slide look. */
+function SlideOptions({ nodeId, options, onChange }: { nodeId: string; options: SlideOptionsConfig; onChange: (o: SlideOptionsConfig) => void }) {
+  const slides = useEditor((s) => {
+    const r = s.results[nodeId];
+    return r?.status === 'ok' ? (r.outputs.document as CmsDocument).meta.pptx?.slides : undefined;
+  });
+  const set = (patch: Partial<SlideOptionsConfig>) => onChange({ ...options, ...patch });
+  const includeHidden = options.includeHidden ?? false;
+  // The slides that would be in the document if the range allowed everything.
+  const available = (slides ?? []).filter((s) => includeHidden || !s.hidden);
+  const chosen = new Set(parseSlideRange(options.slides, slides?.length ?? 0).slides ?? available.map((s) => s.number));
+  const toggle = (slide: PptxSlideInfo, on: boolean) => {
+    const next = available.map((s) => s.number).filter((n) => (n === slide.number ? on : chosen.has(n)));
+    // Every slide ticked: no range at all, so slides added to the deck later come in too.
+    set({ slides: next.length === available.length ? undefined : formatSlideRange(next.length ? next : [slide.number]) });
+  };
+  return (
+    <fieldset className="params slide-options">
+      <legend>Slides</legend>
+      <CheckboxField label="Speaker notes" checked={options.includeNotes ?? true} onChange={(includeNotes) => set({ includeNotes })} hint="At the end of each slide, in a notes box." />
+      <CheckboxField label="Include hidden slides" checked={includeHidden} onChange={(v) => set({ includeHidden: v })} />
+      <CheckboxField
+        label="Look like slides"
+        checked={options.slideStyles ?? true}
+        onChange={(slideStyles) => set({ slideStyles })}
+        hint="Each slide as a card with its number, in the preview and the exported page. Off: plain sections."
+      />
+      <TextField
+        label="Which slides"
+        value={options.slides ?? ''}
+        placeholder="All"
+        hint="Numbers and ranges, e.g. 1-5, 8. Or tick them below."
+        onChange={(v) => set({ slides: v.trim() ? v : undefined })}
+      />
+      {slides && slides.length > 0 && (
+        <ol className="slide-list" aria-label="Slides in the deck">
+          {slides.map((s) => {
+            const unavailable = s.hidden && !includeHidden;
+            return (
+              <li key={s.number} className={s.included ? undefined : 'muted'}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!unavailable && chosen.has(s.number)}
+                    disabled={unavailable}
+                    onChange={(e) => toggle(s, e.target.checked)}
+                  />
+                  <span className="slide-number">{s.number}</span>
+                  <span className="slide-title">{s.title ?? <em>No title</em>}</span>
+                  {s.hidden && <span className="hidden-pill">hidden</span>}
+                </label>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </fieldset>
+  );
 }

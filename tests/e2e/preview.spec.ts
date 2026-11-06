@@ -89,19 +89,19 @@ test('selecting a Selector node highlights its matches in the preview', async ({
   await expect(preview(page).locator('aside.callout')).toHaveCount(2);
 });
 
-test('the preview measures text exactly like the engine (HTML, .docx and JSON)', async ({ page }) => {
+test('the preview measures text exactly like the engine (HTML, .docx, JSON and .pptx)', async ({ page }) => {
   await page.getByRole('button', { name: 'HTML example' }).click();
   await node(page, 'documentSource-1').click();
   const fromHtml = (await importSource({ name: 'example.html', data: sampleHtml() })).tree;
   await previewFrame(page, 'Field Guide');
   expect(await previewText(page)).toBe(buildTextIndex(fromHtml).text);
 
-  for (const name of ['sample.docx', 'sample.json']) {
+  for (const name of ['sample.docx', 'sample.json', 'sample.pptx']) {
     await inspector(page).getByLabel('File').setInputFiles(fixture(name));
     await expect(node(page, 'documentSource-1')).toContainText(name);
     const { readFileSync } = await import('node:fs');
     const doc = await importSource({ name, data: readFileSync(fixture(name)) });
-    await previewFrame(page, name === 'sample.json' ? 'guide-001' : 'Every node');
+    await previewFrame(page, name === 'sample.json' ? 'guide-001' : name === 'sample.pptx' ? 'Read the docs' : 'Every node');
     expect(await previewText(page), name).toBe(buildTextIndex(doc.tree).text);
   }
 });

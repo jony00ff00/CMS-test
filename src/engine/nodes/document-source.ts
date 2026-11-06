@@ -10,7 +10,7 @@ export interface DocumentSourceConfig {
   /** For .docx files: extra mammoth style-map rules. */
   docx?: { styleMap?: string[] };
   /** For .pptx files: notes, hidden slides, which slides. */
-  pptx?: { includeNotes?: boolean; includeHidden?: boolean; slides?: string };
+  pptx?: { includeNotes?: boolean; includeHidden?: boolean; slides?: string; slideStyles?: boolean };
 }
 
 export const documentSource: NodeDefinition<DocumentSourceConfig> = {
