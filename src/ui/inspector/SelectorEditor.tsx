@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import type { Anchor, CmsDocument, GraphNode, ResolveStatus, Selection, SelectorConfig, SelectorMode } from '../../engine';
+import type { Anchor, CmsDocument, GraphNode, ResolveStatus, Selection, SelectorConfig, SelectorMode, SlidePart } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
 import { CheckboxField, SelectField, TextField } from './fields';
@@ -11,6 +11,7 @@ export const SELECTOR_MODES: { value: SelectorMode; label: string }[] = [
   { value: 'jsonField', label: 'JSON field' },
   { value: 'manual', label: 'Selected by hand' },
   { value: 'all', label: 'Everything (select all)' },
+  { value: 'slide', label: 'Slides (from a .pptx)' },
 ];
 
 const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
@@ -20,6 +21,7 @@ const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
   jsonField: { mode: 'jsonField', path: '$.' },
   manual: { mode: 'manual', anchors: [] },
   all: { mode: 'all', scope: 'document' },
+  slide: { mode: 'slide', part: 'slide' },
 };
 
 /** The document coming into a node, e.g. for JSON field path suggestions. */
@@ -80,6 +82,7 @@ export function SelectorFields({
           onChange={(scope) => patch({ scope })}
         />
       )}
+      {config.mode === 'slide' && <SlideFields config={config} input={input} onChange={patch} />}
       {config.mode === 'css' && (
         <TextField
           label="CSS selector"
@@ -204,3 +207,52 @@ function ManualSelections({
 }
 
 const shorten = (s: string) => (s.length > 50 ? `${s.slice(0, 49)}…` : s).replace(/\n/g, ' ');
+
+const SLIDE_PARTS: { value: SlidePart; label: string }[] = [
+  { value: 'slide', label: 'The whole slide' },
+  { value: 'title', label: 'Its title' },
+  { value: 'content', label: 'Its content (without title and notes)' },
+  { value: 'notes', label: 'Its speaker notes' },
+];
+
+/** Which slides (numbers, title words) and which part of each. */
+function SlideFields({
+  config,
+  input,
+  onChange,
+}: {
+  config: Extract<SelectorConfig, { mode: 'slide' }>;
+  input?: CmsDocument;
+  onChange: (p: Partial<SelectorConfig>) => void;
+}) {
+  const deck = input?.meta.pptx;
+  const included = deck?.slides.filter((s) => s.included) ?? [];
+  return (
+    <>
+      <TextField
+        label="Which slides"
+        value={config.slides ?? ''}
+        placeholder="All"
+        hint={
+          deck
+            ? `Numbers in the deck, e.g. 2-5, 8. This document has ${included.length} of the deck's ${deck.slideCount} slides.`
+            : 'Numbers in the deck, e.g. 2-5, 8.'
+        }
+        onChange={(slides) => onChange({ slides: slides.trim() ? slides : undefined })}
+      />
+      <TextField
+        label="Title contains"
+        value={config.title ?? ''}
+        placeholder="Any title"
+        list={deck ? 'slide-titles' : undefined}
+        onChange={(title) => onChange({ title: title.trim() ? title : undefined })}
+      />
+      {deck && (
+        <datalist id="slide-titles">
+          {included.flatMap((s) => (s.title ? [<option key={s.number} value={s.title} />] : []))}
+        </datalist>
+      )}
+      <SelectField label="Select" value={config.part ?? 'slide'} options={SLIDE_PARTS} onChange={(part) => onChange({ part })} />
+    </>
+  );
+}

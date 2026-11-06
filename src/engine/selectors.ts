@@ -2,7 +2,8 @@
 import type { Element } from 'hast';
 import { selectAll } from 'hast-util-select';
 import { resolveAnchors, type ResolveOptions } from './anchors';
-import { elementMatch, enclosingBlock, headingLevel, indexDocument, sameMatch, sectionMatch, textOf, type DocIndex } from './doc-index';
+import { elementMatch, enclosingBlock, headingLevel, indexDocument, sameMatch, sectionMatch, slidesOf, textOf, type DocIndex } from './doc-index';
+import { parseSlideRange } from './pptx';
 import { queryJsonPaths } from './json';
 import type { Anchor, CmsDocument, Match, Selection, SelectionMatch } from './types';
 
@@ -32,9 +33,19 @@ export type SelectorConfig =
       /** "document" (default): everything as one match. "blocks": each top-level block as its own match. */
       scope?: 'document' | 'blocks';
     }
+  | {
+      mode: 'slide';
+      /** Slide numbers in the deck, e.g. "2-5, 8". Empty: every slide. */
+      slides?: string;
+      /** Only slides whose title contains this (case-insensitive). */
+      title?: string;
+      /** What of each slide: all of it (default), its title, its content (without title and notes), its notes. */
+      part?: SlidePart;
+    }
   | ({ mode: 'manual'; anchors: Anchor[] } & ResolveOptions);
 
 export type SelectorMode = SelectorConfig['mode'];
+export type SlidePart = 'slide' | 'title' | 'content' | 'notes';
 
 /** Safety limit so a pattern like "." cannot freeze the app. */
 export const MAX_MATCHES = 5000;
@@ -62,6 +73,9 @@ export function runSelector(doc: CmsDocument, config: SelectorConfig): Selection
       break;
     case 'all':
       matches = selectEverything(ix, config.scope ?? 'document', warnings);
+      break;
+    case 'slide':
+      matches = selectSlides(ix, config, warnings);
       break;
     default:
       warnings.push(`Unknown selector mode "${(config as { mode: string }).mode}"`);
@@ -93,6 +107,54 @@ function selectEverything(ix: DocIndex, scope: 'document' | 'blocks', warnings: 
   while (isBlank(children[start])) start++;
   while (isBlank(children[end - 1])) end--;
   return [withText(ix, { kind: 'nodes', parent: [], start, end })];
+}
+
+/** Slides from a .pptx by number and title: whole slides, their titles, their content or their notes. */
+function selectSlides(ix: DocIndex, config: Extract<SelectorConfig, { mode: 'slide' }>, warnings: string[]): SelectionMatch[] {
+  const slides = slidesOf(ix);
+  if (slides.length === 0) {
+    warnings.push('This document has no slides (slides come from a .pptx file)');
+    return [];
+  }
+  const deckSize = ix.doc.meta.pptx?.slideCount ?? Math.max(...slides.map((s) => s.number));
+  const range = parseSlideRange(config.slides, deckSize);
+  warnings.push(...range.warnings);
+  if (range.slides) {
+    const present = new Set(slides.map((s) => s.number));
+    const missing = [...range.slides].filter((n) => !present.has(n));
+    if (missing.length) {
+      warnings.push(`Slide${missing.length === 1 ? '' : 's'} ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not in the document (hidden, or left out in the Document Source)`);
+    }
+  }
+  const words = config.title?.trim().toLowerCase();
+  const picked = slides.filter((s) => (!range.slides || range.slides.has(s.number)) && (!words || (s.title ?? '').toLowerCase().includes(words)));
+  if (picked.length === 0) {
+    if (!warnings.length) warnings.push(words ? `No slide title contains "${config.title!.trim()}"` : 'No slides chosen');
+    return [];
+  }
+  const part = config.part ?? 'slide';
+  const matches: SelectionMatch[] = [];
+  const lacking: number[] = [];
+  for (const s of picked) {
+    let match: Match | undefined;
+    if (part === 'slide') match = elementMatch(s.path);
+    else if (part === 'title') match = s.titlePath && elementMatch(s.titlePath);
+    else if (part === 'notes') match = s.notesPath && elementMatch(s.notesPath);
+    else {
+      // Everything between the title and the notes, as one run of the slide's children.
+      const kids = s.el.children;
+      const skip = new Set([s.titlePath?.at(-1), s.notesPath?.at(-1)]);
+      const keep = kids.map((c, i) => (!skip.has(i) && !(c.type === 'text' && !c.value.trim()) ? i : -1)).filter((i) => i >= 0);
+      if (keep.length) match = { kind: 'nodes', parent: s.path, start: keep[0], end: keep[keep.length - 1] + 1 };
+    }
+    if (match) matches.push(withText(ix, match));
+    else lacking.push(s.number);
+  }
+  if (lacking.length) {
+    const what = part === 'title' ? 'a title' : part === 'notes' ? 'speaker notes' : 'content besides its title';
+    warnings.push(`Slide${lacking.length === 1 ? '' : 's'} ${lacking.join(', ')} ${lacking.length === 1 ? 'has' : 'have'} no ${what}`);
+  }
+  return matches;
 }
 
 function selectCss(ix: DocIndex, selector: string, warnings: string[]): SelectionMatch[] {

@@ -130,6 +130,8 @@ export interface Anchor {
   semantic?: { headingText: string; level: number; scope: 'section' | 'block' };
   /** Set when the anchor is a JSON field block, or text inside one. */
   jsonPath?: { path: string };
+  /** Set when the anchor is on a slide (from a .pptx): the slide's number and title when it was made. */
+  slide?: { number: number; title?: string };
 }
 
 export interface SelectionMatch {

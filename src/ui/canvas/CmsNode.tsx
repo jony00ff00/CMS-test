@@ -113,6 +113,8 @@ function NodeTitle({ id, name, label }: { id: string; name?: string; label: stri
   );
 }
 
+const SLIDE_PART_LABELS = { slide: 'Slides', title: 'Slide titles', content: 'Slide content', notes: 'Speaker notes' } as const;
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 'es'}`;
 
 function summarize(node: GraphNode, result: NodeResult | undefined): string {
@@ -130,6 +132,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
         : c.mode === 'heading' ? `Section "${c.text}"`
         : c.mode === 'jsonField' ? c.path
         : c.mode === 'all' ? (c.scope === 'blocks' ? 'Every block' : 'Everything')
+        : c.mode === 'slide' ? `${SLIDE_PART_LABELS[c.part ?? 'slide']} · ${c.slides?.trim() ? `slides ${c.slides.trim()}` : 'all slides'}${c.title?.trim() ? ` titled “${c.title.trim()}”` : ''}`
         : `${c.anchors.length} saved selection${c.anchors.length === 1 ? '' : 's'}`;
       return typeof info.matches === 'number' ? `${what} · ${plural(info.matches, 'match')}` : what;
     }

@@ -57,13 +57,18 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Modes: `css` (hast-util-select), `regex` (text ranges, or `scope: 'block'` for the enclosing block),
   `heading` (heading plus everything up to the next heading of the same or higher level), `jsonField`
   (JSONPath over `meta.json.data`, selects the mapped blocks), `manual` (stored anchors), `all` ("Everything":
-  `scope: 'document'` one run of all top-level nodes without edge whitespace, or `'blocks'` each top-level element).
+  `scope: 'document'` one run of all top-level nodes without edge whitespace, or `'blocks'` each top-level element),
+  `slide` (`slides` range by deck number, `title` contains, `part`: slide / title / content (one run of the slide's
+  children without title and notes) / notes; warns for slides not in the document, slides lacking the part, and
+  documents without slides). `slidesOf(ix)` / `slideAt(ix, offset)` in `doc-index.ts` find `section.slide`s.
 - Matches are `NodeMatch` (sibling run: `parent` path, `start`..`end` child indexes) or `TextMatch`
   (text index offsets). `doc-index.ts` holds the shared lookups (`indexDocument`, `rangeOf`, `textOf`, sections).
 - `anchors.ts`: `createAnchor` stores a text quote with context plus structural, CSS, heading and JSON-path
   strategies. `resolveAnchor` returns `exact` / `moved` / `fuzzy` / `failed` with a confidence and a reason.
   Identical text always wins over similar text. Default `minConfidence` 0.75. Index once and pass the
-  `DocIndex` when resolving many anchors.
+  `DocIndex` when resolving many anchors. On slides, anchors store `slide: { number, title }`: candidates on the
+  slide with that title (or that number, untitled) win and are needed for the quick accept; one found only on
+  another slide is `moved` at ×0.85 confidence (`OTHER_SLIDE_FACTOR`).
 - `snippets.ts`: `applySnippet(selection, snippet, { params, snapToBlock })` (async: Handlebars loads on demand)
   → `{ document, warnings, applied }`. Modes: wrap, prepend, append (`inside` for first/last child), replace,
   attributes (merges class and style; selected text gets a <span>). Template variables: `{{content}}` (the
@@ -220,7 +225,7 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 ## Roadmap
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
-All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P3
+All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P4
 (of P1 text · P2 tables, pictures, groups · P3 source options and slide preview · P4 Slide selector · P5 slide-deck
 Output · P6 layout and media). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).

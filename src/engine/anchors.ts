@@ -7,8 +7,8 @@
 import type { Element } from 'hast';
 import { selectAll } from 'hast-util-select';
 import {
-  childrenAt, contextOf, elementMatch, headingLevel, indexDocument, rangeOf, sameMatch, sectionMatch, textOf,
-  type DocIndex,
+  childrenAt, contextOf, elementMatch, headingLevel, indexDocument, rangeOf, sameMatch, sectionMatch, slideAt, slidesOf, textOf,
+  type DocIndex, type SlideInfo,
 } from './doc-index';
 import { allIndexesOf, contextSimilarity, fuzzyFind, similarity } from './text-match';
 import type { Anchor, CmsDocument, Match, NodeMatch, ResolveStatus, TextMatch } from './types';
@@ -31,6 +31,8 @@ export function createAnchor(source: CmsDocument | DocIndex, match: Match, optio
     textQuote: { exact: ix.text.text.slice(range.start, range.end), ...contextOf(ix, range) },
     textPosition: range,
   };
+  const slide = slideAt(ix, range.start);
+  if (slide) anchor.slide = { number: slide.number, ...(slide.title ? { title: slide.title } : {}) };
 
   if (match.kind === 'nodes') {
     const siblings = childrenAt(ix, match.parent) ?? [];
@@ -80,7 +82,12 @@ interface Candidate {
   ctxSim: number;
   samePlace: boolean;
   distance: number;
+  /** For anchors on a slide: whether this candidate is on the same slide (same title, or same number untitled). */
+  sameSlide: boolean;
 }
+
+/** On a slide, an anchor found on another slide (its own slide was deleted or renamed) is less certain. */
+const OTHER_SLIDE_FACTOR = 0.85;
 
 const score = (c: Candidate) => 0.8 * c.textSim + 0.2 * c.ctxSim;
 
@@ -93,6 +100,12 @@ export function resolveAnchor(source: CmsDocument | DocIndex, anchor: Anchor, op
   /** The lowest text similarity that can still reach minConfidence (with perfect context). */
   const neededTextSim = Math.max(0, (minConfidence - 0.2) / 0.8);
 
+  const slides: SlideInfo[] = anchor.slide ? slidesOf(ix) : [];
+  const onSameSlide = (start: number) => {
+    if (!anchor.slide) return true;
+    const s = slideAt(ix, start, slides);
+    return !!s && (anchor.slide.title ? s.title === anchor.slide.title : s.number === anchor.slide.number);
+  };
   const candidates: Candidate[] = [];
   const consider = (match: Match | undefined, strategy: string, textSim?: number): Candidate | undefined => {
     if (!match) return undefined;
@@ -105,6 +118,7 @@ export function resolveAnchor(source: CmsDocument | DocIndex, anchor: Anchor, op
       ctxSim: contextSimilarity(quote, contextOf(ix, range)),
       samePlace: isSamePlace(anchor, match, range),
       distance: Math.abs(range.start - originalStart),
+      sameSlide: onSameSlide(range.start),
     };
     candidates.push(c);
     return c;
@@ -116,10 +130,11 @@ export function resolveAnchor(source: CmsDocument | DocIndex, anchor: Anchor, op
     match: c.match,
     strategy: c.strategy,
   });
-  /** Exact text: 0.8, plus up to 0.2 for matching context. */
-  const found = (c: Candidate) => done(c, c.samePlace ? 'exact' : 'moved', 0.8 + 0.2 * c.ctxSim);
-  /** Same text with fitting context: accept straight away. */
-  const accept = (c: Candidate | undefined) => (c && c.textSim === 1 && c.ctxSim >= 0.5 ? found(c) : undefined);
+  /** Exact text: 0.8, plus up to 0.2 for matching context (less when it is on another slide). */
+  const found = (c: Candidate) =>
+    done(c, c.samePlace && c.sameSlide ? 'exact' : 'moved', (0.8 + 0.2 * c.ctxSim) * (c.sameSlide ? 1 : OTHER_SLIDE_FACTOR));
+  /** Same text with fitting context (on the same slide): accept straight away. */
+  const accept = (c: Candidate | undefined) => (c && c.textSim === 1 && c.ctxSim >= 0.5 && c.sameSlide ? found(c) : undefined);
 
   if (anchor.target === 'nodes') {
     const quick =
@@ -190,8 +205,11 @@ export function resolveAnchor(source: CmsDocument | DocIndex, anchor: Anchor, op
   // Identical text always beats similar text, even when its surroundings changed more.
   const identical = best(candidates.filter((c) => c.textSim === 1));
   if (identical) return found(identical);
+  // Close matches: the anchor's slide first, but only among those good enough.
+  const adjusted = (c: Candidate) => score(c) * (c.sameSlide ? 1 : OTHER_SLIDE_FACTOR);
+  const good = best(candidates.filter((c) => adjusted(c) >= minConfidence));
+  if (good) return done(good, 'fuzzy', adjusted(good));
   const top = best(candidates);
-  if (top && score(top) >= minConfidence) return done(top, 'fuzzy', score(top));
   return {
     anchorId: anchor.id,
     status: 'failed',
@@ -211,8 +229,9 @@ export function resolveAnchors(doc: CmsDocument | DocIndex, anchors: Anchor[], o
 
 // ---------------------------------------------------------------------------------------------
 
+/** The best candidate: on the anchor's slide first, then the highest score, then the closest to where it was. */
 function best(candidates: Candidate[]): Candidate | undefined {
-  return [...candidates].sort((a, b) => score(b) - score(a) || a.distance - b.distance)[0];
+  return [...candidates].sort((a, b) => Number(b.sameSlide) - Number(a.sameSlide) || score(b) - score(a) || a.distance - b.distance)[0];
 }
 
 const round = (n: number) => Math.round(n * 1000) / 1000;

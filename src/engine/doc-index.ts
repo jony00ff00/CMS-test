@@ -130,3 +130,48 @@ export function sameMatch(a: Match, b: Match): boolean {
   if (a.kind !== b.kind || a.start !== b.start || a.end !== b.end) return false;
   return a.kind === 'text' || key(a.parent) === key((b as NodeMatch).parent);
 }
+
+export interface SlideInfo {
+  /** The slide's number in the deck (`data-slide`). */
+  number: number;
+  el: Element;
+  path: number[];
+  /** The slide's title: its first h1 / h2, if it has one. */
+  title?: string;
+  titlePath?: number[];
+  /** Its speaker notes box, if any. */
+  notesPath?: number[];
+  range: { start: number; end: number };
+}
+
+const isSlide = (el: Element) => {
+  const cls = el.properties.className;
+  return el.tagName === 'section' && Array.isArray(cls) && cls.includes('slide');
+};
+
+/** The slides in a document from a .pptx (`<section class="slide">`), in document order. */
+export function slidesOf(ix: DocIndex): SlideInfo[] {
+  const out: SlideInfo[] = [];
+  for (const { el, path } of ix.elements) {
+    if (!isSlide(el)) continue;
+    const kids = el.children;
+    const ti = kids.findIndex((c) => c.type === 'element' && (c.tagName === 'h1' || c.tagName === 'h2'));
+    const ni = kids.findIndex((c) => c.type === 'element' && c.tagName === 'aside' && Array.isArray(c.properties.className) && c.properties.className.includes('speaker-notes'));
+    const titlePath = ti >= 0 ? [...path, ti] : undefined;
+    out.push({
+      number: Number(el.properties.dataSlide) || out.length + 1,
+      el,
+      path,
+      title: titlePath ? textOf(ix, elementMatch(titlePath)) : undefined,
+      titlePath,
+      notesPath: ni >= 0 ? [...path, ni] : undefined,
+      range: rangeOf(ix, elementMatch(path)) ?? { start: 0, end: 0 },
+    });
+  }
+  return out;
+}
+
+/** The slide a text offset is on. */
+export function slideAt(ix: DocIndex, offset: number, slides = slidesOf(ix)): SlideInfo | undefined {
+  return slides.find((s) => offset >= s.range.start && offset < Math.max(s.range.end, s.range.start + 1));
+}

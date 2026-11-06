@@ -85,3 +85,33 @@ test('choose slides, notes and hidden slides in the Document Source', async ({ p
   await inspector(page).getByLabel('Look like slides').uncheck();
   await expect(card).toHaveCSS('border-top-style', 'none');
 });
+
+test('a Selector picks slides by number or title, and their titles, content or notes', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  await node(page, 'documentSource-1').click();
+  await inspector(page).getByLabel('File').setInputFiles(fixture('sample.pptx'));
+  await expect(node(page, 'documentSource-1')).toContainText('sample.pptx');
+
+  await node(page, 'selector-2').click();
+  await inspector(page).getByLabel('Select by').selectOption({ label: 'Slides (from a .pptx)' });
+  await expect(inspector(page)).toContainText("This document has 14 of the deck's 15 slides");
+  await expect(node(page, 'selector-2')).toContainText('Slides · all slides · 14 matches');
+
+  await inspector(page).getByLabel('Title contains').fill('topic');
+  await inspector(page).getByLabel('Select', { exact: true }).selectOption('title');
+  await expect(node(page, 'selector-2')).toContainText('Slide titles · all slides titled “topic” · 5 matches');
+  await expect(preview(page).locator('[data-cms-match]')).toHaveCount(5);
+
+  await inspector(page).getByLabel('Title contains').fill('');
+  await inspector(page).getByLabel('Which slides').fill('2-6');
+  await inspector(page).getByLabel('Select', { exact: true }).selectOption('notes');
+  await expect(node(page, 'selector-2')).toContainText('Speaker notes · slides 2-6 · 3 matches');
+  await expect(inspector(page)).toContainText('Slide 6 is not in the document');
+  await expect(inspector(page)).toContainText('Slide 4 has no speaker notes');
+  await preview(page).locator('[data-cms-match]').first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/pptx-slide-selector.png' });
+
+  // The Callout snippet now wraps each slide's notes.
+  await node(page, 'output-4').click();
+  await expect(preview(page).locator('.callout aside.speaker-notes, aside.speaker-notes .callout, .callout .speaker-notes')).toHaveCount(3);
+});

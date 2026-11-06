@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import {
-  buildTextIndex, formatSlideRange, GraphEvaluator, importPptx, importSource, nodeRegistry, parseSlideRange, SLIDE_CSS, runSelector, serialize, storeFile,
+  applySnippet, buildTextIndex, createAnchor, formatSlideRange, indexDocument, parseHtml, rangeOf, resolveAnchor, slideAt, slidesOf, GraphEvaluator, importPptx, importSource, nodeRegistry, parseSlideRange, SLIDE_CSS, runSelector, serialize, storeFile,
 } from '../../src/engine';
 import { PNG_BASE64, SAMPLE_DECK } from '../../src/samples';
 import { fixture } from './helpers';
@@ -358,5 +358,96 @@ describe('slide ranges', () => {
     expect(parseSlideRange('2-x', 5).warnings).toEqual(['"2-x" is not a slide number or range (e.g. 2-5)']);
     expect(parseSlideRange('4-9', 5)).toMatchObject({ warnings: ['The deck has 5 slides: "4-9" goes beyond that'] });
     expect([...parseSlideRange('4-9', 5).slides!]).toEqual([4, 5]);
+  });
+});
+
+describe('the Slides selector mode', () => {
+  const deck = () => importPptx(sample());
+
+  it('selects whole slides by number, in document order, and says which are not there', async () => {
+    const doc = await deck();
+    const sel = runSelector(doc, { mode: 'slide', slides: '3, 2, 6' });
+    expect(sel.matches.map((m) => m.text.split('\n')[0])).toEqual(['Getting started', 'Pricing']);
+    expect(sel.warnings).toEqual(['Slide 6 is not in the document (hidden, or left out in the Document Source)']);
+    expect(runSelector(doc, { mode: 'slide' }).matches).toHaveLength(14);
+  });
+
+  it('selects by title words, and titles, content or notes of each slide', async () => {
+    const doc = await deck();
+    expect(runSelector(doc, { mode: 'slide', title: 'topic', part: 'title' }).matches.map((m) => m.text)).toEqual(
+      ['Topic 1', 'Topic 2', 'Topic 3', 'Topic 4', 'Topic 5'],
+    );
+    const content = runSelector(doc, { mode: 'slide', slides: '2', part: 'content' });
+    expect(content.matches.map((m) => m.text)).toEqual(['Plant a source node first\nThen connect a selector to it']);
+    const notes = runSelector(doc, { mode: 'slide', slides: '2-4', part: 'notes' });
+    expect(notes.matches.map((m) => m.text)).toEqual(['Talk about getting started.', 'Talk about pricing.']);
+    expect(notes.warnings).toEqual(['Slide 4 has no speaker notes']);
+    expect(runSelector(doc, { mode: 'slide', title: 'nothing like it' }).warnings).toEqual(['No slide title contains "nothing like it"']);
+  });
+
+  it('wraps slide content with a snippet, keeping the title and notes outside', async () => {
+    const doc = await deck();
+    const sel = runSelector(doc, { mode: 'slide', slides: '3', part: 'content' });
+    const { document } = await applySnippet(sel, { kind: 'snippet', id: 'box', name: 'Box', version: 1, mode: 'wrap', template: '<div class="box">{{content}}</div>', params: [] });
+    expect(serialize(document)).toContain('<h2>Pricing</h2><div class="box"><ul><li>The basic plan costs nothing</li><li>The pro plan adds snippets</li></ul></div><aside class="speaker-notes">');
+  });
+
+  it('warns for documents without slides', () => {
+    expect(runSelector(parseHtml('<p>x</p>'), { mode: 'slide' }).warnings).toEqual(['This document has no slides (slides come from a .pptx file)']);
+  });
+});
+
+describe('selections on slides', () => {
+  const slide = (file: string, title: string, bullets: string[]) => ({
+    file,
+    shapes: sp({ ph: 'title', paras: para(title) }) + sp({ ph: 'body', y: 10, paras: bullets.map((b) => para(b)).join('') }),
+  });
+  // The same long text around "Questions?" on both slides: only the slide's title tells them apart.
+  const filler = 'Thank you all for coming along to this session today';
+  const slidesAB = [slide('slide1.xml', 'Alpha', [filler, 'Questions?', filler]), slide('slide2.xml', 'Beta', [filler, 'Questions?', filler])];
+  const anchorOn = async (title: string, text: string) => {
+    const doc = await importPptx(await makeDeck(slidesAB));
+    const ix = indexDocument(doc);
+    const s = slidesOf(ix).find((x) => x.title === title)!;
+    const start = ix.text.text.indexOf(text, s.range.start);
+    return createAnchor(ix, { kind: 'text', start, end: start + text.length });
+  };
+
+  it('remember their slide', async () => {
+    expect((await anchorOn('Beta', 'Questions?')).slide).toEqual({ number: 2, title: 'Beta' });
+  });
+
+  it("follow their slide when slides are reordered, even when the same text is on another slide", async () => {
+    const anchor = await anchorOn('Beta', 'Questions?');
+    const reordered = await importPptx(await makeDeck(slidesAB, [1, 0]));
+    const r = resolveAnchor(reordered, anchor);
+    expect(r.status).toBe('moved');
+    expect(r.confidence).toBeGreaterThan(0.9);
+    const ix = indexDocument(reordered);
+    expect(slideAt(ix, rangeOf(ix, r.match!)!.start)?.title).toBe('Beta');
+  });
+
+  it('are less certain when their slide is gone and the text is only found elsewhere', async () => {
+    const anchor = await anchorOn('Beta', 'Questions?');
+    const withoutBeta = await importPptx(await makeDeck([slidesAB[0]]));
+    const r = resolveAnchor(withoutBeta, anchor);
+    expect(r.status).toBe('moved');
+    expect(r.confidence).toBeLessThanOrEqual(0.85);
+    expect(r.confidence).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it('work as before in documents without slides', () => {
+    const doc = parseHtml('<p>One two</p>');
+    const anchor = createAnchor(doc, { kind: 'text', start: 0, end: 3 });
+    expect(anchor.slide).toBeUndefined();
+    expect(resolveAnchor(doc, anchor).status).toBe('exact');
+  });
+
+  it('through a manual selector, keep the slide after the deck changes', async () => {
+    const anchor = await anchorOn('Alpha', 'Questions?');
+    const reordered = await importPptx(await makeDeck(slidesAB, [1, 0]));
+    const sel = runSelector(reordered, { mode: 'manual', anchors: [anchor] });
+    const ix = indexDocument(reordered);
+    expect(slideAt(ix, rangeOf(ix, sel.matches[0].match)!.start)?.title).toBe('Alpha');
   });
 });
