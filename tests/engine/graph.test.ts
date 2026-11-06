@@ -231,7 +231,7 @@ describe('evaluation', () => {
   it('waits for a file or a connection instead of failing', async () => {
     const noFile = setConfig(pipeline(), 'src', {});
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(noFile, ctx);
-    expect(results.src).toMatchObject({ status: 'waiting', message: 'Choose a .html, .docx or .json file' });
+    expect(results.src).toMatchObject({ status: 'waiting', message: 'Choose a .html, .docx, .pptx or .json file' });
     expect(results.sel).toMatchObject({ status: 'waiting', message: 'Waiting for the nodes before this one' });
     expect(results.out.status).toBe('waiting');
 

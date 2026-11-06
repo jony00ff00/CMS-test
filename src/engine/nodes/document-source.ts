@@ -9,6 +9,8 @@ export interface DocumentSourceConfig {
   json?: JsonMapping;
   /** For .docx files: extra mammoth style-map rules. */
   docx?: { styleMap?: string[] };
+  /** For .pptx files: notes, hidden slides, which slides. */
+  pptx?: { includeNotes?: boolean; includeHidden?: boolean; slides?: string };
 }
 
 export const documentSource: NodeDefinition<DocumentSourceConfig> = {
@@ -20,14 +22,23 @@ export const documentSource: NodeDefinition<DocumentSourceConfig> = {
   defaultConfig: () => ({}),
   dependencies: (config, ctx) => (config.fileId ? (ctx.files[config.fileId]?.hash ?? 'missing') : undefined),
   async evaluate(_inputs, config, ctx) {
-    if (!config.fileId) return { outputs: {}, waiting: 'Choose a .html, .docx or .json file' };
+    if (!config.fileId) return { outputs: {}, waiting: 'Choose a .html, .docx, .pptx or .json file' };
     const file = ctx.files[config.fileId];
     if (!file) return { outputs: {}, waiting: 'The chosen file is no longer in the project; choose it again' };
-    const doc = await importSource(file, { json: config.json, docx: config.docx });
+    const doc = await importSource(file, { json: config.json, docx: config.docx, pptx: config.pptx });
     return {
       outputs: { document: doc },
       warnings: doc.meta.warnings,
-      info: { file: file.name, format: detectFormat(file.name) ?? 'unknown', title: doc.meta.title ?? '' },
+      info: {
+        file: file.name,
+        format: detectFormat(file.name) ?? 'unknown',
+        title: doc.meta.title ?? '',
+        ...(doc.meta.pptx && {
+          slides: doc.meta.pptx.slides.filter((s) => s.included).length,
+          slideCount: doc.meta.pptx.slideCount,
+          hiddenSlides: doc.meta.pptx.slides.filter((s) => s.hidden).length,
+        }),
+      },
     };
   },
 };

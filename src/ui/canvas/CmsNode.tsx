@@ -119,7 +119,9 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
   const info = result?.info ?? {};
   switch (node.type) {
     case 'documentSource':
-      return info.file ? `${info.file}` : 'No file chosen';
+      if (!info.file) return 'No file chosen';
+      if (typeof info.slideCount !== 'number') return `${info.file}`;
+      return `${info.file} · ${info.slides === info.slideCount ? '' : `${info.slides} of `}${info.slideCount} slide${info.slideCount === 1 ? '' : 's'}${info.hiddenSlides ? ` (${info.hiddenSlides} hidden)` : ''}`;
     case 'selector': {
       const c = node.config as SelectorConfig;
       const what =

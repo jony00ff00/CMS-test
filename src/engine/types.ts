@@ -2,7 +2,7 @@
 // These are the values that travel along graph edges (port types).
 import type { Root } from 'hast';
 
-export type SourceFormat = 'html' | 'docx' | 'json';
+export type SourceFormat = 'html' | 'docx' | 'json' | 'pptx';
 
 /** A binary file (such as an image) that belongs to a document. Base64 keeps it JSON-serializable. */
 export interface Asset {
@@ -21,8 +21,21 @@ export interface DocumentMeta {
   warnings: string[];
   /** Only for JSON sources: what is needed to write the transformed content back into the file. */
   json?: JsonSourceInfo;
+  /** Only for .pptx sources: the deck's slides (also those left out). */
+  pptx?: { slideCount: number; slides: PptxSlideInfo[] };
   /** CSS and JS of the snippets applied so far, once per snippet version (see snippets.ts). */
   snippetAssets?: SnippetAsset[];
+}
+
+export interface PptxSlideInfo {
+  /** Position in the deck, from 1 (hidden slides count). */
+  number: number;
+  title?: string;
+  hidden: boolean;
+  /** In the document (not hidden, or hidden slides included, and in the chosen range). */
+  included: boolean;
+  /** The slide layout's name, e.g. "Title and Content". */
+  layout?: string;
 }
 
 export interface SnippetAsset {

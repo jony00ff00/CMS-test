@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import {
   Document, HeadingLevel, ImageRun, LevelFormat, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx';
-import { PNG_BASE64, SAMPLE_CONTENT as content, sampleHtml as html, sampleJson as json } from '../src/samples';
+import PptxGenJS from 'pptxgenjs';
+import { PNG_BASE64, SAMPLE_CONTENT as content, SAMPLE_DECK, sampleHtml as html, sampleJson as json } from '../src/samples';
 
 const outDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'tests', 'fixtures');
 
@@ -57,11 +58,48 @@ async function docx(): Promise<Buffer> {
   return Packer.toBuffer(doc);
 }
 
+type Bullets = (string | Bullets)[];
+
+/** The sample deck, with real title / body placeholders from a slide master (as PowerPoint makes them). */
+async function pptx(): Promise<Buffer> {
+  const pres = new PptxGenJS();
+  pres.layout = 'LAYOUT_16x9';
+  pres.defineSlideMaster({
+    title: 'TITLE_AND_CONTENT',
+    objects: [
+      { placeholder: { options: { name: 'title', type: 'title', x: 0.5, y: 0.3, w: 9, h: 1 }, text: '' } },
+      { placeholder: { options: { name: 'body', type: 'body', x: 0.5, y: 1.5, w: 9, h: 3.5 }, text: '' } },
+    ],
+  });
+  const first = pres.addSlide({ masterName: 'TITLE_AND_CONTENT' });
+  first.addText(SAMPLE_DECK.title, { placeholder: 'title' });
+  first.addText(SAMPLE_DECK.subtitle, { x: 0.5, y: 2, w: 9, h: 1 });
+  const items = (list: Bullets, level = 0): PptxGenJS.TextProps[] =>
+    list.flatMap((b) => (typeof b === 'string' ? [{ text: b, options: { bullet: true, indentLevel: level, breakLine: true } }] : items(b, level + 1)));
+  for (const s of SAMPLE_DECK.slides) {
+    const slide = pres.addSlide({ masterName: 'TITLE_AND_CONTENT' });
+    if ('hidden' in s && s.hidden) slide.hidden = true;
+    slide.addText(s.title, { placeholder: 'title' });
+    if ('numbered' in s && s.numbered) {
+      slide.addText(s.numbered.map((t) => ({ text: t, options: { bullet: { type: 'number' }, breakLine: true } })), { placeholder: 'body' });
+    } else if (s.bullets?.length) slide.addText(items(s.bullets as Bullets), { placeholder: 'body' });
+    if ('link' in s && s.link) {
+      slide.addText(
+        [{ text: 'More: ', options: { bold: true } }, { text: s.link.text, options: { hyperlink: { url: s.link.url } } }],
+        { x: 0.5, y: 4.5, w: 9, h: 0.6 },
+      );
+    }
+    if (s.notes) slide.addNotes(s.notes);
+  }
+  return (await pres.write({ outputType: 'nodebuffer' })) as Buffer;
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   const files: Record<string, string | Buffer> = {
     'sample.html': html(),
     'sample.docx': await docx(),
+    'sample.pptx': await pptx(),
     'sample.json': json(),
     // Deliberately broken: trailing comma and an unclosed string.
     'sample-invalid.json': '{ "title": "Broken, "articles": [1, 2,] \n',

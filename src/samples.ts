@@ -71,3 +71,17 @@ export function sampleJson(): string {
     ) + '\n'
   );
 }
+
+/** A sample slide deck (written as tests/fixtures/sample.pptx). 12 slides, so slide 10 must sort after slide 2. */
+export const SAMPLE_DECK = {
+  title: SAMPLE_CONTENT.title,
+  subtitle: 'A short tour in slides',
+  slides: [
+    ...SAMPLE_CONTENT.sections.map((s) => ({ title: s.heading, bullets: s.body.split('. ').map((b) => b.replace(/\.$/, '')), notes: `Talk about ${s.heading.toLowerCase()}.` })),
+    { title: 'How it works', bullets: ['Sources', ['HTML, Word and JSON', ['And now PowerPoint']], 'Selectors'], notes: '' },
+    { title: 'Steps', numbered: SAMPLE_CONTENT.steps, notes: 'Go through the steps slowly.' },
+    { title: 'Hidden extra', bullets: ['Only for the long version'], notes: '', hidden: true },
+    ...Array.from({ length: 5 }, (_, i) => ({ title: `Topic ${i + 1}`, bullets: [`Point ${i + 1}`], notes: '' })),
+    { title: 'Thanks', bullets: [], notes: 'Questions?', link: { text: 'Read the docs', url: 'https://example.com/docs' } },
+  ],
+};

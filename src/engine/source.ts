@@ -2,6 +2,7 @@
 import { parseHtml } from './document';
 import { importDocx, type DocxOptions } from './docx';
 import { importJson } from './json';
+import { importPptx, type PptxOptions } from './pptx';
 import type { CmsDocument, JsonMapping, SourceFormat } from './types';
 
 export interface SourceFile {
@@ -14,10 +15,12 @@ export interface SourceOptions {
   json?: JsonMapping;
   /** Only used for .docx files. */
   docx?: Omit<DocxOptions, 'fileName'>;
+  /** Only used for .pptx files. */
+  pptx?: Omit<PptxOptions, 'fileName'>;
 }
 
 const EXTENSIONS: Record<string, SourceFormat> = {
-  html: 'html', htm: 'html', xhtml: 'html', docx: 'docx', json: 'json',
+  html: 'html', htm: 'html', xhtml: 'html', docx: 'docx', json: 'json', pptx: 'pptx',
 };
 
 export const ACCEPTED_EXTENSIONS = Object.keys(EXTENSIONS).map((e) => `.${e}`);
@@ -40,6 +43,9 @@ export async function importSource(file: SourceFile, options: SourceOptions = {}
     case 'docx':
       if (typeof file.data === 'string') throw new Error(`${file.name}: a .docx file must be read as binary data`);
       return importDocx(file.data, { ...options.docx, fileName: file.name });
+    case 'pptx':
+      if (typeof file.data === 'string') throw new Error(`${file.name}: a .pptx file must be read as binary data`);
+      return importPptx(file.data, { ...options.pptx, fileName: file.name });
     default:
       throw new Error(`${file.name}: unsupported file type. Use one of ${ACCEPTED_EXTENSIONS.join(', ')}`);
   }

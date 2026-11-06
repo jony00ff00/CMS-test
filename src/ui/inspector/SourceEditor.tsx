@@ -28,7 +28,7 @@ export function SourceEditor({ node }: { node: GraphNode }) {
       editorStore.getState().notify('error', `${chosen.name}: use one of ${ACCEPTED_EXTENSIONS.join(', ')}`);
       return;
     }
-    const data = format === 'docx' ? new Uint8Array(await chosen.arrayBuffer()) : await chosen.text();
+    const data = format === 'docx' || format === 'pptx' ? new Uint8Array(await chosen.arrayBuffer()) : await chosen.text();
     editorStore.getState().chooseFile(node.id, chosen.name, data);
   };
 
