@@ -147,8 +147,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `data-json-path` and brings its images and the source's snippet assets; connecting a selection to an Object
   switches it to that kind in `connect`. `parseProject` turns old `insert` nodes into a Selector `<id>-point`
   (their `where`) feeding an Object with the same id;
-  `extractor` (a `SelectorConfig`; outputs a document of only what it picked: `documentFromSelection` in
-  `convert.ts`);
+  `extractor` (a `SelectorConfig`, any mode but point; outputs a document of only what it picked:
+  `documentFromSelection` in `convert.ts`; its outputs also carry `selection`, not a port, for the preview and the
+  saved selections' status);
   `combinator` (inputs `a` / `b`, both `any` and optional; `combine` merge (default; `mergePorts` ['a', 'b']: two
   changed versions of one document become one; two selections / points in the same document become one selection)
   or append (A then B, `combineDocuments`); outputs like the Connector's);
@@ -213,7 +214,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   selected: "Where it goes" (its Point's document with the marker; clicks move the point when it comes straight from
   a point-mode Selector) or "Result". The Selector's inspector has "Point output" (place) for the other modes;
   `PointSummary` / `PLACES` live in `ObjectEditor.tsx`. The Extractor's inspector reuses `SelectorFields` without
-  "by hand" and point. `chooseMediaFile` adds an image or video file. Project files save every `fileId` found
+  point (and `ManualSelections` for "Selected by hand"). An Extractor selected by hand has two preview views (`views`
+  on `PreviewSource`): "Pick" (its input with the kept parts highlighted; selected text → "Add to <extractor>",
+  `addAnchor`) and "Kept" (its output). `chooseMediaFile` adds an image or video file. Project files save every `fileId` found
   anywhere in a node's settings.
 - Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
   shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives

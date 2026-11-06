@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  customSnippet, GraphEvaluator, nodeRegistry, serialize, storeFile, type CmsDocument, type Graph, type GraphEdge, type GraphNode, type Selection,
+  createAnchor, customSnippet, GraphEvaluator, runSelector, nodeRegistry, serialize, storeFile, type CmsDocument, type Graph, type GraphEdge, type GraphNode, type Selection,
 } from '../../src/engine';
 
 const files = {
@@ -33,6 +33,23 @@ describe('Extractor', () => {
     });
     expect(html(r.sec.outputs.document)).toBe('<h2>Two</h2><p>Second</p>');
     expect(html(r.txt.outputs.document)).toBe('Intro <em>here</em>');
+  });
+
+  it('keeps parts selected by hand, and passes their selection on for the preview', async () => {
+    const first = await run({ nodes: [node('src', 'documentSource', { fileId: 'html' })], edges: [] });
+    const doc = first.src.outputs.document as CmsDocument;
+    const anchor = (pattern: string, id: string) => {
+      const sel = runSelector(doc, { mode: 'regex', pattern });
+      return createAnchor(doc, sel.matches[0].match, { id });
+    };
+    const r = await run({
+      nodes: [node('src', 'documentSource', { fileId: 'html' }), node('x', 'extractor', { mode: 'manual', anchors: [anchor('Second', 's'), anchor('Intro', 'i')] })],
+      edges: [edge('src', 'document', 'x', 'document')],
+    });
+    expect(html(r.x.outputs.document)).toBe('IntroSecond');
+    const selection = r.x.outputs.selection as Selection;
+    expect(selection.matches.map((m) => m.anchorId).sort()).toEqual(['i', 's']);
+    expect(r.x.info).toMatchObject({ matches: 2 });
   });
 
   it('gives an empty document, with a warning, when nothing matches', async () => {

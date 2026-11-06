@@ -176,7 +176,7 @@ const STATUS_TEXT: Record<ResolveStatus, string> = {
   failed: 'Needs attention',
 };
 
-function ManualSelections({
+export function ManualSelections({
   node,
   config,
   onChange,

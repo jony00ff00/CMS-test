@@ -15,7 +15,8 @@ export const extractor: NodeDefinition<SelectorConfig> = {
     const selection = runSelector(inputs.document as CmsDocument, config);
     const { document: kept, warnings } = await documentFromSelection(selection);
     return {
-      outputs: { document: kept },
+      // `selection` is not a port: the preview highlights it, and hand-made selections show whether they were found.
+      outputs: { document: kept, selection },
       warnings: selection.matches.length
         ? [...selection.warnings, ...warnings.filter((w) => !selection.warnings.includes(w))]
         : [...selection.warnings, 'Nothing matched, so nothing is kept'],

@@ -44,7 +44,9 @@ test('an Extractor keeps only what it picks', async ({ page }) => {
   await connect(page, 'documentSource-1', 'document', 'extractor-5', 'document');
   await connect(page, 'extractor-5', 'document', 'output-6', 'document');
   await node(page, 'extractor-5').click();
-  await expect(inspector(page).getByLabel('Select by').locator('option')).not.toContainText(['Selected by hand']);
+  const modes = await inspector(page).getByLabel('Select by').locator('option').allTextContents();
+  expect(modes).toContain('Selected by hand');
+  expect(modes.some((m) => /point/i.test(m))).toBe(false);
   await inspector(page).getByLabel('CSS selector').fill('h2, blockquote');
   await expect(node(page, 'extractor-5')).toContainText('h2, blockquote · 3 matches · the rest removed');
   await expect(preview(page).locator('body > :not(script, style)')).toHaveText(['Getting started', 'Pricing', 'Every node does one job well.']);
@@ -52,6 +54,56 @@ test('an Extractor keeps only what it picks', async ({ page }) => {
   await node(page, 'output-6').click();
   await expect(preview(page).locator('h1')).toHaveCount(0);
   await expect(preview(page).locator('h2')).toHaveCount(2);
+});
+
+/** Select a phrase in the preview, like dragging over it with the mouse. */
+async function selectInPreview(page: Page, phrase: string) {
+  await expect(preview(page).locator('body')).toContainText(phrase);
+  const frame = (await (await page.locator('iframe[title="Output preview"]').elementHandle())!.contentFrame())!;
+  await frame.evaluate((p) => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const i = (n as Text).data.indexOf(p);
+      if (i === -1) continue;
+      const range = document.createRange();
+      range.setStart(n, i);
+      range.setEnd(n, i + p.length);
+      getSelection()!.removeAllRanges();
+      getSelection()!.addRange(range);
+      return;
+    }
+    throw new Error(`"${p}" not found in the preview`);
+  }, phrase);
+}
+
+test('an Extractor can pick by hand: select text in its input, keep only that', async ({ page }) => {
+  await palette(page).getByRole('button', { name: /^Extractor/ }).click();
+  await fitView(page);
+  await connect(page, 'documentSource-1', 'document', 'extractor-5', 'document');
+  await node(page, 'extractor-5').click();
+  await inspector(page).getByLabel('Select by').selectOption({ label: 'Selected by hand' });
+  await expect(inspector(page)).toContainText('None yet');
+  const show = page.getByRole('group', { name: 'Show' });
+  await expect(show.getByRole('button', { name: 'Pick' })).toHaveAttribute('aria-pressed', 'true');
+
+  const actions = page.getByRole('dialog', { name: 'Selected text' });
+  await selectInPreview(page, 'costs nothing');
+  await actions.getByRole('button', { name: 'Add to extractor-5' }).click();
+  await expect(preview(page).locator('span[data-cms-match]')).toHaveText('costs nothing');
+  await selectInPreview(page, 'Every node does one job well.');
+  await actions.getByRole('button', { name: 'Add to extractor-5' }).click();
+  const saved = inspector(page).getByRole('list', { name: 'Saved selections' });
+  await expect(saved.getByRole('listitem')).toHaveCount(2);
+  await expect(saved).toContainText('Found');
+  await expect(node(page, 'extractor-5')).toContainText('2 saved selections · 2 matches · the rest removed');
+  await expect(preview(page).locator('[data-cms-match]')).toHaveCount(2);
+  await page.screenshot({ path: 'test-results/extractor-by-hand.png' });
+
+  await show.getByRole('button', { name: 'Kept' }).click();
+  await expect(preview(page).locator('body')).toHaveText(/^\s*costs nothing\s*Every node does one job well\.\s*$/);
+  await expect(preview(page).locator('h1')).toHaveCount(0);
+  await show.getByRole('button', { name: 'Pick' }).click();
+  await expect(preview(page).locator('h1')).toBeVisible();
 });
 
 test('a Combinator joins two selections, and merges two changed versions of a document', async ({ page }) => {
