@@ -1,6 +1,8 @@
+import type { ElementContent } from 'hast';
+import { convertValue } from '../convert';
 import type { NodeDefinition, NodeOutput } from '../graph';
-import { describeInsertion, insertContent, type InsertContent, type PointValue } from '../insert';
-import type { Selection } from '../types';
+import { copyContent, describeInsertion, insertContent, type InsertContent, type PointValue } from '../insert';
+import type { CmsDocument, Selection } from '../types';
 
 export interface ObjectNodeConfig {
   /** What the Object holds: code, an image or video (uploaded or by address), or selected content. */
@@ -14,11 +16,12 @@ export interface ObjectNodeConfig {
 export const object: NodeDefinition<ObjectNodeConfig> = {
   type: 'object',
   label: 'Object',
-  description: 'Code, an image, a video or selected content, added at a Point from a Selector',
+  description: 'Code, an image, a video or content from another node, added at a Point from a Selector',
   inputs: [
     { name: 'point', type: 'point', label: 'Point' },
-    // Only for "Selected content": what to copy in (from this document or another one).
-    { name: 'selection', type: 'selection', label: 'Selection', optional: true },
+    // Only for "Content from another node": what to copy in (a selection or a whole document, e.g. an
+    // Extractor's), from this document or another one.
+    { name: 'content', type: 'any', label: 'Content', optional: true },
   ],
   outputs: [{ name: 'document', type: 'document', label: 'Document' }],
   defaultConfig: () => ({ content: { kind: 'imageUrl', url: '', alt: '' } }),
@@ -29,13 +32,31 @@ export const object: NodeDefinition<ObjectNodeConfig> = {
   },
   async evaluate(inputs, config, ctx): Promise<NodeOutput> {
     const point = inputs.point as PointValue;
-    const selection = inputs.selection as Selection | undefined;
+    // A document (or HTML) means all of it; a selection, what it picked.
+    const converted = inputs.content === undefined ? undefined : await convertValue(inputs.content);
+    const selection: Selection | undefined = converted?.selection;
     const result = await insertContent(point.document, point.where, config.content, ctx.files, selection);
     if (result.waiting) return { outputs: {}, waiting: result.waiting };
     const info: Record<string, string | number> = { what: describeInsertion(config.content), inserted: result.inserted };
     if (result.needsAttention) info.needsAttention = 1;
-    const warnings = [...result.warnings];
-    if (selection && config.content.kind !== 'selection') warnings.push('A selection is connected but not used: choose "Selected content" to add it');
-    return { outputs: { document: result.document }, warnings, info };
+    const warnings = [...(converted?.warnings ?? []).filter((w) => !result.warnings.includes(w)), ...result.warnings];
+    if (selection && config.content.kind !== 'selection') warnings.push('Content is connected but not used: choose "Content from another node" to add it');
+    const outputs: Record<string, unknown> = { document: result.document };
+    // Not a port: what is inserted, for the preview's "Content" view.
+    if (selection && config.content.kind === 'selection') outputs.content = await contentDocument(selection, config.content);
+    if (selection) info.from = selection.document.meta.fileName ?? 'another node';
+    return { outputs, warnings, info };
   },
 };
+
+/** A document of just the content an Object adds (wrapped and styled as it will be, headings not yet moved). */
+async function contentDocument(selection: Selection, content: Extract<InsertContent, { kind: 'selection' }>): Promise<CmsDocument> {
+  const built = await copyContent(selection, content);
+  const source = selection.document;
+  return {
+    kind: 'document',
+    tree: { type: 'root', children: built.nodes as ElementContent[] },
+    meta: { origin: source.meta.origin, fileName: source.meta.fileName, styles: built.styles ?? [], warnings: [], snippetAssets: built.snippetAssets },
+    assets: Object.fromEntries(built.assets.map((a) => [a.id, a])),
+  };
+}

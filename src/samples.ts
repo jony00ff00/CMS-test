@@ -93,3 +93,24 @@ export const SAMPLE_DECK = {
     chart: { title: 'Growth', name: 'Gardens', categories: ['2024', '2025', '2026'], values: [3, 7, 12] },
   },
 };
+
+/** A second document for the "Two documents" example: a section of it is copied into the guide. */
+export function sampleNotesHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Gardener's notes</title>
+<style>.tip { color: #166534; font-weight: 600; }</style></head>
+<body>
+  <h1>Gardener's notes</h1>
+  <p>Notes from the greenhouse.</p>
+  <h2>Watering</h2>
+  <p class="tip">Water a new node once, then let it settle.</p>
+  <p>Old nodes need less water than new ones.</p>
+  <h3>In winter</h3>
+  <p>Water every other week.</p>
+  <h2>Pests</h2>
+  <p>Loops are the worst pest: the canvas refuses them.</p>
+</body>
+</html>
+`;
+}

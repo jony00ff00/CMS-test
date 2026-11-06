@@ -13,7 +13,7 @@ const KINDS: { value: InsertKind; label: string }[] = [
   { value: 'video', label: 'Video (upload a file)' },
   { value: 'imageUrl', label: 'Linked image (from a web address)' },
   { value: 'videoUrl', label: 'Linked video (web address, YouTube or Vimeo)' },
-  { value: 'selection', label: 'Selected content (from the Selection input)' },
+  { value: 'selection', label: 'Content from another node' },
 ];
 
 const EMPTY: Record<InsertKind, InsertContent> = {
@@ -153,7 +153,47 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
 
   switch (content.kind) {
     case 'selection':
-      return <SelectionSource nodeId={node.id} />;
+      return (
+        <>
+          <ContentSource nodeId={node.id} />
+          <SelectField
+            label="Put it in"
+            value={content.wrap ?? 'none'}
+            options={[
+              { value: 'none', label: 'Nothing: add it as it is' },
+              { value: 'div', label: 'A box with a class (<div>)' },
+              { value: 'section', label: 'A section labelled with where it came from' },
+            ]}
+            onChange={(wrap) => onChange({ wrap })}
+          />
+          {(content.wrap === 'div' || content.wrap === 'section') && (
+            <TextField
+              label="Class name"
+              monospace
+              value={content.className ?? ''}
+              placeholder={content.wrap === 'div' ? 'inserted' : 'cms-from'}
+              hint={content.wrap === 'section' ? 'Added next to cms-from, for your own CSS.' : 'For your own CSS (a snippet’s or the page’s).'}
+              onChange={(className) => onChange({ className: className || undefined })}
+            />
+          )}
+          <CheckboxField
+            label="Bring the source’s styles"
+            checked={content.styles !== false}
+            hint="Its own CSS (e.g. <style> in an HTML file, the slide look of a .pptx) is added to this page once. It applies to the whole page, so it can change how the rest looks."
+            onChange={(styles) => onChange({ styles: styles ? undefined : false })}
+          />
+          <SelectField
+            label="Heading levels"
+            value={content.headings ?? 'keep'}
+            options={[
+              { value: 'keep', label: 'Keep them as they are' },
+              { value: 'fit', label: 'Fit them under the heading before the point' },
+            ]}
+            hint={content.headings === 'fit' ? 'E.g. after an <h2>, the highest inserted heading becomes <h3> and the others move with it.' : undefined}
+            onChange={(headings) => onChange({ headings: headings === 'fit' ? 'fit' : undefined })}
+          />
+        </>
+      );
     case 'code':
       return (
         <>
@@ -249,27 +289,32 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
   }
 }
 
-/** Where the content for "Selected content" comes from. */
-function SelectionSource({ nodeId }: { nodeId: string }) {
-  const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'selection'));
+/** Where "Content from another node" comes from: whatever is connected to the Content input. */
+function ContentSource({ nodeId }: { nodeId: string }) {
+  const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'content'));
   const source = useEditor((s) => (edge ? s.graph.nodes.find((n) => n.id === edge.source) : undefined));
-  const count = useEditor((s) => {
+  const what = useEditor((s) => {
     const r = edge ? s.results[edge.source] : undefined;
-    return r?.status === 'ok' ? (r.outputs[edge!.sourcePort] as Selection | undefined)?.matches.length : undefined;
+    const value = r?.status === 'ok' ? r.outputs[edge!.sourcePort] : undefined;
+    if (value === undefined) return undefined;
+    if ((value as Selection).kind === 'selection') {
+      const n = (value as Selection).matches.length;
+      return `${n} match${n === 1 ? '' : 'es'}`;
+    }
+    return typeof value === 'string' ? 'HTML' : (value as { kind?: string }).kind === 'point' ? 'the places of a point' : 'all of its document';
   });
   if (!source) {
     return (
       <p className="hint warn-text">
-        Connect a Selector's Selection output to this Object's Selection input. What it selects is copied here; the
-        Selector can look at this document or another one.
+        Connect something to this Object's <strong>Content</strong> input: an Extractor (all it keeps), a Selector's
+        Selection (what it selects), or any document. It is copied in; it can come from this document or another one.
       </p>
     );
   }
   return (
     <p className="hint">
-      A copy of what <strong>{nodeLabel(source)}</strong> selects
-      {typeof count === 'number' ? ` (${count} match${count === 1 ? '' : 'es'})` : ''}, in document order, with its
-      formatting and snippet styles. The original stays where it is.
+      A copy of what comes from <strong>{nodeLabel(source)}</strong>
+      {what ? ` (${what})` : ''}, in document order, with its formatting and snippet styles. The original stays where it is.
     </p>
   );
 }

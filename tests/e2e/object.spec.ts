@@ -269,19 +269,53 @@ test('an Object adds content picked by another Selector', async ({ page }) => {
   await palette.getByRole('button', { name: /^Selector/ }).click();
   await fitView(page);
   await connect(page, 'documentSource-1', 'document', 'selector-8', 'document');
-  // Connecting a selection switches the Object to "Selected content".
-  await connect(page, 'selector-8', 'selection', 'object-6', 'selection');
+  // Connecting a selection switches the Object to "Content from another node".
+  await connect(page, 'selector-8', 'selection', 'object-6', 'content');
   await expect(page.locator('.react-flow__edge')).toHaveCount(8);
-  await expect(node(page, 'object-6')).toContainText('Selected content');
+  await expect(node(page, 'object-6')).toContainText('Content from another node');
 
   await node(page, 'selector-8').click();
   await inspector(page).getByLabel('CSS selector').fill('h1');
   await node(page, 'object-6').click();
   await expect(inspector(page).getByLabel('Object', { exact: true })).toHaveValue('selection');
-  await expect(inspector(page)).toContainText('A copy of what selector-8 selects (1 match)');
+  await expect(inspector(page)).toContainText('A copy of what comes from selector-8 (1 match)');
   await expect(node(page, 'object-6')).toContainText('added 2×'); // after each h2 of selector-5
 
   await node(page, 'output-7').click();
   await expect(preview(page).locator('h1')).toHaveCount(3);
   await page.screenshot({ path: 'test-results/object-selection.png' });
+});
+
+test('"Two documents": an Extractor’s section of one document goes into another', async ({ page }) => {
+  page.on('pageerror', (err) => {
+    throw err;
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Two documents' }).click();
+  await expect(node(page, 'object-5')).toContainText('Content (labelled section) · added 1×');
+  // The Output: the notes' Watering section before the guide's quote, its headings one level down.
+  await expect(preview(page).locator('section.cms-from h3')).toHaveText('Watering');
+  await expect(preview(page).locator('section.cms-from h4')).toHaveText('In winter');
+  await expect(preview(page).locator('.cms-from-label')).toHaveText('From notes.html');
+  await expect(preview(page).locator('section.cms-from + blockquote')).toHaveCount(1);
+  await expect(preview(page).locator('.tip')).toHaveCSS('color', 'rgb(22, 101, 52)');
+  await page.screenshot({ path: 'test-results/two-documents.png' });
+
+  await node(page, 'object-5').click();
+  const show = page.getByRole('group', { name: 'Show' });
+  await expect(show.getByRole('button')).toHaveText(['Where it goes', 'Content', 'Result']);
+  await expect(preview(page).locator('.cms-insert-marker')).toBeVisible();
+  await show.getByRole('button', { name: 'Content' }).click();
+  await expect(preview(page).locator('h1')).toHaveCount(0);
+  await expect(preview(page).locator('.cms-from-label')).toHaveText('From notes.html');
+  await page.screenshot({ path: 'test-results/object-content-view.png' });
+
+  // Options: keep the headings, no wrapper, no source styles.
+  await inspector(page).getByLabel('Heading levels').selectOption('keep');
+  await inspector(page).getByLabel('Put it in').selectOption('none');
+  await inspector(page).getByLabel('Bring the source’s styles').uncheck();
+  await show.getByRole('button', { name: 'Result' }).click();
+  await expect(preview(page).locator('h2', { hasText: 'Watering' })).toBeVisible();
+  await expect(preview(page).locator('.cms-from')).toHaveCount(0);
+  await expect(preview(page).locator('.tip')).not.toHaveCSS('color', 'rgb(22, 101, 52)');
 });

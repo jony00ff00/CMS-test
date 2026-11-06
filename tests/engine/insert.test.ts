@@ -390,10 +390,10 @@ describe('inserting selected content', () => {
     const r = await insertContent(target, after('h1'), { kind: 'selection' }, {}, empty);
     expect(r.inserted).toBe(0);
     expect(r.warnings.join()).toMatch(/selection is empty/);
-    expect((await insertContent(target, after('h1'), { kind: 'selection' }, {})).waiting).toMatch(/Connect a selection/);
+    expect((await insertContent(target, after('h1'), { kind: 'selection' }, {})).waiting).toMatch(/Content input/);
   });
 
-  it('runs in a graph with the optional Selection input', async () => {
+  it('runs in a graph with the optional Content input', async () => {
     const html = storeFile('a.html', '<h1>A</h1><p>Text</p>', 'html');
     const notes = storeFile('b.html', '<blockquote>Quoted</blockquote>', 'html');
     const g: Graph = {
@@ -409,7 +409,7 @@ describe('inserting selected content', () => {
         { id: 'e1', source: 'a', sourcePort: 'document', target: 'pt', targetPort: 'document' },
         { id: 'e1b', source: 'pt', sourcePort: 'point', target: 'ins', targetPort: 'point' },
         { id: 'e2', source: 'b', sourcePort: 'document', target: 'sel', targetPort: 'document' },
-        { id: 'e3', source: 'sel', sourcePort: 'selection', target: 'ins', targetPort: 'selection' },
+        { id: 'e3', source: 'sel', sourcePort: 'selection', target: 'ins', targetPort: 'content' },
         { id: 'e4', source: 'pt', sourcePort: 'point', target: 'plain', targetPort: 'point' },
       ],
     };

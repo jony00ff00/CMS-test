@@ -183,7 +183,7 @@ export function Canvas() {
 }
 
 function ExampleButtons() {
-  const load = (kind: 'html' | 'json') => {
+  const load = (kind: 'html' | 'json' | 'two') => {
     const state = editorStore.getState();
     if (state.graph.nodes.length && !window.confirm('Replace the current graph with the example?')) return;
     state.loadExample(kind);
@@ -195,6 +195,9 @@ function ExampleButtons() {
       </button>
       <button type="button" onClick={() => load('json')}>
         JSON example
+      </button>
+      <button type="button" onClick={() => load('two')} title="A section of one document copied into another">
+        Two documents
       </button>
     </>
   );

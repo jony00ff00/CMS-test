@@ -29,8 +29,8 @@ interface PreviewSource {
   insert?: { nodeId?: string; where: InsertWhere; block: boolean };
   /** The selected node is an Object node (both views: where it goes, and the result). */
   insertNodeId?: string;
-  /** The names of the two views the selected node has (Object, or an Extractor picking by hand). */
-  views?: [string, string];
+  /** The views the selected node has (Object, or an Extractor picking by hand); the first is the default. */
+  views?: string[];
   message?: string;
 }
 
@@ -45,8 +45,10 @@ function pointWhere(config: Extract<SelectorConfig, { mode: 'point' }>): InsertW
   return where;
 }
 
-const OBJECT_VIEWS: [string, string] = ['Where it goes', 'Result'];
-const EXTRACTOR_VIEWS: [string, string] = ['Pick', 'Kept'];
+const OBJECT_VIEWS = ['Where it goes', 'Result'];
+/** An Object with content from another node can also show just that content. */
+const OBJECT_CONTENT_VIEWS = ['Where it goes', 'Content', 'Result'];
+const EXTRACTOR_VIEWS = ['Pick', 'Kept'];
 
 function inputOf(s: EditorState, nodeId: string, port: string) {
   const edge = s.graph.edges.find((e) => e.target === nodeId && e.targetPort === port);
@@ -55,14 +57,27 @@ function inputOf(s: EditorState, nodeId: string, port: string) {
   return { doc, from: { nodeId: edge.source, port: edge.sourcePort } };
 }
 
-function previewSource(s: EditorState, showResult: boolean): PreviewSource {
+function previewSource(s: EditorState, view: string | undefined): PreviewSource {
   const selected = s.graph.nodes.find((n) => n.id === s.selectedId);
   if (selected?.type === 'object') {
     const config = selected.config as ObjectNodeConfig;
-    if (showResult) {
+    const views = config.content.kind === 'selection' ? OBJECT_CONTENT_VIEWS : OBJECT_VIEWS;
+    if (view === 'Result') {
       const result = s.results[selected.id];
       const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
-      return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, views: OBJECT_VIEWS, message: result?.message ?? 'Waiting…' };
+      return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, views, message: result?.message ?? 'Waiting…' };
+    }
+    if (view === 'Content' && views.includes('Content')) {
+      const result = s.results[selected.id];
+      const doc = result?.status === 'ok' ? (result.outputs.content as CmsDocument | undefined) : undefined;
+      const from = s.graph.edges.find((e) => e.target === selected.id && e.targetPort === 'content');
+      return {
+        label: `What ${nodeLabel(selected)} adds`,
+        doc,
+        insertNodeId: selected.id,
+        views,
+        message: !from ? 'Connect something to the Content input.' : doc ? undefined : (result?.message ?? 'Waiting…'),
+      };
     }
     const edge = s.graph.edges.find((e) => e.target === selected.id && e.targetPort === 'point');
     const pointer = edge && s.graph.nodes.find((n) => n.id === edge.source);
@@ -78,7 +93,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
       doc: point?.document,
       insert: point ? { nodeId: pickable ? pointer!.id : undefined, where: point.where, block } : undefined,
       insertNodeId: selected.id,
-      views: OBJECT_VIEWS,
+      views,
       message: !edge ? "Connect a Selector's Point to this Object." : point ? undefined : (r?.message ?? 'Waiting…'),
     };
   }
@@ -94,7 +109,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
     };
   }
   // An Extractor picking by hand: its input with what it keeps highlighted, where more can be added.
-  if (selected?.type === 'extractor' && (selected.config as SelectorConfig).mode === 'manual' && !showResult) {
+  if (selected?.type === 'extractor' && (selected.config as SelectorConfig).mode === 'manual' && view !== 'Kept') {
     const input = inputOf(s, selected.id, 'document');
     const result = s.results[selected.id];
     const selection = result?.status === 'ok' ? (result.outputs.selection as Selection) : undefined;
@@ -164,9 +179,10 @@ export interface PreviewProps {
 
 export function Preview({ width, onWidthChange, onDetachedChange, minimised, onMinimisedChange }: PreviewProps) {
   const s = useEditor((state) => state);
-  const [showResult, setShowResult] = useState(false);
-  useEffect(() => setShowResult(false), [s.selectedId]);
-  const source = useMemo(() => previewSource(s, showResult), [s, showResult]);
+  const [view, setView] = useState<string>();
+  useEffect(() => setView(undefined), [s.selectedId]);
+  const source = useMemo(() => previewSource(s, view), [s, view]);
+  const shownView = source.views && (view && source.views.includes(view) ? view : source.views[0]);
   // The message listener lives longer than one render: it reads the current source from here.
   const sourceRef = useRef(source);
   sourceRef.current = source;
@@ -353,12 +369,11 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
 
   const insertToggle = source.views && (
     <span className="segmented" role="group" aria-label="Show">
-      <button type="button" aria-pressed={!showResult} onClick={() => setShowResult(false)}>
-        {source.views[0]}
-      </button>
-      <button type="button" aria-pressed={showResult} onClick={() => setShowResult(true)}>
-        {source.views[1]}
-      </button>
+      {source.views.map((v) => (
+        <button key={v} type="button" aria-pressed={v === shownView} onClick={() => setView(v)}>
+          {v}
+        </button>
+      ))}
     </span>
   );
 

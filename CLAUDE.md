@@ -140,13 +140,21 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `point`, a `PointValue` { kind: 'point', document, where: `InsertWhere` }): mode `point` (picked in the preview;
   waits until picked) gives `{ mode: 'point', point }`, every other mode `{ mode: 'selector', selector, place }`
   (place default after);
-  `object` (was Insert: `content` only; input `point` (required) + optional `selection` input (`PortDef.optional`:
-  the node runs without it) used by content `{ kind: 'selection' }`; `insertContent` at the point's `where`; depends
-  on its media file's hash; reports `needsAttention` when its point is gone). `copySelection` in `insert.ts` copies
-  what a selection matched, in document order, via a wrap snippet with a `cms-extract` marker; the copy drops
-  `data-json-path` and brings its images and the source's snippet assets; connecting a selection to an Object
-  switches it to that kind in `connect`. `parseProject` turns old `insert` nodes into a Selector `<id>-point`
-  (their `where`) feeding an Object with the same id;
+  `object` (was Insert: `content` only; input `point` (required) + optional `content` input of port type `any`
+  (`PortDef.optional`: the node runs without it; was `selection`, `parseProject` renames old edges) used by content
+  `{ kind: 'selection', wrap?, className?, styles?, headings? }` ("Content from another node"): the input goes
+  through `convertValue`, so a document (e.g. an Extractor's) means all of it, a selection what it picked, HTML its
+  body; `insertContent` at the point's `where`; depends on its media file's hash; reports `needsAttention` when its
+  point is gone; outputs also carry `content` (not a port: what it adds, for the preview) and `info.from`).
+  `copySelection` in `insert.ts` copies what a selection matched, in document order, via a wrap snippet with a
+  `cms-extract` marker; the copy drops `data-json-path` and brings its images and the source's snippet assets.
+  `copyContent` adds the options: `wrap` none | div (class `className`, default `inserted`) | section
+  (`section.cms-from[data-from]` with a "From <file>" `p.cms-from-label`, plus `FROM_CSS`); `styles` (default true)
+  adds the source's `meta.styles` to the target's once; `headings: 'fit'` (`fitHeadings`) shifts the headings so the
+  highest sits one below the last heading before each place (`place` passes that level to `nodesFor`; none: kept;
+  past h6: h6 with a warning). Connecting anything to an Object's `content` switches it to that kind in `connect`.
+  `parseProject` turns old `insert` nodes into a Selector `<id>-point` (their `where`) feeding an Object with the
+  same id;
   `extractor` (a `SelectorConfig`, any mode but point; outputs a document of only what it picked:
   `documentFromSelection` in `convert.ts`; its outputs also carry `selection`, not a port, for the preview and the
   saved selections' status);
@@ -212,7 +220,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - Selector in point mode selected: the preview shows its input with the marker; a click (the bridge reports `caret`
   offsets) opens "Point here": At the cursor, Before / After this <block> (sets the Selector's `point`). Object
   selected: "Where it goes" (its Point's document with the marker; clicks move the point when it comes straight from
-  a point-mode Selector) or "Result". The Selector's inspector has "Point output" (place) for the other modes;
+  a point-mode Selector), "Content" (only for content from another node: what it adds) or "Result" (`views` on
+  `PreviewSource`, picked by name). The Selector's inspector has "Point output" (place) for the other modes;
   `PointSummary` / `PLACES` live in `ObjectEditor.tsx`. The Extractor's inspector reuses `SelectorFields` without
   point (and `ManualSelections` for "Selected by hand"). An Extractor selected by hand has two preview views (`views`
   on `PreviewSource`): "Pick" (its input with the kept parts highlighted; selected text → "Add to <extractor>",
@@ -240,7 +249,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   node's settings within `undoGrouping` (1 s) are one step (`groupKey` set by `updateConfig`); actions that
   change several things use `batch()` so they are one step; deletes go through `removeElements` (React Flow's
   `onDelete`) for the same reason. Keyboard: Ctrl/Cmd+Z, Ctrl+Y / Shift+Cmd+Z, ignored inside fields.
-- `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`.
+- `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`. Examples
+  (`loadExample`): `html`, `json`, and `two` ("Two documents": the Watering section of `sampleNotesHtml()`, via an
+  Extractor, into the guide before its quote, as a labelled section with fitted headings).
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).
@@ -267,7 +278,8 @@ All planned milestones are done; since then: resizable / separate-window preview
 (text · tables, pictures, groups · source options and slide preview · Slide selector · slide-deck Output; the
 PowerPoint work stops there: P6, shape positions, embedded media and theme colours / fonts, is not planned),
 Connector that turns any input into any output, Extractor, Point output and Object node (replacing Insert),
-Combinator, simple custom snippets with node-only CSS / JS. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+Combinator, simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
+another document (wrap, source styles, heading levels, Content view, "Two documents" example). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

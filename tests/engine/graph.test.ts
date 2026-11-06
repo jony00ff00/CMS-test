@@ -61,7 +61,7 @@ describe('node registry', () => {
       ['selector', ['document'], ['selection', 'point']],
       ['snippet', ['selection'], ['document']],
       ['extractor', ['document'], ['document']],
-      ['object', ['point', 'selection'], ['document']],
+      ['object', ['point', 'any'], ['document']],
       ['output', ['document'], ['html', 'result']],
       ['connector', ['any'], ['document', 'selection', 'html', 'result']],
       ['combinator', ['any', 'any'], ['document', 'selection', 'html', 'result']],

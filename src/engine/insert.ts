@@ -14,8 +14,15 @@ export type InsertContent =
   | { kind: 'video'; fileId?: string; caption?: string; width?: Width; autoplay?: boolean; loop?: boolean; muted?: boolean }
   | { kind: 'imageUrl'; url: string; alt: string; caption?: string; width?: Width; href?: string }
   | { kind: 'videoUrl'; url: string; caption?: string; width?: Width }
-  /** A copy of what the selection connected to the Insert node's Selection input picked (from any document). */
-  | { kind: 'selection' };
+  /**
+   * A copy of what comes into the Object's Content input (a selection, or a whole document such as an Extractor's),
+   * from any document. Options: what to put it in, whether the source's own styles come along (default yes), and
+   * whether its headings keep their levels or fit under the heading before the point.
+   */
+  | { kind: 'selection'; wrap?: CopyWrap; className?: string; styles?: boolean; headings?: 'keep' | 'fit' };
+
+/** What copied content is put in: nothing, a box with a class, or a section labelled with where it came from. */
+export type CopyWrap = 'none' | 'div' | 'section';
 
 export type InsertKind = InsertContent['kind'];
 
@@ -111,6 +118,8 @@ interface Built {
   block: boolean;
   warnings: string[];
   snippetAssets?: NonNullable<CmsDocument['meta']['snippetAssets']>;
+  /** CSS of the document the content came from (its `<style>`, the slide look), added to the target. */
+  styles?: string[];
 }
 
 /** The elements to insert. Returns a reason instead when the content is not complete yet. */
@@ -207,7 +216,7 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
       return { nodes: [figure(media, content.caption).node], assets: [], block: true, warnings };
     }
     case 'selection':
-      return { waiting: "Connect a selection to the Insert node's Selection input" };
+      return { waiting: "Connect a document or a selection to this Object's Content input" };
     default:
       return { error: `Unknown kind of insertion "${(content as { kind: string }).kind}"` };
   }
@@ -317,6 +326,68 @@ export async function copySelection(selection: Selection): Promise<Built> {
   };
 }
 
+const HEADING = /^h([1-6])$/;
+const headingLevel = (n: ElementContent): number => (n.type === 'element' ? Number(HEADING.exec(n.tagName)?.[1] ?? 0) : 0);
+
+/** Every heading in `nodes`, in document order. */
+function headingsIn(nodes: ElementContent[], out: Element[] = []): Element[] {
+  for (const n of nodes) {
+    if (n.type !== 'element') continue;
+    if (headingLevel(n)) out.push(n);
+    headingsIn(n.children, out);
+  }
+  return out;
+}
+
+/**
+ * Move headings so the highest one sits one level below `level` (the heading before the place), keeping the
+ * steps between them. Headings past level 6 stay <h6>; their text goes into `deep`.
+ */
+export function fitHeadings(nodes: ElementContent[], level: number, deep: string[] = []): ElementContent[] {
+  const headings = headingsIn(nodes);
+  if (!headings.length) return nodes;
+  const top = Math.min(...headings.map(headingLevel));
+  const shift = level + 1 - top;
+  for (const h of headings) {
+    const next = headingLevel(h) + shift;
+    if (next > 6) deep.push(`“${textContent(h).slice(0, 40)}”`);
+    h.tagName = `h${Math.max(1, Math.min(6, next))}`;
+  }
+  return nodes;
+}
+
+const textContent = (n: ElementContent): string => (n.type === 'text' ? n.value : n.type === 'element' ? n.children.map(textContent).join('') : '');
+
+/** Letters, digits, - and _ only; a default when nothing is left. */
+const safeClass = (name: string | undefined, fallback: string) => (name ?? '').trim().replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
+
+/** Where copied content came from, for the section label. */
+export const sourceName = (doc: CmsDocument) => doc.meta.fileName ?? doc.meta.title ?? 'another document';
+
+/**
+ * What the Object's "Content from another node" adds: a copy of the selection, put in a box or a labelled
+ * section if asked, with the source's own styles unless turned off.
+ */
+export async function copyContent(selection: Selection, options: Extract<InsertContent, { kind: 'selection' }> = { kind: 'selection' }): Promise<Built> {
+  const copy = await copySelection(selection);
+  const doc = selection.document;
+  const styles = options.styles === false ? [] : doc.meta.styles.filter((css) => css.trim());
+  const wrap = options.wrap ?? 'none';
+  if (wrap === 'none' || copy.nodes.length === 0) return { ...copy, styles };
+  const name = sourceName(doc);
+  const wrapped =
+    wrap === 'div'
+      ? el('div', { className: [safeClass(options.className, 'inserted')] }, copy.nodes)
+      : el('section', { className: ['cms-from', ...(options.className?.trim() ? [safeClass(options.className, 'cms-from')] : [])], dataFrom: name }, [
+          el('p', { className: ['cms-from-label'] }, [text(`From ${name}`)]),
+          ...copy.nodes,
+        ]);
+  return { ...copy, nodes: [wrapped], block: true, styles: wrap === 'section' ? [...styles, FROM_CSS] : styles };
+}
+
+const FROM_CSS = `.cms-from { margin: 1rem 0; padding: .75rem 1rem; border-left: 3px solid #94a3b8; background: #f8fafc; }
+.cms-from-label { margin: 0 0 .4rem; font: 600 .75rem/1.4 system-ui, sans-serif; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }`;
+
 function unwrapMarkers(el: Element) {
   el.children = el.children.flatMap((c) => {
     if (c.type !== 'element') return [c];
@@ -421,13 +492,17 @@ function nodeAt(doc: CmsDocument, m: Extract<Match, { kind: 'nodes' }>): Nodes |
 }
 
 /** Put `nodesFor(i)` at each target. Never changes `doc`. */
-async function place(doc: CmsDocument, targets: Targets, nodesFor: (i: number) => ElementContent[]) {
+async function place(doc: CmsDocument, targets: Targets, nodesFor: (i: number, level: number) => ElementContent[]) {
   const selection: Selection = { kind: 'selection', document: doc, matches: targets.matches.map((match) => ({ match, text: '' })), warnings: [] };
   const result = await applySnippet(selection, placeSnippet(targets.place));
+  // The level of the last heading before each place (0: none), in document order.
+  let level = 0;
   const replace = (children: ElementContent[]): ElementContent[] =>
     children.flatMap((c) => {
       if (c.type !== 'element') return [c];
-      if (c.tagName === PLACEHOLDER) return nodesFor(Number(c.properties.dataI ?? 0));
+      if (c.tagName === PLACEHOLDER) return nodesFor(Number(c.properties.dataI ?? 0), level);
+      const h = headingLevel(c);
+      if (h) level = h;
       c.children = replace(c.children);
       return [c];
     });
@@ -443,7 +518,7 @@ export async function insertContent(
   files: Record<string, StoredFile>,
   selection?: Selection,
 ): Promise<InsertResult> {
-  const built = content.kind === 'selection' && selection ? await copySelection(selection) : buildInsertion(content, files);
+  const built = content.kind === 'selection' && selection ? await copyContent(selection, content) : buildInsertion(content, files);
   if ('waiting' in built) return { document: doc, warnings: [], inserted: 0, needsAttention: false, waiting: built.waiting };
   if ('error' in built) throw new Error(built.error);
   const targets = insertionTargets(doc, where, built.block);
@@ -452,8 +527,16 @@ export async function insertContent(
   if (built.nodes.length === 0) return { document: doc, warnings, inserted: 0, needsAttention: targets.needsAttention };
   if (targets.matches.length === 0) return { document: doc, warnings, inserted: 0, needsAttention: targets.needsAttention };
 
-  const placed = await place(doc, targets, () => structuredClone(built.nodes));
+  const fit = content.kind === 'selection' && content.headings === 'fit';
+  const deep: string[] = [];
+  const placed = await place(doc, targets, (_i, level) => {
+    const nodes = structuredClone(built.nodes);
+    if (fit && level) fitHeadings(nodes, level, deep);
+    return nodes;
+  });
+  if (deep.length) warnings.push(`Some headings would be deeper than level 6, so they stay <h6>: ${[...new Set(deep)].join(', ')}`);
   const out = placed.document;
+  for (const css of built.styles ?? []) if (!out.meta.styles.includes(css)) out.meta = { ...out.meta, styles: [...out.meta.styles, css] };
   for (const a of built.assets) out.assets = { ...out.assets, [a.id]: a };
   // Copied content keeps its look: the snippet CSS and JS of the document it came from come along.
   for (const a of built.snippetAssets ?? []) {
@@ -501,7 +584,7 @@ export function describeInsertion(content: InsertContent): string {
     case 'videoUrl':
       return 'Linked video';
     case 'selection':
-      return 'Selected content';
+      return content.wrap === 'section' ? 'Content (labelled section)' : content.wrap === 'div' ? 'Content (in a box)' : 'Content from another node';
   }
 }
 
