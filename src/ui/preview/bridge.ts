@@ -111,7 +111,8 @@ function bridge(blockTags: string[], source: string) {
     timer = window.setTimeout(report, 120);
   });
   addEventListener('message', (e) => {
-    if (e.source !== parent || !e.data || e.data.source !== source) return;
+    // From the editor: the parent window, or (when the preview is in its own window) that window's opener.
+    if ((e.source !== parent && e.source !== parent.opener) || !e.data || e.data.source !== source) return;
     if (e.data.type === 'get-text') post({ type: 'text', text: buildIndex().text });
     if (e.data.type === 'clear-selection') getSelection()?.removeAllRanges();
   });

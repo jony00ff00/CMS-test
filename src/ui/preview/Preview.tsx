@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   createAnchor, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, indexDocument, rangeOf, serialize, type CmsDocument,
   type Match, type Selection, type SelectorConfig,
 } from '../../engine';
 import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
 import { BRIDGE_SOURCE, withBridge, type BridgeMessage } from './bridge';
+import { openPreviewWindow, type PreviewWindow } from './preview-window';
+import { PreviewResizer } from './PreviewResizer';
 
 /** What the preview shows, worked out from the selected node. */
 interface PreviewSource {
@@ -71,12 +74,53 @@ interface TextSelection {
   rect: { x: number; y: number; width: number; height: number };
 }
 
-export function Preview() {
+export interface PreviewProps {
+  height: number;
+  onHeightChange: (height: number) => void;
+  /** Called when the preview moves to its own window, or back. */
+  onDetachedChange: (detached: boolean) => void;
+}
+
+export function Preview({ height, onHeightChange, onDetachedChange }: PreviewProps) {
   const s = useEditor((state) => state);
   const source = useMemo(() => previewSource(s), [s]);
   const iframe = useRef<HTMLIFrameElement>(null);
   const [page, setPage] = useState<string>();
   const [picked, setPicked] = useState<TextSelection>();
+  const [popup, setPopup] = useState<PreviewWindow>();
+  const host = popup?.win ?? window;
+
+  const detach = () => {
+    const opened = openPreviewWindow();
+    if (!opened) {
+      editorStore.getState().notify('error', 'The browser blocked the new window. Allow pop-ups for this site and try again.');
+      return;
+    }
+    setPicked(undefined);
+    setPopup(opened);
+  };
+  const attach = () => {
+    popup?.win.close();
+    setPopup(undefined);
+  };
+
+  // Tell the layout, and notice when the window is closed (or reloaded, which empties it).
+  useEffect(() => {
+    onDetachedChange(!!popup);
+    if (!popup) return;
+    const back = () => {
+      setPicked(undefined);
+      setPopup(undefined);
+    };
+    popup.win.addEventListener('pagehide', back);
+    // Closing the editor closes its preview window too.
+    const closeIt = () => popup.win.close();
+    addEventListener('pagehide', closeIt);
+    return () => {
+      popup.win.removeEventListener('pagehide', back);
+      removeEventListener('pagehide', closeIt);
+    };
+  }, [popup, onDetachedChange]);
 
   // Build the page: highlights for a selection, the bridge script always.
   useEffect(() => {
@@ -104,9 +148,10 @@ export function Preview() {
       if (msg.type === 'selection') setPicked({ start: msg.start, end: msg.end, text: msg.text, rect: msg.rect });
       if (msg.type === 'selection-cleared') setPicked(undefined);
     };
-    addEventListener('message', onMessage);
-    return () => removeEventListener('message', onMessage);
-  }, []);
+    // Messages arrive at the window the iframe is in: this one, or the preview window.
+    host.addEventListener('message', onMessage);
+    return () => host.removeEventListener('message', onMessage);
+  }, [host]);
 
   const dismiss = () => {
     setPicked(undefined);
@@ -127,46 +172,91 @@ export function Preview() {
     dismiss();
   };
 
-  const frameBox = iframe.current?.getBoundingClientRect();
   const short = picked && (picked.text.length > 48 ? `${picked.text.slice(0, 47)}…` : picked.text).replace(/\n/g, ' ');
+  const label = page ? source.label : (source.message ?? source.label);
+
+  /** The page and the actions for selected text: shown here, or in the preview window. */
+  const surface = (win: Window) => {
+    const frameBox = iframe.current?.getBoundingClientRect();
+    return (
+      <>
+        {page ? (
+          // allow-scripts without allow-same-origin: snippet JS runs, but cannot reach the editor.
+          <iframe ref={iframe} title="Output preview" sandbox="allow-scripts" srcDoc={page} />
+        ) : (
+          <div className="preview-empty muted">Nothing to show yet.</div>
+        )}
+        {picked && source.doc && frameBox && (
+          <div
+            className="selection-actions"
+            role="dialog"
+            aria-label="Selected text"
+            style={{
+              // Above the selected text, but always inside the preview area.
+              left: clamp(frameBox.left + picked.rect.x, frameBox.left + 8, Math.min(frameBox.right, win.innerWidth) - 400),
+              top: clamp(frameBox.top + picked.rect.y - 48, frameBox.top + 8, Math.min(frameBox.bottom, win.innerHeight) - 48),
+            }}
+          >
+            <span className="quote">“{short}”</span>
+            {source.manualSelectorId && (
+              <button type="button" onClick={() => save('existing')}>
+                Add to {source.manualSelectorId}
+              </button>
+            )}
+            <button type="button" onClick={() => save('new')}>
+              Create selector from selection
+            </button>
+            <button type="button" className="ghost" aria-label="Cancel" onClick={dismiss}>
+              ✕
+            </button>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
-    <section className="preview" aria-label="Preview">
+    <section className={`preview${popup ? ' is-detached' : ''}`} aria-label="Preview">
+      {!popup && <PreviewResizer height={height} onChange={onHeightChange} />}
       <div className="preview-head">
         <h2>Preview</h2>
-        <span className="muted small">{page ? source.label : (source.message ?? source.label)}</span>
-        {page && source.doc && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
-      </div>
-      {page ? (
-        // allow-scripts without allow-same-origin: snippet JS runs, but cannot reach the editor.
-        <iframe ref={iframe} title="Output preview" sandbox="allow-scripts" srcDoc={page} />
-      ) : (
-        <div className="preview-empty muted">Nothing to show yet.</div>
-      )}
-      {picked && source.doc && frameBox && (
-        <div
-          className="selection-actions"
-          role="dialog"
-          aria-label="Selected text"
-          style={{
-            // Above the selected text, but always inside the preview area.
-            left: clamp(frameBox.left + picked.rect.x, frameBox.left + 8, Math.min(frameBox.right, innerWidth) - 400),
-            top: clamp(frameBox.top + picked.rect.y - 48, frameBox.top + 8, Math.min(frameBox.bottom, innerHeight) - 48),
-          }}
-        >
-          <span className="quote">“{short}”</span>
-          {source.manualSelectorId && (
-            <button type="button" onClick={() => save('existing')}>
-              Add to {source.manualSelectorId}
+        <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
+        {!popup && page && source.doc && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+        {popup ? (
+          <span className="preview-actions">
+            <button type="button" onClick={() => popup.win.focus()}>
+              Show the window
             </button>
-          )}
-          <button type="button" onClick={() => save('new')}>
-            Create selector from selection
-          </button>
-          <button type="button" className="ghost" aria-label="Cancel" onClick={dismiss}>
-            ✕
-          </button>
-        </div>
-      )}
+            <button type="button" onClick={attach}>
+              Bring it back here
+            </button>
+          </span>
+        ) : (
+          <span className="preview-actions">
+            <button type="button" className="ghost" onClick={detach} title="Open the preview in a separate window, e.g. on another screen">
+              Open in new window
+            </button>
+          </span>
+        )}
+      </div>
+      {popup
+        ? createPortal(
+            <div className="preview preview-in-window" aria-label="Preview" role="region">
+              <div className="preview-head">
+                <h2>Preview</h2>
+                <span className="muted small">{label}</span>
+                {page && source.doc && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+                <span className="preview-actions">
+                  <button type="button" onClick={attach}>
+                    Back into the editor
+                  </button>
+                </span>
+              </div>
+              {surface(popup.win)}
+            </div>,
+            popup.container,
+          )
+        : surface(window)}
     </section>
   );
 }

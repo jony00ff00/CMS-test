@@ -45,7 +45,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .app {
   display: grid;
   grid-template-columns: 220px 1fr 340px;
-  grid-template-rows: 1fr 260px;
+  grid-template-rows: minmax(0, 1fr) var(--preview-height, 260px);
   grid-template-areas: 'palette canvas inspector' 'preview preview inspector';
   height: 100%;
 }
@@ -128,7 +128,22 @@ details.advanced[open] { display: grid; gap: 0.5rem; }
 .status-pill.status-error { background: #fee2e2; color: var(--danger); }
 .status-pill.status-blocked { background: #fef3c7; color: var(--warn); }
 
-.preview { grid-area: preview; border-top: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; min-height: 0; padding: 0.75rem 1rem 1rem; }
+.preview { grid-area: preview; position: relative; border-top: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; min-height: 0; padding: 0.75rem 1rem 1rem; }
+.preview.is-detached { padding-bottom: 0.6rem; }
+.preview-actions { margin-left: auto; display: flex; gap: 0.4rem; }
+.preview-tip + .preview-actions { margin-left: 0.75rem; }
+.preview-resizer {
+  position: absolute; left: 0; right: 0; top: -5px; height: 10px; cursor: row-resize; z-index: 5; touch-action: none;
+}
+.preview-resizer::after {
+  content: ''; position: absolute; left: 50%; top: 3px; width: 48px; height: 4px; margin-left: -24px; border-radius: 2px; background: var(--border);
+}
+.preview-resizer:hover::after, .preview-resizer:focus-visible::after { background: var(--accent); }
+.preview-resizer:focus-visible { outline: none; background: var(--accent-soft); }
+/* The separate preview window */
+body.preview-window { margin: 0; height: 100vh; }
+.preview-window-root { height: 100%; }
+.preview-in-window { height: 100%; border-top: 0; }
 .preview-head { display: flex; gap: 0.75rem; align-items: baseline; }
 .preview-head h2 { margin: 0 0 0.5rem; }
 .preview iframe { flex: 1; width: 100%; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
