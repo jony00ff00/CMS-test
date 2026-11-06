@@ -6,11 +6,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { edgeError, nodeRegistry, type EdgeCandidate } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CmsNode, type CmsFlowNode } from './CmsNode';
+import { DeletableEdge } from './DeletableEdge';
 import { ProjectToolbar } from './ProjectToolbar';
 import { DRAG_SNIPPET } from '../library/LibraryPanel';
 import { DRAG_TYPE } from './Palette';
 
 const nodeTypes = { cms: CmsNode };
+const edgeTypes = { deletable: DeletableEdge };
 
 const toCandidate = (c: Connection | Edge): EdgeCandidate => ({
   source: c.source,
@@ -60,6 +62,7 @@ export function Canvas() {
           sourceHandle: e.sourcePort,
           target: e.target,
           targetHandle: e.targetPort,
+          type: 'deletable',
           className: `edge-${type ?? 'unknown'}`,
           selected: selectedEdges.has(e.id),
         };
@@ -133,6 +136,7 @@ export function Canvas() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

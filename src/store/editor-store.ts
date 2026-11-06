@@ -37,6 +37,11 @@ export interface EditorState {
   addNode(type: string, position?: { x: number; y: number }): string;
   removeNodes(ids: string[]): void;
   removeEdges(ids: string[]): void;
+  /**
+   * Copy a node: same settings, its name with " copy", the same incoming connections, placed just below.
+   * Its outputs start unconnected. Returns the copy's id.
+   */
+  duplicateNode(id: string): string | undefined;
   /** Move a connection earlier (-1) or later (+1) among those into the same input (an Output's documents). */
   moveInput(edgeId: string, delta: -1 | 1): void;
   /** Remove nodes and connections together, as one undo step. */
@@ -206,6 +211,26 @@ export function createEditorStore(options: EditorOptions = {}) {
           edges: graph.edges.filter((e) => !edges.has(e.id) && !nodes.has(e.source) && !nodes.has(e.target)),
         },
         selectedId: selectedId && nodes.has(selectedId) ? undefined : selectedId,
+      });
+    },
+
+    duplicateNode(id) {
+      const original = get().graph.nodes.find((n) => n.id === id);
+      if (!original) return undefined;
+      return batch(() => {
+        const base = original.position ?? { x: 40, y: 120 };
+        let position = { x: base.x + 30, y: base.y + 110 };
+        const taken = (p: { x: number; y: number }) =>
+          get().graph.nodes.some((n) => n.position && Math.abs(n.position.x - p.x) < 60 && Math.abs(n.position.y - p.y) < 60);
+        while (taken(position)) position = { x: position.x + 30, y: position.y + 60 };
+        const copyId = get().addNode(original.type, position);
+        get().updateConfig(copyId, structuredClone(original.config));
+        if (original.name?.trim()) get().renameNode(copyId, `${original.name.trim()} copy`);
+        for (const e of get().graph.edges.filter((x) => x.target === id)) {
+          get().connect({ source: e.source, sourcePort: e.sourcePort, target: copyId, targetPort: e.targetPort });
+        }
+        get().select(copyId);
+        return copyId;
       });
     },
 

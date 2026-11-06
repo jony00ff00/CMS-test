@@ -105,6 +105,10 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   with `nodeLabel(node)` (`src/ui/node-label.ts`): the name, or the id. Rename in the inspector's Name field or by
   double-clicking a node's title on the canvas (`NodeTitle` in `CmsNode.tsx`; the input is `nodrag` and stops key
   events so Backspace does not delete the node).
+- Inspector header: Duplicate (`duplicateNode`: settings, name + " copy", incoming connections, placed below,
+  one undo step; also Ctrl/Cmd+D outside fields) and Delete (`removeElements`). Connections use the `deletable`
+  edge type (`DeletableEdge.tsx`): a delete button at the middle while selected. In e2e, click a connection by
+  position between its handles (a straight one has no height).
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
   app). Holds `graph`, `files`, `selectedId`, `results`, `notice`. Changes to the graph or files re-evaluate
   after 150 ms; position-only changes do not. Stale evaluations are dropped. `whenIdle()` for tests.

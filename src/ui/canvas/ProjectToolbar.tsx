@@ -73,7 +73,10 @@ function SavedLabel({ at }: { at?: Date }) {
   );
 }
 
-/** Ctrl/Cmd+Z and Ctrl+Y / Shift+Cmd+Z, except while typing in a field (which has its own undo). */
+/**
+ * Ctrl/Cmd+Z and Ctrl+Y / Shift+Cmd+Z (undo, redo) and Ctrl/Cmd+D (duplicate the selected node),
+ * except while typing in a field (which has its own undo).
+ */
 export function useUndoShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -81,7 +84,12 @@ export function useUndoShortcuts() {
       const target = e.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"], .cm-editor')) return;
       const key = e.key.toLowerCase();
-      if (key === 'z' && !e.shiftKey) editorStore.getState().undo();
+      const state = editorStore.getState();
+      if (key === 'd' && !e.shiftKey) {
+        // Duplicate the selected node (instead of the browser's bookmark shortcut).
+        if (!state.selectedId) return;
+        state.duplicateNode(state.selectedId);
+      } else if (key === 'z' && !e.shiftKey) editorStore.getState().undo();
       else if ((key === 'z' && e.shiftKey) || key === 'y') editorStore.getState().redo();
       else return;
       e.preventDefault();

@@ -250,3 +250,39 @@ describe('naming nodes', () => {
     expect(parseProject(text).project.graph.nodes[0].name).toBeUndefined();
   });
 });
+
+describe('duplicating nodes', () => {
+  it('copies the settings, the name and the incoming connections, as one undo step', async () => {
+    const store = createEditorStore({ storage: null, evaluateDelay: 1, undoGrouping: 1000 });
+    store.getState().loadExample('html');
+    store.getState().renameNode('snippet-3', 'Callouts');
+    store.temporal.getState().clear();
+    const copy = store.getState().duplicateNode('snippet-3')!;
+    const { graph, selectedId } = store.getState();
+    const a = graph.nodes.find((n) => n.id === 'snippet-3')!;
+    const b = graph.nodes.find((n) => n.id === copy)!;
+    expect(copy).toBe('snippet-5');
+    expect(selectedId).toBe(copy);
+    expect(b).toMatchObject({ type: 'snippet', name: 'Callouts copy', config: a.config });
+    expect(b.config).not.toBe(a.config);
+    expect(b.position).not.toEqual(a.position);
+    expect(graph.edges.filter((e) => e.target === copy).map((e) => e.source)).toEqual(['selector-2']);
+    expect(graph.edges.filter((e) => e.source === copy)).toEqual([]);
+    await store.getState().whenIdle();
+    expect(store.getState().results[copy].info).toMatchObject({ applied: 2 });
+
+    store.getState().undo();
+    expect(store.getState().graph.nodes.map((n) => n.id)).toEqual(['documentSource-1', 'selector-2', 'snippet-3', 'output-4']);
+    expect(store.getState().graph.edges).toHaveLength(3);
+  });
+
+  it('places further copies so they do not cover each other', () => {
+    const store = createEditorStore({ storage: null });
+    store.getState().addNode('selector', { x: 0, y: 0 });
+    const one = store.getState().duplicateNode('selector-1')!;
+    const two = store.getState().duplicateNode('selector-1')!;
+    const pos = (id: string) => store.getState().graph.nodes.find((n) => n.id === id)!.position!;
+    expect(pos(one)).not.toEqual(pos(two));
+    expect(store.getState().duplicateNode('nope')).toBeUndefined();
+  });
+});

@@ -55,9 +55,14 @@ export function Inspector() {
       <div className="inspector-head">
         <h2>{def?.label ?? node.type}</h2>
         <span className="muted small">{node.id}</span>
-        <button type="button" className="ghost danger" onClick={() => editorStore.getState().removeNodes([node.id])}>
-          Delete
-        </button>
+        <span className="inspector-head-actions">
+          <button type="button" className="ghost" title="Copy this node with its settings and inputs (Ctrl+D)" onClick={() => editorStore.getState().duplicateNode(node.id)}>
+            Duplicate
+          </button>
+          <button type="button" className="ghost danger" title="Delete this node and its connections (Backspace)" onClick={() => editorStore.getState().removeElements([node.id], [])}>
+            Delete
+          </button>
+        </span>
       </div>
       {/* key: a fresh editor for each node, so local state never leaks between nodes */}
       <div className="inspector-body" key={node.id}>
