@@ -8,21 +8,24 @@ import { editorStore, selectedNodeIds, useEditor } from '../../store/editor-stor
 import { CmsNode, type CmsFlowNode } from './CmsNode';
 import { DeletableEdge } from './DeletableEdge';
 import { MiniMapNode } from './MiniMapNode';
+import { GroupFrame, type GroupFlowNode } from './GroupFrame';
+import { collapsedPorts, collapsedSize, frameBox, frameId, groupIdOfFrame, isFrameId, portHandle, resolveHandle } from './group-layout';
 import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
 import { ProjectToolbar } from './ProjectToolbar';
 import { DRAG_TYPE } from './Palette';
 
-const nodeTypes = { cms: CmsNode };
+const nodeTypes = { cms: CmsNode, cmsGroup: GroupFrame };
+type FlowNode = CmsFlowNode | GroupFlowNode;
 /** Hold one of these and click to add a node to the selection (or take it out). */
 const MULTI_SELECT_KEYS = ['Shift', 'Control', 'Meta'];
 const edgeTypes = { deletable: DeletableEdge };
 
-const toCandidate = (c: Connection | Edge): EdgeCandidate => ({
-  source: c.source,
-  sourcePort: c.sourceHandle ?? '',
-  target: c.target,
-  targetPort: c.targetHandle ?? '',
-});
+/** A connection on the canvas as the graph has it: a collapsed group's handles stand for its nodes' ports. */
+const toCandidate = (c: Connection | Edge): EdgeCandidate => {
+  const from = resolveHandle(c.source, c.sourceHandle);
+  const to = resolveHandle(c.target, c.targetHandle);
+  return { source: from.node, sourcePort: from.port, target: to.node, targetPort: to.port };
+};
 
 export function Canvas() {
   const graph = useEditor((s) => s.graph);
@@ -30,6 +33,7 @@ export function Canvas() {
   const selection = useEditor((s) => selectedNodeIds(s).join(' '));
   const evaluating = useEditor((s) => s.evaluating);
   const fitRequest = useEditor((s) => s.fitRequest);
+  const fitTo = useEditor((s) => s.fitTo);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const initialized = useNodesInitialized();
 
@@ -55,35 +59,118 @@ export function Canvas() {
     void fitView({ padding: 0.15, maxZoom: 1 });
   }, [initialized, fitRequest, fitView]);
 
+  // Fit the view to a group (from the Groups list).
+  const fittedTo = useRef(0);
+  useEffect(() => {
+    if (!fitTo || fitTo.n === fittedTo.current) return;
+    fittedTo.current = fitTo.n;
+    const group = graph.groups?.find((g) => g.id === fitTo.groupId);
+    const ids = group?.collapsed ? [frameId(group.id)] : [...fitTo.nodeIds, ...(group ? [frameId(group.id)] : [])];
+    void fitView({ nodes: ids.map((id) => ({ id })), padding: 0.25, maxZoom: 1, duration: 250 });
+  }, [fitTo, graph.groups, fitView]);
+
+  // Nodes in a collapsed group are hidden; the group shows as one box instead.
+  const collapsedOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of graph.groups ?? []) if (g.collapsed) for (const id of g.nodeIds) map.set(id, g.id);
+    return map;
+  }, [graph.groups]);
+
+  // Each group's frame, around its nodes as they are now (also while they are dragged).
+  const frames = useMemo<GroupFlowNode[]>(
+    () =>
+      (graph.groups ?? []).flatMap((g): GroupFlowNode[] => {
+        const members = nodes.filter((n) => g.nodeIds.includes(n.id));
+        if (!members.length) return [];
+        const box = frameBox(members);
+        if (g.collapsed) {
+          const ports = collapsedPorts(graph, g);
+          const size = collapsedSize(Math.max(ports.inputs.length, ports.outputs.length));
+          // `measured` too: React Flow keeps a node's measured handles only when the new node object has it.
+          return [{ id: frameId(g.id), type: 'cmsGroup', position: { x: box.x, y: box.y }, ...size, measured: size, data: { groupId: g.id, ports }, selectable: false, className: 'is-collapsed' }];
+        }
+        return [{
+          id: frameId(g.id), type: 'cmsGroup', position: { x: box.x, y: box.y }, width: box.width, height: box.height,
+          measured: { width: box.width, height: box.height },
+          data: { groupId: g.id }, selectable: false, dragHandle: '.group-frame-head', zIndex: -1,
+        }];
+      }),
+    [graph, nodes],
+  );
+  const framesRef = useRef(frames);
+  framesRef.current = frames;
+  const flowNodes = useMemo<FlowNode[]>(
+    () => [...frames, ...nodes.map((n) => (collapsedOf.has(n.id) ? { ...n, hidden: true } : n))],
+    [frames, nodes, collapsedOf],
+  );
+
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const edges = useMemo<Edge[]>(
     () =>
-      graph.edges.map((e) => {
+      graph.edges.flatMap((e) => {
         const source = graph.nodes.find((n) => n.id === e.source);
         const type = source && nodeRegistry[source.type]?.outputs.find((p) => p.name === e.sourcePort)?.type;
-        return {
+        const from = collapsedOf.get(e.source);
+        const to = collapsedOf.get(e.target);
+        // Inside one collapsed group: not shown. Into or out of one: drawn to the group's box.
+        if (from && from === to) return [];
+        return [{
           id: e.id,
-          source: e.source,
-          sourceHandle: e.sourcePort,
-          target: e.target,
-          targetHandle: e.targetPort,
+          source: from ? frameId(from) : e.source,
+          sourceHandle: from ? portHandle('out', e.source, e.sourcePort) : e.sourcePort,
+          target: to ? frameId(to) : e.target,
+          targetHandle: to ? portHandle('in', e.target, e.targetPort) : e.targetPort,
           type: 'deletable',
           className: `edge-${type ?? 'unknown'}`,
           selected: selectedEdges.has(e.id),
-        };
+        }];
       }),
-    [graph, selectedEdges],
+    [graph, selectedEdges, collapsedOf],
   );
 
-  // The minimap shows each node in its type's colour.
+  // The minimap shows each node in its type's colour, and each group in its own (a light frame when expanded).
   const nodeColor = useCallback(
-    (n: CmsFlowNode) => NODE_COLORS[graph.nodes.find((g) => g.id === n.id)?.type ?? ''] ?? UNKNOWN_NODE_COLOR,
-    [graph.nodes],
+    (n: FlowNode) => {
+      if (n.type === 'cmsGroup') {
+        const color = graph.groups?.find((g) => g.id === n.data.groupId)?.color ?? '#64748b';
+        return n.className === 'is-collapsed' ? color : `${color}22`;
+      }
+      return NODE_COLORS[graph.nodes.find((g) => g.id === n.id)?.type ?? ''] ?? UNKNOWN_NODE_COLOR;
+    },
+    [graph.nodes, graph.groups],
+  );
+  const nodeStroke = useCallback(
+    (n: FlowNode) => (n.type === 'cmsGroup' ? (graph.groups?.find((g) => g.id === n.data.groupId)?.color ?? '#64748b') : nodeColor(n)),
+    [graph.groups, nodeColor],
   );
 
-  const onNodesChange = useCallback((changes: NodeChange<CmsFlowNode>[]) => {
-    setNodes((ns) => applyNodeChanges(changes, ns));
+  /** While a group's frame is dragged: where it and its nodes started. */
+  const frameDrag = useRef<{ id: string; start: { x: number; y: number }; members: Map<string, { x: number; y: number }> }>(undefined);
+
+  const onNodesChange = useCallback((all: NodeChange<FlowNode>[]) => {
     const state = editorStore.getState();
+    // A frame being dragged moves its group's nodes by as much as it moved (one undo step when dropped).
+    for (const c of all) {
+      if (c.type !== 'position' || !isFrameId(c.id) || !c.position) continue;
+      const frame = framesRef.current.find((f) => f.id === c.id);
+      const group = state.graph.groups?.find((g) => g.id === groupIdOfFrame(c.id));
+      if (!frame || !group) continue;
+      let drag = frameDrag.current;
+      if (!drag || drag.id !== c.id) {
+        const members = new Map(state.graph.nodes.filter((n) => group.nodeIds.includes(n.id)).map((n) => [n.id, n.position ?? { x: 0, y: 0 }]));
+        drag = frameDrag.current = { id: c.id, start: frame.position, members };
+      }
+      const dx = c.position.x - drag.start.x;
+      const dy = c.position.y - drag.start.y;
+      const moved = Object.fromEntries([...drag.members].map(([id, p]) => [id, { x: p.x + dx, y: p.y + dy }]));
+      setNodes((ns) => ns.map((n) => (moved[n.id] ? { ...n, position: moved[n.id] } : n)));
+      if (!c.dragging) {
+        frameDrag.current = undefined;
+        if (dx || dy) state.moveNodes(moved);
+      }
+    }
+    const changes = all.filter((c) => !('id' in c) || !isFrameId(c.id)) as NodeChange<CmsFlowNode>[];
+    setNodes((ns) => applyNodeChanges(changes, ns));
     // Dragging several selected nodes moves them all: one undo step when they are dropped.
     const moved: Record<string, { x: number; y: number }> = {};
     const added: string[] = [];
@@ -125,7 +212,9 @@ export function Canvas() {
   const onConnectEnd = useCallback((_e: MouseEvent | TouchEvent, s: FinalConnectionState) => {
     if (!s.fromHandle || !s.toHandle || s.isValid !== false) return;
     const [from, to] = s.fromHandle.type === 'source' ? [s.fromHandle, s.toHandle] : [s.toHandle, s.fromHandle];
-    const candidate = { source: from.nodeId, sourcePort: from.id ?? '', target: to.nodeId, targetPort: to.id ?? '' };
+    const a = resolveHandle(from.nodeId, from.id);
+    const b = resolveHandle(to.nodeId, to.id);
+    const candidate = { source: a.node, sourcePort: a.port, target: b.node, targetPort: b.port };
     const state = editorStore.getState();
     const reason =
       from.type === to.type
@@ -149,7 +238,7 @@ export function Canvas() {
   return (
     <main className="canvas" aria-label="Canvas" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <ReactFlow
-        nodes={nodes}
+        nodes={flowNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -162,10 +251,12 @@ export function Canvas() {
         // Also for a node that is already selected (e.g. to leave the snippet library editor and show it again).
         // With Shift / Ctrl / Cmd the click adds or removes the node (see onNodesChange) instead.
         onNodeClick={(e, n) => {
-          if (!e.shiftKey && !e.ctrlKey && !e.metaKey) editorStore.getState().select(n.id);
+          // A group's header (or its collapsed box): select the group.
+          if (isFrameId(n.id)) editorStore.getState().selectGroup(groupIdOfFrame(n.id));
+          else if (!e.shiftKey && !e.ctrlKey && !e.metaKey) editorStore.getState().select(n.id);
         }}
         multiSelectionKeyCode={MULTI_SELECT_KEYS}
-        onDelete={({ nodes: n, edges: e }) => editorStore.getState().removeElements(n.map((x) => x.id), e.map((x) => x.id))}
+        onDelete={({ nodes: n, edges: e }) => editorStore.getState().removeElements(n.filter((x) => !isFrameId(x.id)).map((x) => x.id), e.map((x) => x.id))}
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
         fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
@@ -174,7 +265,7 @@ export function Canvas() {
       >
         <Background gap={20} />
         <Controls />
-        <MiniMap pannable zoomable className="minimap" style={{ width: 160, height: 100 }} nodeColor={nodeColor} nodeStrokeColor={nodeColor} nodeBorderRadius={3} nodeComponent={MiniMapNode} />
+        <MiniMap pannable zoomable className="minimap" style={{ width: 160, height: 100 }} nodeColor={nodeColor} nodeStrokeColor={nodeStroke} nodeBorderRadius={3} nodeComponent={MiniMapNode} />
         <Panel position="top-left" className="canvas-toolbar">
           <ExampleButtons />
           {graph.nodes.length > 0 && (

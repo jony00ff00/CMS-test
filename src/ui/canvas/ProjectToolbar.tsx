@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore } from 'zustand';
-import { editorStore, useEditor } from '../../store/editor-store';
+import { editorStore, selectedNodeIds, useEditor } from '../../store/editor-store';
 import { SaveDialog } from './SaveDialog';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -87,7 +87,18 @@ export function useUndoShortcuts() {
       if (target?.closest('input, textarea, select, [contenteditable="true"], .cm-editor')) return;
       const key = e.key.toLowerCase();
       const state = editorStore.getState();
-      if (key === 'd' && !e.shiftKey) {
+      if (key === 'g') {
+        // Group the selected nodes; with Shift, ungroup the selected group (or the group of the selected node).
+        if (e.shiftKey) {
+          const id = state.selectedGroupId ?? state.graph.groups?.find((g) => state.selectedId && g.nodeIds.includes(state.selectedId))?.id;
+          if (!id) return;
+          state.ungroup(id);
+        } else {
+          const ids = selectedNodeIds(state);
+          if (!ids.length) return;
+          state.groupNodes(ids);
+        }
+      } else if (key === 'd' && !e.shiftKey) {
         // Duplicate the selected node (instead of the browser's bookmark shortcut).
         if (!state.selectedId) return;
         state.duplicateNode(state.selectedId);

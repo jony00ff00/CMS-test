@@ -317,3 +317,41 @@ fieldset.where { gap: 0.6rem; }
 .multi-selection { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
 .multi-selection li { display: flex; align-items: center; gap: 8px; }
 .multi-selection .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+/* Groups: a frame behind its nodes (only its header takes the pointer), or one box when collapsed. */
+.react-flow__node.react-flow__node-cmsGroup { pointer-events: none; }
+.react-flow__node.react-flow__node-cmsGroup.is-collapsed { pointer-events: all; }
+.group-frame {
+  box-sizing: border-box; border: 2px solid var(--group-color); border-radius: 10px;
+  background: color-mix(in srgb, var(--group-color) 6%, transparent);
+}
+.group-frame.is-selected, .group-box.is-selected { box-shadow: 0 0 0 3px color-mix(in srgb, var(--group-color) 35%, transparent); }
+.group-frame-head {
+  pointer-events: all; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px;
+  background: var(--group-color); color: #fff; border-radius: 7px 7px 0 0; cursor: grab; font-size: 0.8rem;
+}
+.group-frame .group-frame-head { margin: -1px -1px 0; }
+.group-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-count { opacity: 0.85; font-size: 0.72rem; white-space: nowrap; }
+.group-toggle.ghost { margin-left: auto; color: #fff; padding: 0 8px; min-height: 22px; line-height: 1; font-size: 1rem; }
+.group-toggle.ghost:hover { background: rgb(255 255 255 / 0.2); }
+.group-name-input { max-width: 160px; }
+.group-box {
+  box-sizing: border-box; border: 2px solid var(--group-color); border-radius: 10px; background: var(--panel, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+.group-box .group-frame-head { margin: -1px -1px 0; cursor: grab; }
+.group-box .port { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
+.group-box-empty { margin: 4px 10px; }
+
+/* The inspector's group settings, and the palette's list of groups. */
+.group-colors { display: flex; gap: 6px; flex-wrap: wrap; }
+.group-colors button { width: 22px; height: 22px; border-radius: 6px; padding: 0; border: 2px solid transparent; }
+.group-colors button[aria-pressed='true'] { border-color: var(--text, #111); }
+.group-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.group-list button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; }
+.group-list .swatch, .in-group .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+.in-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+.palette-groups { margin-top: 1rem; }
+.palette-groups .group-list li { margin-bottom: 0; }
+.group-list .group-list-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

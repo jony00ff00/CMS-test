@@ -1,7 +1,7 @@
 // Project files: the graph, its files and the snippet library as one JSON document.
 // Used for autosave (localStorage) and for "Save project file" / "Open project".
 import {
-  edgeError, nodeRegistry, storeFile, type Graph, type NodeRegistry, type Snippet, type SnippetLibrary, type StoredFile,
+  edgeError, nodeRegistry, storeFile, type Graph, type NodeGroup, type NodeRegistry, type Snippet, type SnippetLibrary, type StoredFile,
 } from '../engine';
 import { seedLibrary } from '../snippets/seed';
 
@@ -112,6 +112,9 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
     else graph.edges.push(e);
   }
 
+  const groups = readGroups(p.graph?.groups, ids, warnings);
+  if (groups.length) graph.groups = groups;
+
   let library: SnippetLibrary = seedLibrary();
   if (p.library && typeof p.library === 'object') {
     library = {};
@@ -177,4 +180,44 @@ function upgradeInsertNodes(nodes: any[], edges: any[], warnings: string[]) {
       `${upgraded} Insert node${upgraded === 1 ? ' is' : 's are'} now ${upgraded === 1 ? 'an Object node' : 'Object nodes'}: where ${upgraded === 1 ? 'it goes' : 'they go'} is set by a new Selector (its Point output)`,
     );
   }
+}
+
+/** Groups from a project file: unknown nodes leave them, a node in two groups stays in the first, empty ones go. */
+function readGroups(raw: unknown, nodeIds: Set<string>, warnings: string[]): NodeGroup[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    warnings.push('The groups could not be read and were left out');
+    return [];
+  }
+  const groups: NodeGroup[] = [];
+  const taken = new Set<string>();
+  for (const g of raw as Partial<NodeGroup>[]) {
+    if (!g || typeof g.id !== 'string' || !Array.isArray(g.nodeIds) || groups.some((x) => x.id === g.id)) {
+      warnings.push('A group could not be read and was left out');
+      continue;
+    }
+    const name = typeof g.name === 'string' ? g.name : g.id;
+    const members: string[] = [];
+    for (const id of g.nodeIds) {
+      if (typeof id !== 'string' || !nodeIds.has(id) || members.includes(id)) continue;
+      if (taken.has(id)) {
+        warnings.push(`The node "${id}" was in two groups; it stays in the first`);
+        continue;
+      }
+      members.push(id);
+      taken.add(id);
+    }
+    if (!members.length) {
+      warnings.push(`The group "${name}" has no nodes left and was left out`);
+      continue;
+    }
+    groups.push({
+      id: g.id,
+      name,
+      nodeIds: members,
+      ...(typeof g.color === 'string' && /^#[0-9a-f]{6}$/i.test(g.color) && { color: g.color }),
+      ...(g.collapsed === true && { collapsed: true }),
+    });
+  }
+  return groups;
 }

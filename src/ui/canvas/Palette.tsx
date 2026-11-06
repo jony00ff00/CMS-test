@@ -1,5 +1,5 @@
 import { nodeRegistry } from '../../engine';
-import { useEditor } from '../../store/editor-store';
+import { editorStore, useEditor } from '../../store/editor-store';
 import { MinimiseButton } from '../panels';
 
 export const DRAG_TYPE = 'application/x-cms-node';
@@ -33,6 +33,42 @@ export function Palette({ onMinimise }: { onMinimise: () => void }) {
           </li>
         ))}
       </ul>
+      <GroupList />
     </aside>
+  );
+}
+
+/** Every group: click one to select it and fit the canvas to it. */
+function GroupList() {
+  const groups = useEditor((s) => s.graph.groups);
+  const selectedGroupId = useEditor((s) => s.selectedGroupId);
+  return (
+    <section className="palette-groups" aria-label="Groups">
+      <h2>Groups</h2>
+      {!groups?.length ? (
+        <p className="muted small">Select several nodes and press Ctrl+G (or “Group” in the inspector) to group them.</p>
+      ) : (
+        <ul className="group-list">
+          {groups.map((g) => (
+            <li key={g.id}>
+              <button
+                type="button"
+                className={`ghost${g.id === selectedGroupId ? ' is-current' : ''}`}
+                aria-pressed={g.id === selectedGroupId}
+                title="Select this group and show it on the canvas"
+                onClick={() => editorStore.getState().focusGroup(g.id)}
+              >
+                <span className="swatch" style={{ background: g.color ?? '#64748b' }} aria-hidden="true" />
+                <span className="group-list-name">{g.name}</span>
+                <span className="muted small">
+                  {g.nodeIds.length}
+                  {g.collapsed ? ' · collapsed' : ''}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

@@ -2,6 +2,7 @@ import type React from 'react';
 import { nodeRegistry } from '../../engine';
 import { editorStore, selectedNodeIds, useEditor } from '../../store/editor-store';
 import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
+import { GroupInspector, InGroup } from './GroupInspector';
 import { nodeLabel } from '../node-label';
 import { LibraryEditor } from '../library/LibraryEditor';
 import { TextField } from './fields';
@@ -33,6 +34,7 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
   const result = useEditor((s) => (s.selectedId ? s.results[s.selectedId] : undefined));
   const openSnippetId = useEditor((s) => s.openSnippetId);
   const selection = useEditor((s) => selectedNodeIds(s).join(' '));
+  const groupId = useEditor((s) => (s.selectedGroupId && s.graph.groups?.some((g) => g.id === s.selectedGroupId) ? s.selectedGroupId : undefined));
 
   if (openSnippetId) {
     return (
@@ -52,6 +54,7 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
     );
   }
 
+  if (groupId) return <GroupInspector groupId={groupId} minimise={minimise} />;
   if (selection.includes(' ')) return <MultiSelection ids={selection.split(' ')} minimise={minimise} />;
 
   if (!node) {
@@ -85,6 +88,7 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
       </div>
       {/* key: a fresh editor for each node, so local state never leaks between nodes */}
       <div className="inspector-body" key={node.id}>
+        <InGroup nodeId={node.id} />
         <TextField
           label="Name"
           value={node.name ?? ''}
@@ -116,6 +120,7 @@ function MultiSelection({ ids, minimise }: { ids: string[]; minimise: React.Reac
           {minimise}
         </span>
       </div>
+      <GroupActions ids={ids} />
       <ul className="multi-selection" aria-label="Selected nodes">
         {picked.map((n) => (
           <li key={n.id}>
@@ -135,5 +140,25 @@ function MultiSelection({ ids, minimise }: { ids: string[]; minimise: React.Reac
         edit that node alone.
       </p>
     </aside>
+  );
+}
+
+/** Group the selected nodes, or add them to the one group some of them are in. */
+function GroupActions({ ids }: { ids: string[] }) {
+  const groups = useEditor((s) => s.graph.groups);
+  const store = editorStore.getState();
+  const touched = (groups ?? []).filter((g) => g.nodeIds.some((id) => ids.includes(id)));
+  const into = touched.length === 1 && !ids.every((id) => touched[0].nodeIds.includes(id)) ? touched[0] : undefined;
+  return (
+    <div className="button-row">
+      <button type="button" title="Put these nodes in a new group (Ctrl+G)" onClick={() => store.groupNodes(ids)}>
+        Group
+      </button>
+      {into && (
+        <button type="button" className="ghost" onClick={() => store.addToGroup(into.id, ids)}>
+          Add to “{into.name}”
+        </button>
+      )}
+    </div>
   );
 }

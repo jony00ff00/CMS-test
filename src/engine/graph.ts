@@ -84,6 +84,19 @@ export interface GraphEdge {
 export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  /** Named groups of nodes on the canvas. Only for arranging the canvas: evaluation never looks at them. */
+  groups?: NodeGroup[];
+}
+
+/** Nodes kept together on the canvas: named, moved as one, and collapsible. A node is in at most one group. */
+export interface NodeGroup {
+  id: string;
+  name: string;
+  nodeIds: string[];
+  /** A colour like "#2563eb" (the frame's border and header). */
+  color?: string;
+  /** Shown as one small box with the group's outside connections. */
+  collapsed?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -203,6 +203,29 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   moves all of them: `moveNodes` (one undo step). With several selected the inspector shows `MultiSelection`
   (the list, "Delete N nodes"). The minimap draws the connections (`MiniMapNode.tsx`: the first node's component
   draws every edge as a bezier between its handles, under all boxes, `.minimap-edge.edge-<type>`).
+- Groups (G1–G5): `Graph.groups` (`NodeGroup` { id, name, nodeIds, color?, collapsed? } in `engine/graph.ts`; the
+  engine ignores them, and `sameExceptPositions` ignores them, so they never re-run anything). A node is in at most
+  one group. Helpers in `src/store/groups.ts` (`GROUP_COLORS`, `nextGroupName` / `Id` / `Color`, `pruneGroups`,
+  `withoutNodes`, `groupOfNode`). Store: `groupNodes` (Ctrl/Cmd+G; takes nodes out of other groups; selects the
+  group), `ungroup` (Ctrl/Cmd+Shift+G), `renameGroup` (one undo step while typing), `setGroupColor`,
+  `setGroupCollapsed`, `addToGroup`, `removeFromGroup`, `selectGroup` (`selectedGroupId` + its nodes selected;
+  `select` / `changeSelection` clear it), `focusGroup` (+ `fitTo` for the canvas), `duplicateGroup` (nodes, the
+  connections between them and those coming in; below), `deleteGroupAndNodes`. Deleting nodes prunes groups (a group
+  left empty is gone); `duplicateNode` puts the copy in the original's group. Every action that rebuilds `graph`
+  must keep `groups`. `parseProject` reads groups (`readGroups`: unknown nodes dropped, a node in two groups stays in
+  the first, empty or broken groups left out, each with a warning; bad colours dropped).
+  Canvas: each group is a React Flow node `group:<id>` of type `cmsGroup` (`GroupFrame.tsx`), built every render from
+  its members (`frameBox` in `group-layout.ts`), first in the node list, `selectable: false`; it needs `measured`
+  set or React Flow forgets its handles. Expanded: a frame behind the nodes (zIndex −1, only its header takes the
+  pointer, `dragHandle`); dragging it moves the members (start positions in `frameDrag`, `moveNodes` on drop);
+  clicking it selects the group; double-click the name to rename. Collapsed: members `hidden`, one box with handles
+  `in|<node>|<port>` / `out|<node>|<port>` (`collapsedPorts`: ports with outside connections or none at all);
+  edges into / out of it are drawn to those handles, edges inside are not drawn; `resolveHandle` turns a box
+  handle back into the member's port for `connect`, `isValidConnection` and `onConnectEnd`. Call
+  `updateNodeInternals` when the box's handles change. Inspector: `GroupInspector` (name, colour, nodes with ×,
+  Collapse / Expand, Show on canvas, Duplicate, Ungroup, Delete group and its nodes), `InGroup` on a member's
+  editor, "Group" / "Add to …" in `MultiSelection`. Palette: a Groups list (`focusGroup`). Minimap: frames in the
+  group's colour (light when expanded).
 - `src/ui/canvas`: React Flow canvas. Nodes live in local state (React Flow stores measured sizes on them) and
   are synced from the store; positions go back on drag end. `isValidConnection` uses `edgeError`;
   `onConnectEnd` shows why a drop on a wrong handle was refused. `CmsNode` renders any node type from its
@@ -287,7 +310,8 @@ All planned milestones are done; since then: resizable / separate-window preview
 PowerPoint work stops there: P6, shape positions, embedded media and theme colours / fonts, is not planned),
 Connector that turns any input into any output, Extractor, Point output and Object node (replacing Insert),
 Combinator, simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
-another document (wrap, source styles, heading levels, Content view, "Two documents" example). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
+connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

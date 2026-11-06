@@ -11,6 +11,7 @@ import {
 import { sampleHtml, sampleJson, sampleNotesHtml } from '../samples';
 import { seedLibrary } from '../snippets/seed';
 import { parseProject, projectToJson } from './project';
+import { groupOfNode, groupsOf, nextGroupColor, nextGroupId, nextGroupName, pruneGroups, withoutNodes } from './groups';
 
 export interface Notice {
   id: number;
@@ -70,6 +71,27 @@ export interface EditorState {
   connect(edge: EdgeCandidate): string | undefined;
   /** Select only this node (or nothing). */
   select(id?: string): void;
+
+  /** The group whose settings the inspector shows (its nodes are selected too). */
+  selectedGroupId?: string;
+  /** Asks the canvas to fit these nodes into view (`n` increases each time). */
+  fitTo?: { nodeIds: string[]; groupId?: string; n: number };
+  /** Group nodes (taken out of other groups). Returns the group's id. */
+  groupNodes(ids: string[], name?: string): string | undefined;
+  ungroup(groupId: string): void;
+  renameGroup(groupId: string, name: string): void;
+  setGroupColor(groupId: string, color: string): void;
+  setGroupCollapsed(groupId: string, collapsed: boolean): void;
+  addToGroup(groupId: string, ids: string[]): void;
+  removeFromGroup(ids: string[]): void;
+  /** Select a group: all its nodes, and the group in the inspector. */
+  selectGroup(groupId: string): void;
+  /** Select a group and fit the canvas to it. */
+  focusGroup(groupId: string): void;
+  /** Copy a group: its nodes, the connections between them and those coming in; placed below. */
+  duplicateGroup(groupId: string): string | undefined;
+  /** Delete a group and all its nodes. */
+  deleteGroupAndNodes(groupId: string): void;
   /** Add nodes to the selection and take some out; the last one added becomes the main one. */
   changeSelection(added: string[], removed: string[]): void;
 
@@ -212,10 +234,12 @@ export function createEditorStore(options: EditorOptions = {}) {
       if (ids.length === 0) return;
       const gone = new Set(ids);
       const { graph, selectedId } = get();
+      const nodes = graph.nodes.filter((n) => !gone.has(n.id));
       set({
         graph: {
-          nodes: graph.nodes.filter((n) => !gone.has(n.id)),
+          nodes,
           edges: graph.edges.filter((e) => !gone.has(e.source) && !gone.has(e.target)),
+          ...(graph.groups && { groups: pruneGroups(graph.groups, new Set(nodes.map((n) => n.id))) }),
         },
         selectedId: selectedId && gone.has(selectedId) ? undefined : selectedId,
       });
@@ -226,10 +250,12 @@ export function createEditorStore(options: EditorOptions = {}) {
       const nodes = new Set(nodeIds);
       const edges = new Set(edgeIds);
       const { graph, selectedId } = get();
+      const kept = graph.nodes.filter((n) => !nodes.has(n.id));
       set({
         graph: {
-          nodes: graph.nodes.filter((n) => !nodes.has(n.id)),
+          nodes: kept,
           edges: graph.edges.filter((e) => !edges.has(e.id) && !nodes.has(e.source) && !nodes.has(e.target)),
+          ...(graph.groups && { groups: pruneGroups(graph.groups, new Set(kept.map((n) => n.id))) }),
         },
         selectedId: selectedId && nodes.has(selectedId) ? undefined : selectedId,
       });
@@ -247,6 +273,8 @@ export function createEditorStore(options: EditorOptions = {}) {
         const copyId = get().addNode(original.type, position);
         get().updateConfig(copyId, structuredClone(original.config));
         if (original.name?.trim()) get().renameNode(copyId, `${original.name.trim()} copy`);
+        const group = groupOfNode(get().graph, id);
+        if (group) get().addToGroup(group.id, [copyId]);
         for (const e of get().graph.edges.filter((x) => x.target === id)) {
           get().connect({ source: e.source, sourcePort: e.sourcePort, target: copyId, targetPort: e.targetPort });
         }
@@ -319,7 +347,9 @@ export function createEditorStore(options: EditorOptions = {}) {
 
     select(id) {
       const { selectedId, selectedIds, openSnippetId } = get();
-      if (selectedId !== id || openSnippetId || (selectedIds?.length ?? 0) > 1) set({ selectedId: id, selectedIds: undefined, openSnippetId: undefined });
+      if (selectedId !== id || openSnippetId || (selectedIds?.length ?? 0) > 1 || get().selectedGroupId) {
+        set({ selectedId: id, selectedIds: undefined, openSnippetId: undefined, selectedGroupId: undefined });
+      }
     },
 
     changeSelection(added, removed) {
@@ -327,7 +357,112 @@ export function createEditorStore(options: EditorOptions = {}) {
       const gone = new Set(removed);
       const ids = [...selectedNodeIds(state).filter((id) => !gone.has(id) && !added.includes(id)), ...added.filter((id) => !gone.has(id))];
       const main = added.filter((id) => !gone.has(id)).at(-1) ?? (state.selectedId && ids.includes(state.selectedId) ? state.selectedId : ids.at(-1));
-      set({ selectedId: main, selectedIds: ids.length > 1 ? ids : undefined, ...(main !== state.selectedId && { openSnippetId: undefined }) });
+      set({ selectedId: main, selectedIds: ids.length > 1 ? ids : undefined, selectedGroupId: undefined, ...(main !== state.selectedId && { openSnippetId: undefined }) });
+    },
+
+    groupNodes(ids, name) {
+      const { graph } = get();
+      const real = ids.filter((id) => graph.nodes.some((n) => n.id === id));
+      if (!real.length) return undefined;
+      const others = withoutNodes(groupsOf(graph), real);
+      const group = { id: nextGroupId(groupsOf(graph)), name: name?.trim() || nextGroupName(others), nodeIds: real, color: nextGroupColor(others) };
+      set({ graph: { ...graph, groups: [...others, group] } });
+      get().selectGroup(group.id);
+      return group.id;
+    },
+
+    ungroup(groupId) {
+      const { graph, selectedGroupId } = get();
+      if (!groupsOf(graph).some((g) => g.id === groupId)) return;
+      set({ graph: { ...graph, groups: groupsOf(graph).filter((g) => g.id !== groupId) }, ...(selectedGroupId === groupId && { selectedGroupId: undefined }) });
+    },
+
+    renameGroup(groupId, name) {
+      const { graph } = get();
+      const group = groupsOf(graph).find((g) => g.id === groupId);
+      if (!group || group.name === name) return;
+      groupKey = `group-name:${groupId}`; // typing a name is one undo step
+      set({ graph: { ...graph, groups: groupsOf(graph).map((g) => (g.id === groupId ? { ...g, name } : g)) } });
+    },
+
+    setGroupColor(groupId, color) {
+      const { graph } = get();
+      set({ graph: { ...graph, groups: groupsOf(graph).map((g) => (g.id === groupId ? { ...g, color } : g)) } });
+    },
+
+    setGroupCollapsed(groupId, collapsed) {
+      const { graph } = get();
+      const group = groupsOf(graph).find((g) => g.id === groupId);
+      if (!group || !!group.collapsed === collapsed) return;
+      set({ graph: { ...graph, groups: groupsOf(graph).map((g) => (g.id === groupId ? { ...g, collapsed: collapsed || undefined } : g)) } });
+    },
+
+    addToGroup(groupId, ids) {
+      const { graph } = get();
+      const target = groupsOf(graph).find((g) => g.id === groupId);
+      if (!target) return;
+      const add = ids.filter((id) => !target.nodeIds.includes(id) && graph.nodes.some((n) => n.id === id));
+      if (!add.length) return;
+      const groups = withoutNodes(groupsOf(graph), add).map((g) => (g.id === groupId ? { ...g, nodeIds: [...g.nodeIds, ...add] } : g));
+      // The target group may only have held nodes that were added again: keep it in any case.
+      set({ graph: { ...graph, groups: groups.some((g) => g.id === groupId) ? groups : [...groups, { ...target, nodeIds: [...target.nodeIds, ...add] }] } });
+    },
+
+    removeFromGroup(ids) {
+      const { graph, selectedGroupId } = get();
+      const groups = withoutNodes(groupsOf(graph), ids);
+      set({ graph: { ...graph, groups }, ...(selectedGroupId && !groups.some((g) => g.id === selectedGroupId) && { selectedGroupId: undefined }) });
+    },
+
+    selectGroup(groupId) {
+      const group = groupsOf(get().graph).find((g) => g.id === groupId);
+      if (!group) return;
+      set({
+        selectedGroupId: groupId,
+        selectedId: group.nodeIds.at(-1),
+        selectedIds: group.nodeIds.length > 1 ? [...group.nodeIds] : undefined,
+        openSnippetId: undefined,
+      });
+    },
+
+    focusGroup(groupId) {
+      const group = groupsOf(get().graph).find((g) => g.id === groupId);
+      if (!group) return;
+      get().selectGroup(groupId);
+      set({ fitTo: { nodeIds: [...group.nodeIds], groupId, n: (get().fitTo?.n ?? 0) + 1 } });
+    },
+
+    duplicateGroup(groupId) {
+      const group = groupsOf(get().graph).find((g) => g.id === groupId);
+      if (!group) return undefined;
+      return batch(() => {
+        const members = get().graph.nodes.filter((n) => group.nodeIds.includes(n.id));
+        const ys = members.map((n) => n.position?.y ?? 0);
+        // Below the group: its height, plus room for the frame's header and the nodes' own height.
+        const dy = Math.max(...ys) - Math.min(...ys) + 220;
+        const copies = new Map<string, string>();
+        for (const n of members) {
+          const p = n.position ?? { x: 40, y: 120 };
+          const id = get().addNode(n.type, { x: p.x, y: p.y + dy });
+          get().updateConfig(id, structuredClone(n.config));
+          if (n.name?.trim()) get().renameNode(id, `${n.name.trim()} copy`);
+          copies.set(n.id, id);
+        }
+        // Connections between members, and those coming in from outside, in their order.
+        for (const e of get().graph.edges.filter((x) => copies.has(x.target))) {
+          get().connect({ source: copies.get(e.source) ?? e.source, sourcePort: e.sourcePort, target: copies.get(e.target)!, targetPort: e.targetPort });
+        }
+        const copyId = get().groupNodes([...copies.values()], `${group.name} copy`);
+        if (copyId && group.collapsed) get().setGroupCollapsed(copyId, true);
+        return copyId;
+      });
+    },
+
+    deleteGroupAndNodes(groupId) {
+      const group = groupsOf(get().graph).find((g) => g.id === groupId);
+      if (!group) return;
+      get().removeElements(group.nodeIds, []);
+      set({ selectedGroupId: undefined, selectedId: undefined, selectedIds: undefined });
     },
 
     openSnippet(id) {
