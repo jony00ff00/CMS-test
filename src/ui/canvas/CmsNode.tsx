@@ -149,6 +149,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     }
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
+      if (info.format === 'slides') return `Slide deck · ${info.slides} slide${info.slides === 1 ? '' : 's'}`;
       if (typeof info.bytes !== 'number') return 'Nothing to show yet';
       const several = typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : '';
       return `${several}${(info.bytes / 1024).toFixed(1)} kB of HTML`;

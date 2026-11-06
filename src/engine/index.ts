@@ -4,6 +4,7 @@ export * from './document';
 export * from './combine';
 export * from './docx';
 export * from './pptx';
+export * from './slide-deck';
 export * from './json';
 export * from './json-export';
 export * from './source';

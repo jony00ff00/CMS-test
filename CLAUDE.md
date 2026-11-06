@@ -46,6 +46,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `SLIDE_CSS` to `meta.styles` (cards, "Slide N" / "Notes" labels from `::before`, so the text index is unchanged);
   `formatSlideRange` writes [1,2,3,5] as "1-3, 5". .ppt / password-protected files
   (OLE header) get a plain error.
+- `slide-deck.ts`: `toSlideDeck(doc)` for Output format `slides`: keeps `section.slide`s (warns about top-level content
+  outside them), or splits other documents at top-level h1 / h2 (also a block that starts with one, e.g. a callout
+  around it); adds `DECK_VIEWER` as a snippet asset (CSS + JS). The viewer only styles once its script ran
+  (`html.cms-deck`), so the page reads fine without JS; slides are 960 × 540 scaled to fit (`--cms-deck-scale`);
+  keys ←/→/Space/PgUp/PgDn/Home/End, N notes, `#3` opens slide 3 (replaceState in try: sandboxed preview).
+  Its bar is `data-cms-preview` (not measured). The JS gets `document` / `window` as `d` / `w` parameters
+  (`})(document, window)`), so the engine purity check holds.
 - `json.ts`: `parseJson` (own error scanner gives line, column and a plain reason in every browser),
   `discoverPaths` (every string field, with a suggested format), `mapJsonToDocument` / `importJson` (async).
   Field mode: each matched string becomes a block with `data-json-path`, read as `text`, `html` or `markdown`;
@@ -122,7 +129,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   hidden copies (`<output>~<i>~<id>`) of each later input's nodes on the previous input's result, so selectors and
   points re-resolve on the changed text; the copies' results are dropped, `info.combined` is set. Inputs with no
   shared document, and `combine: 'append'`, go one after another (`combineDocuments` in `combine.ts`); JSON export
-  refuses only in that case; `format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
+  refuses only in that case; `format` html | json | slides (always a complete page; info `slides`), `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
   preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
   `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone;
   optional `selection` input (`PortDef.optional`: the node runs without it) used by content `{ kind: 'selection' }`:
@@ -225,7 +232,7 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 ## Roadmap
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
-All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P4
+All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P5
 (of P1 text · P2 tables, pictures, groups · P3 source options and slide preview · P4 Slide selector · P5 slide-deck
 Output · P6 layout and media). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).

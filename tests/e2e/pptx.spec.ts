@@ -115,3 +115,64 @@ test('a Selector picks slides by number or title, and their titles, content or n
   await node(page, 'output-4').click();
   await expect(preview(page).locator('.callout aside.speaker-notes, aside.speaker-notes .callout, .callout .speaker-notes')).toHaveCount(3);
 });
+
+test('export as a slide deck: one slide at a time, keys to move, N for notes, #3 opens slide 3', async ({ page, browser }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  await node(page, 'documentSource-1').click();
+  await inspector(page).getByLabel('File').setInputFiles(fixture('sample.pptx'));
+  await node(page, 'output-4').click();
+  await inspector(page).getByLabel('Export as').selectOption('slides');
+  await expect(node(page, 'output-4')).toContainText('Slide deck · 14 slides');
+
+  const deck = preview(page);
+  const current = deck.locator('section.slide.cms-current');
+  const count = deck.locator('.cms-deck-count');
+  await expect(count).toHaveText('1 / 14');
+  await expect(current).toHaveAttribute('data-slide', '1');
+  await expect(deck.locator('section.slide:visible')).toHaveCount(1);
+  await expect(deck.getByRole('button', { name: 'Previous slide' })).toBeDisabled();
+
+  // Keys work once the deck has the focus (a click on it).
+  await current.click();
+  await page.keyboard.press('ArrowRight');
+  await expect(current).toHaveAttribute('data-slide', '2');
+  await expect(deck.locator('aside.speaker-notes:visible')).toHaveCount(0);
+  await page.keyboard.press('n');
+  await expect(deck.locator('aside.speaker-notes:visible')).toHaveText('Talk about getting started.');
+  await expect(deck.getByRole('button', { name: 'Notes' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('End');
+  await expect(count).toHaveText('14 / 14');
+  await expect(current).toHaveAttribute('data-slide', '15');
+  await expect(deck.getByRole('button', { name: 'Next slide' })).toBeDisabled();
+  await deck.getByRole('button', { name: 'Previous slide' }).click();
+  await expect(current).toHaveAttribute('data-slide', '14');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(current).toHaveAttribute('data-slide', '4');
+  await page.screenshot({ path: 'test-results/pptx-slide-deck.png' });
+
+  // The downloaded file works on its own, and #3 in its address opens the third slide.
+  const [download] = await Promise.all([page.waitForEvent('download'), inspector(page).getByRole('button', { name: 'Download HTML' }).click()]);
+  expect(download.suggestedFilename()).toBe('sample.slides.html');
+  // Downloads are stored without an extension: give it one, so the browser opens it as a page.
+  const file = join(test.info().outputDir, 'deck.html');
+  await download.saveAs(file);
+  const other = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
+  await other.goto(`file://${file}#3`);
+  await expect(other.locator('.cms-deck-count')).toHaveText('3 / 14');
+  await expect(other.locator('section.slide.cms-current h2')).toHaveText('Pricing');
+  await other.keyboard.press('ArrowRight');
+  await expect(other).toHaveURL(/#4$/);
+  await other.screenshot({ path: 'test-results/pptx-slide-deck-file.png' });
+});
+
+test('any document can be a slide deck: a new slide at each heading', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  await node(page, 'output-4').click();
+  await inspector(page).getByLabel('Export as').selectOption('slides');
+  await expect(node(page, 'output-4')).toContainText('Slide deck · 3 slides');
+  await expect(inspector(page)).toContainText('a new slide starts at each top-level heading');
+  await expect(preview(page).locator('section.slide.cms-current h1')).toHaveText('Field Guide to Node Gardens');
+});

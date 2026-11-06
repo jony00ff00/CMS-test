@@ -2,6 +2,7 @@ import { combineDocuments } from '../combine';
 import { serialize } from '../document';
 import type { NodeDefinition, NodeOutput } from '../graph';
 import { exportJson } from '../json-export';
+import { toSlideDeck } from '../slide-deck';
 import type { CmsDocument } from '../types';
 
 export interface OutputConfig {
@@ -10,8 +11,11 @@ export interface OutputConfig {
    * from the same source); "append" shows the documents one after another.
    */
   combine?: 'merge' | 'append';
-  /** "html" (default): a web page. "json": the JSON source file with the changed fields written back. */
-  format?: 'html' | 'json';
+  /**
+   * "html" (default): a web page. "json": the JSON source file with the changed fields written back.
+   * "slides": a page that shows one slide at a time (see slide-deck.ts); always a complete page.
+   */
+  format?: 'html' | 'json' | 'slides';
   /** A complete page with title, styles and snippet scripts (default), or just the body content. */
   fullDocument?: boolean;
   /** Put images into the HTML as data URIs (default true), so the page works on its own. */
@@ -36,6 +40,15 @@ export const output: NodeDefinition<OutputConfig> = {
   async evaluate(inputs, config): Promise<NodeOutput> {
     const docs = inputs.document as CmsDocument[];
     const doc = combineDocuments(docs);
+    if (config.format === 'slides') {
+      const deck = toSlideDeck(doc);
+      const html = serialize(deck.document, { fullDocument: true, inlineAssets: config.inlineAssets ?? true });
+      return {
+        outputs: { html, document: doc, result: doc },
+        warnings: deck.warnings,
+        info: { format: 'slides', slides: deck.slides, bytes: new TextEncoder().encode(html).length },
+      };
+    }
     // The page is always made: the preview shows it, also when exporting JSON.
     const html = serialize(doc, { fullDocument: config.fullDocument ?? true, inlineAssets: config.inlineAssets ?? true });
     if (config.format === 'json') {

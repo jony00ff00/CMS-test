@@ -25,7 +25,7 @@ export function OutputEditor({ node }: { node: GraphNode }) {
   const save = () => {
     if (!ok) return;
     if (format === 'json') download(`${baseName}.edited.json`, result.outputs.json as string, 'application/json');
-    else download(`${baseName}.html`, result.outputs.html as string, 'text/html');
+    else download(`${baseName}${format === 'slides' ? '.slides' : ''}.html`, result.outputs.html as string, 'text/html');
   };
 
   return (
@@ -78,12 +78,15 @@ export function OutputEditor({ node }: { node: GraphNode }) {
         options={[
           { value: 'html', label: 'Web page (HTML)' },
           { value: 'json', label: 'JSON file (changed fields written back)' },
+          { value: 'slides', label: 'Slide deck (one slide at a time)' },
         ]}
         hint={
           appended
             ? 'Documents shown one after another can only be made into a web page.'
             : format === 'json'
             ? 'Only the mapped fields change; everything else in the file stays as it was.'
+            : format === 'slides'
+            ? 'A page that shows one slide at a time: arrow keys, Space, Page Up / Down, Home / End, N for speaker notes. Documents without slides get a new slide at each heading.'
             : input?.meta.json && !jsonPossible
               ? 'This JSON source uses a template, so it can only be exported as a page.'
               : undefined
@@ -96,6 +99,13 @@ export function OutputEditor({ node }: { node: GraphNode }) {
           checked={!!config.jsonAssets}
           hint='Added under a "$assets" key.'
           onChange={(jsonAssets) => update({ jsonAssets })}
+        />
+      ) : format === 'slides' ? (
+        <CheckboxField
+          label="Put images into the HTML"
+          checked={config.inlineAssets ?? true}
+          hint="So the deck works on its own as one file."
+          onChange={(inlineAssets) => update({ inlineAssets })}
         />
       ) : (
         <>
