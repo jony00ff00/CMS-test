@@ -27,6 +27,11 @@ export type SelectorConfig =
       includeHeading?: boolean;
     }
   | { mode: 'jsonField'; path: string }
+  | {
+      mode: 'all';
+      /** "document" (default): everything as one match. "blocks": each top-level block as its own match. */
+      scope?: 'document' | 'blocks';
+    }
   | ({ mode: 'manual'; anchors: Anchor[] } & ResolveOptions);
 
 export type SelectorMode = SelectorConfig['mode'];
@@ -55,6 +60,9 @@ export function runSelector(doc: CmsDocument, config: SelectorConfig): Selection
     case 'manual':
       matches = selectManual(ix, config, warnings);
       break;
+    case 'all':
+      matches = selectEverything(ix, config.scope ?? 'document', warnings);
+      break;
     default:
       warnings.push(`Unknown selector mode "${(config as { mode: string }).mode}"`);
       matches = [];
@@ -67,6 +75,25 @@ export function runSelector(doc: CmsDocument, config: SelectorConfig): Selection
 }
 
 const withText = (ix: DocIndex, match: Match): SelectionMatch => ({ match, text: textOf(ix, match) });
+
+/** The whole document as one run of its top-level nodes, or each top-level element on its own. */
+function selectEverything(ix: DocIndex, scope: 'document' | 'blocks', warnings: string[]): SelectionMatch[] {
+  const children = ix.doc.tree.children;
+  const isBlank = (n: (typeof children)[number]) => n.type === 'text' && !n.value.trim();
+  if (children.every((n) => isBlank(n) || n.type === 'comment')) {
+    warnings.push('The document is empty');
+    return [];
+  }
+  if (scope === 'blocks') {
+    return children.flatMap((n, i) => (n.type === 'element' ? [withText(ix, elementMatch([i]))] : []));
+  }
+  // Leave out whitespace at the edges so a wrapper sits right around the content.
+  let start = 0;
+  let end = children.length;
+  while (isBlank(children[start])) start++;
+  while (isBlank(children[end - 1])) end--;
+  return [withText(ix, { kind: 'nodes', parent: [], start, end })];
+}
 
 function selectCss(ix: DocIndex, selector: string, warnings: string[]): SelectionMatch[] {
   if (!selector.trim()) {

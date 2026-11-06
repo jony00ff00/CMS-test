@@ -137,3 +137,27 @@ describe('runSelector', () => {
     expect(JSON.stringify(doc)).toBe(before);
   });
 });
+
+describe('select everything', () => {
+  const doc = parseHtml('\n<h1>Title</h1>\n<p>One <em>two</em></p>\n<ul><li>three</li></ul>\n');
+
+  it('selects the whole document as one match, without the whitespace at the edges', () => {
+    const sel = runSelector(doc, { mode: 'all' });
+    expect(sel.warnings).toEqual([]);
+    expect(sel.matches).toHaveLength(1);
+    const m = sel.matches[0].match as { parent: number[]; start: number; end: number };
+    expect(m.parent).toEqual([]);
+    expect(doc.tree.children[m.start]).toMatchObject({ tagName: 'h1' });
+    expect(doc.tree.children[m.end - 1]).toMatchObject({ tagName: 'ul' });
+    expect(sel.matches[0].text).toContain('three');
+  });
+
+  it('selects each top-level block on its own', () => {
+    const sel = runSelector(doc, { mode: 'all', scope: 'blocks' });
+    expect(sel.matches.map((m) => m.text)).toEqual(['Title', 'One two', 'three']);
+  });
+
+  it('warns for an empty document', () => {
+    expect(runSelector(parseHtml('  '), { mode: 'all' }).warnings).toEqual(['The document is empty']);
+  });
+});

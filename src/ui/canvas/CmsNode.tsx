@@ -127,6 +127,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
         : c.mode === 'regex' ? `/${c.pattern}/${c.flags ?? ''}`
         : c.mode === 'heading' ? `Section "${c.text}"`
         : c.mode === 'jsonField' ? c.path
+        : c.mode === 'all' ? (c.scope === 'blocks' ? 'Every block' : 'Everything')
         : `${c.anchors.length} saved selection${c.anchors.length === 1 ? '' : 's'}`;
       return typeof info.matches === 'number' ? `${what} · ${plural(info.matches, 'match')}` : what;
     }
@@ -146,6 +147,8 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       if (typeof info.bytes !== 'number') return 'Nothing to show yet';
       const several = typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : '';
       return `${several}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
+    case 'connector':
+      return typeof info.blocks === 'number' ? `Result as a document · ${info.blocks} block${info.blocks === 1 ? '' : 's'}` : 'Connect an Output’s Result';
     default:
       return '';
   }

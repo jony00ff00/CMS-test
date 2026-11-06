@@ -12,6 +12,8 @@
   --port-document: #2563eb;
   --port-selection: #d97706;
   --port-html: #059669;
+  --port-result: #dc2626;
+  --node-connector: #db2777;
   --node-output: #dc2626;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
@@ -78,6 +80,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-selector { border-left-color: var(--port-selection); }
 .palette-snippet { border-left-color: #7c3aed; }
 .palette-output { border-left-color: var(--node-output); }
+.palette-connector { border-left-color: var(--node-connector); }
 .palette-insert { border-left-color: #0d9488; }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
@@ -192,6 +195,7 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-selector { border-top-color: var(--port-selection); }
 .cms-node-snippet { border-top-color: #7c3aed; }
 .cms-node-output { border-top-color: var(--node-output); }
+.cms-node-connector { border-top-color: var(--node-connector); }
 .cms-node-insert { border-top-color: #0d9488; }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
@@ -212,10 +216,12 @@ body.preview-window { margin: 0; height: 100vh; }
 .react-flow__handle.handle-document { background: var(--port-document); }
 .react-flow__handle.handle-selection { background: var(--port-selection); }
 .react-flow__handle.handle-html { background: var(--port-html); }
+.react-flow__handle.handle-result { background: var(--port-result); }
 .react-flow__handle.connectingto:not(.valid) { background: var(--danger); }
 .react-flow__edge.edge-document .react-flow__edge-path { stroke: var(--port-document); }
 .react-flow__edge.edge-selection .react-flow__edge-path { stroke: var(--port-selection); }
 .react-flow__edge.edge-html .react-flow__edge-path { stroke: var(--port-html); }
+.react-flow__edge.edge-result .react-flow__edge-path { stroke: var(--port-result); stroke-dasharray: 6 3; }
 .react-flow__edge .react-flow__edge-path { stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3.5; }
 .minimap { width: 140px; height: 90px; }

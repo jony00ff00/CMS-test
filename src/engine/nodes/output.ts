@@ -26,7 +26,11 @@ export const output: NodeDefinition<OutputConfig> = {
   description: 'Shows the result and exports it as HTML or JSON',
   // Several documents can come in (e.g. from an Insert and a Snippet): they are shown one after another.
   inputs: [{ name: 'document', type: 'document', label: 'Document', multiple: true }],
-  outputs: [{ name: 'html', type: 'html', label: 'HTML' }],
+  outputs: [
+    { name: 'html', type: 'html', label: 'HTML' },
+    // The finished document, for a Connector node (which passes it on to more nodes).
+    { name: 'result', type: 'result', label: 'Result' },
+  ],
   defaultConfig: () => ({ format: 'html', fullDocument: true, inlineAssets: true }),
   mergesInputs: (config) => (config.combine ?? 'merge') === 'merge',
   async evaluate(inputs, config): Promise<NodeOutput> {
@@ -38,13 +42,13 @@ export const output: NodeDefinition<OutputConfig> = {
       if (docs.length > 1) throw new Error('JSON export writes one JSON file, so connect only one document to this Output');
       const result = await exportJson(doc, { assets: config.jsonAssets });
       return {
-        outputs: { html, json: result.json, document: doc },
+        outputs: { html, json: result.json, document: doc, result: doc },
         warnings: result.warnings,
         info: { format: 'json', changed: result.changed.length, bytes: new TextEncoder().encode(result.json).length },
       };
     }
     const info: Record<string, number> = { bytes: new TextEncoder().encode(html).length };
     if (docs.length > 1) info.documents = docs.length;
-    return { outputs: { html, document: doc }, info };
+    return { outputs: { html, document: doc, result: doc }, info };
   },
 };

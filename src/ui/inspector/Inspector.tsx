@@ -2,6 +2,7 @@ import { nodeRegistry } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { LibraryEditor } from '../library/LibraryEditor';
 import { TextField } from './fields';
+import { ConnectorEditor } from './ConnectorEditor';
 import { InsertEditor } from './InsertEditor';
 import { OutputEditor } from './OutputEditor';
 import { ResultPanel } from './ResultPanel';
@@ -16,6 +17,7 @@ const EDITORS = {
   snippet: SnippetEditor,
   insert: InsertEditor,
   output: OutputEditor,
+  connector: ConnectorEditor,
 } as const;
 
 export function Inspector({ onMinimise }: { onMinimise: () => void }) {

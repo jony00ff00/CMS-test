@@ -36,7 +36,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `selectors.ts`: `runSelector(doc, config)` → `Selection` (never throws; problems become `warnings`).
   Modes: `css` (hast-util-select), `regex` (text ranges, or `scope: 'block'` for the enclosing block),
   `heading` (heading plus everything up to the next heading of the same or higher level), `jsonField`
-  (JSONPath over `meta.json.data`, selects the mapped blocks), `manual` (stored anchors).
+  (JSONPath over `meta.json.data`, selects the mapped blocks), `manual` (stored anchors), `all` ("Everything":
+  `scope: 'document'` one run of all top-level nodes without edge whitespace, or `'blocks'` each top-level element).
 - Matches are `NodeMatch` (sibling run: `parent` path, `start`..`end` child indexes) or `TextMatch`
   (text index offsets). `doc-index.ts` holds the shared lookups (`indexDocument`, `rangeOf`, `textOf`, sections).
 - `anchors.ts`: `createAnchor` stores a text quote with context plus structural, CSS, heading and JSON-path
@@ -98,7 +99,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   shared document, and `combine: 'append'`, go one after another (`combineDocuments` in `combine.ts`); JSON export
   refuses only in that case; `format` html | json, `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
   preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
-  `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone).
+  `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone);
+  `connector` (input `result`, the port type of Output's `result` output, which carries the finished document;
+  passes it on as a `document`, the same object, so snippet assets and JSON meta are kept; no settings).
 
 ## UI (so far)
 - Nodes can be named (`GraphNode.name`, `renameNode`, one undo step while typing; never re-evaluates). Show nodes

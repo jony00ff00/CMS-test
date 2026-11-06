@@ -76,7 +76,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
       message: !input ? 'Connect a document to this Selector.' : (result?.message ?? (input.doc ? undefined : 'Waiting…')),
     };
   }
-  if (selected && (selected.type === 'documentSource' || selected.type === 'snippet')) {
+  if (selected && (selected.type === 'documentSource' || selected.type === 'snippet' || selected.type === 'connector')) {
     const result = s.results[selected.id];
     const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
     return { label: `Output of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, message: result?.message ?? 'Waiting…' };

@@ -54,14 +54,15 @@ describe('hashing', () => {
 
 describe('node registry', () => {
   it('has the node types with typed ports', () => {
-    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'insert', 'output']);
+    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'insert', 'output', 'connector']);
     const ports = Object.values(nodeRegistry).map((d) => [d.type, d.inputs.map((p) => p.type), d.outputs.map((p) => p.type)]);
     expect(ports).toEqual([
       ['documentSource', [], ['document']],
       ['selector', ['document'], ['selection']],
       ['snippet', ['selection'], ['document']],
       ['insert', ['document'], ['document']],
-      ['output', ['document'], ['html']],
+      ['output', ['document'], ['html', 'result']],
+      ['connector', ['result'], ['document']],
     ]);
   });
 
@@ -463,5 +464,46 @@ describe('combining the changes of several inputs (the default)', () => {
     const data = JSON.parse(r.results.out.outputs.json as string);
     expect(data.faq[0].a).toMatch(/^<aside class="callout callout-info">/);
     expect(data.faq[1].a).toMatch(/<img src="https:\/\/x\.test\/a\.png" alt="A" class="cms-insert" loading="lazy" style="width:100%">$/);
+  });
+});
+
+describe('connector', () => {
+  /** pipeline → Output's Result → Connector → Selector (everything) → Snippet → second Output */
+  function chained(): Graph {
+    const g = pipeline();
+    return {
+      nodes: [
+        ...g.nodes,
+        node('con', 'connector'),
+        node('all', 'selector', { mode: 'all' }),
+        node('snip2', 'snippet'),
+        node('out2', 'output', { fullDocument: true, inlineAssets: false }),
+      ],
+      edges: [
+        ...g.edges,
+        edge('out', 'result', 'con', 'result'),
+        edge('con', 'document', 'all', 'document'),
+        edge('all', 'selection', 'snip2', 'selection'),
+        edge('snip2', 'document', 'out2', 'document'),
+      ],
+    };
+  }
+
+  it('connects only an Output\'s Result to a Connector', () => {
+    const g = chained();
+    expect(edgeError(g, { source: 'out', sourcePort: 'html', target: 'con', targetPort: 'result' }, nodeRegistry)).toMatch(/./);
+    expect(edgeError(g, { source: 'src', sourcePort: 'document', target: 'con', targetPort: 'result' }, nodeRegistry)).toMatch(/./);
+    expect(edgeError(g, { source: 'con', sourcePort: 'document', target: 'sel', targetPort: 'document' }, nodeRegistry)).toMatch(/./); // already has an input
+  });
+
+  it("passes an Output's document on to more nodes, keeping the earlier changes", async () => {
+    const { results } = await new GraphEvaluator(nodeRegistry).evaluate(chained(), ctx);
+    expect(results.con.status).toBe('ok');
+    expect(results.con.outputs.document).toBe(results.out.outputs.document);
+    expect(results.all.info.matches).toBe(1);
+    const page = results.out2.outputs.html as string;
+    // The first Snippet's callouts are inside the second Snippet's callout around everything.
+    expect(page.match(/class="callout/g)!.length).toBe(3);
+    expect(page.indexOf('callout')).toBeLessThan(page.indexOf('<h2'));
   });
 });

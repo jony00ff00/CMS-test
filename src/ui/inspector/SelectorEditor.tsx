@@ -10,6 +10,7 @@ export const SELECTOR_MODES: { value: SelectorMode; label: string }[] = [
   { value: 'heading', label: 'Section under a heading' },
   { value: 'jsonField', label: 'JSON field' },
   { value: 'manual', label: 'Selected by hand' },
+  { value: 'all', label: 'Everything (select all)' },
 ];
 
 const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
@@ -18,6 +19,7 @@ const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
   heading: { mode: 'heading', text: '', match: 'contains', includeHeading: true },
   jsonField: { mode: 'jsonField', path: '$.' },
   manual: { mode: 'manual', anchors: [] },
+  all: { mode: 'all', scope: 'document' },
 };
 
 /** The document coming into a node, e.g. for JSON field path suggestions. */
@@ -67,6 +69,17 @@ export function SelectorFields({
         options={modes}
         onChange={(mode) => set(mode === config.mode ? config : DEFAULTS[mode])}
       />
+      {config.mode === 'all' && (
+        <SelectField
+          label="As"
+          value={config.scope ?? 'document'}
+          options={[
+            { value: 'document', label: 'One selection: the whole document' },
+            { value: 'blocks', label: 'Each block on its own (paragraphs, headings, …)' },
+          ]}
+          onChange={(scope) => patch({ scope })}
+        />
+      )}
       {config.mode === 'css' && (
         <TextField
           label="CSS selector"

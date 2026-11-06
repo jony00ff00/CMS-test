@@ -4,7 +4,8 @@ import { planMerges } from './merge';
 import type { SourceFile } from './source';
 
 /** What travels along an edge. Edges only connect ports of the same type. */
-export type PortType = 'document' | 'selection' | 'html';
+/** `result`: an Output's finished document, which a Connector turns back into a `document`. */
+export type PortType = 'document' | 'selection' | 'html' | 'result';
 
 export interface PortDef {
   name: string;
