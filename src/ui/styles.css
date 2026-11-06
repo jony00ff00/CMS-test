@@ -217,6 +217,7 @@ body.preview-window { margin: 0; height: 100vh; }
 .react-flow__handle.handle-selection { background: var(--port-selection); }
 .react-flow__handle.handle-html { background: var(--port-html); }
 .react-flow__handle.handle-result { background: var(--port-result); }
+.react-flow__handle.handle-any { background: conic-gradient(var(--port-document) 0 25%, var(--port-selection) 0 50%, var(--port-html) 0 75%, var(--port-result) 0); }
 .react-flow__handle.connectingto:not(.valid) { background: var(--danger); }
 .react-flow__edge.edge-document .react-flow__edge-path { stroke: var(--port-document); }
 .react-flow__edge.edge-selection .react-flow__edge-path { stroke: var(--port-selection); }

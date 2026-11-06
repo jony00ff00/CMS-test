@@ -14,6 +14,19 @@ const memory = (): ProjectStorage & { data: Map<string, string> } => {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe('project files', () => {
+  it('opens projects saved when the Connector only took a result (its input was called "result")', () => {
+    const graph: Graph = {
+      nodes: [
+        { id: 'output-1', type: 'output', config: {} },
+        { id: 'connector-2', type: 'connector', config: {} },
+      ],
+      edges: [{ id: 'e1', source: 'output-1', sourcePort: 'result', target: 'connector-2', targetPort: 'result' }],
+    };
+    const { project, warnings } = parseProject(projectToJson({ graph, files: {}, library: {} }));
+    expect(warnings).toEqual([]);
+    expect(project.graph.edges).toEqual([{ ...graph.edges[0], targetPort: 'input' }]);
+  });
+
   it('round-trips the graph, text and binary files, and the library', async () => {
     const html = storeFile('a.html', '<h2>Hi</h2>');
     const word = storeFile('b.docx', new Uint8Array(docx));

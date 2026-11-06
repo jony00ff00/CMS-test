@@ -4,8 +4,10 @@ import { planMerges } from './merge';
 import type { SourceFile } from './source';
 
 /** What travels along an edge. Edges only connect ports of the same type. */
-/** `result`: an Output's finished document, which a Connector turns back into a `document`. */
-export type PortType = 'document' | 'selection' | 'html' | 'result';
+/**
+ * `result`: an Output's finished document. `any` (inputs only, the Connector's): takes every other type.
+ */
+export type PortType = 'document' | 'selection' | 'html' | 'result' | 'any';
 
 export interface PortDef {
   name: string;
@@ -100,7 +102,7 @@ export function edgeError(graph: Graph, edge: EdgeCandidate, registry: NodeRegis
   const inp = targetDef.inputs.find((p) => p.name === edge.targetPort);
   if (!out) return `${sourceDef.label} has no output "${edge.sourcePort}"`;
   if (!inp) return `${targetDef.label} has no input "${edge.targetPort}"`;
-  if (out.type !== inp.type) return `Cannot connect a ${out.type} output to a ${inp.type} input`;
+  if (out.type !== inp.type && inp.type !== 'any') return `Cannot connect a ${out.type} output to a ${inp.type} input`;
   const others = graph.edges.filter((e) => e.id !== edge.id && e.target === edge.target && e.targetPort === edge.targetPort);
   if (!inp.multiple && others.length) return `${targetDef.label} input "${inp.label}" is already connected`;
   if (others.some((e) => e.source === edge.source && e.sourcePort === edge.sourcePort)) return 'These two are already connected';

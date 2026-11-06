@@ -44,15 +44,13 @@ test("a Connector feeds an Output's result into more nodes; a Selector can selec
   await palette.getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
 
-  // The Output's HTML does not fit a Connector; its Result does.
-  await connect(page, 'output-4', 'html', 'connector-5', 'result');
-  await expect(page.locator('.react-flow__edge')).toHaveCount(3);
-  await connect(page, 'output-4', 'result', 'connector-5', 'result');
+  // The Connector takes anything: here the Output's Result.
+  await connect(page, 'output-4', 'result', 'connector-5', 'input');
   await connect(page, 'connector-5', 'document', 'selector-6', 'document');
   await connect(page, 'selector-6', 'selection', 'snippet-7', 'selection');
   await connect(page, 'snippet-7', 'document', 'output-8', 'document');
   await expect(page.locator('.react-flow__edge')).toHaveCount(7);
-  await expect(node(page, 'connector-5')).toContainText('Result as a document');
+  await expect(node(page, 'connector-5')).toContainText('From a document · any kind out');
 
   await node(page, 'selector-6').click();
   await inspector(page).getByLabel('Select by').selectOption({ label: 'Everything (select all)' });
@@ -67,4 +65,39 @@ test("a Connector feeds an Output's result into more nodes; a Selector can selec
   await node(page, 'selector-6').click();
   await inspector(page).getByLabel('As').selectOption('blocks');
   await expect(node(page, 'selector-6')).toContainText(/Every block · \d+ matches/);
+});
+
+test('a Connector turns a selection into a document, and HTML into a document', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  const palette = page.getByRole('complementary', { name: 'Node palette' });
+  await palette.getByRole('button', { name: /^Connector/ }).click();
+  await palette.getByRole('button', { name: /^Output/ }).click();
+  await fitView(page);
+
+  // The Selector picks the two h2 headings; through the Connector they become a document of their own.
+  await connect(page, 'selector-2', 'selection', 'connector-5', 'input');
+  await connect(page, 'connector-5', 'document', 'output-6', 'document');
+  await expect(node(page, 'connector-5')).toContainText('From a selection');
+  await node(page, 'output-6').click();
+  await expect(preview(page).locator('body > h2')).toHaveText(['Getting started', 'Pricing']);
+  await expect(preview(page).locator('p')).toHaveCount(0);
+
+  // The whole document it selects in, instead.
+  await node(page, 'connector-5').click();
+  await expect(inspector(page)).toContainText('a selection');
+  await inspector(page).getByLabel('A selection as a document').selectOption('document');
+  await node(page, 'output-6').click();
+  await expect(preview(page).locator('h1')).toHaveText('Field Guide to Node Gardens');
+  await page.screenshot({ path: 'test-results/connector-any.png' });
+
+  // An Output's HTML into a Connector: a document again (read like an HTML file).
+  await node(page, 'connector-5').click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await palette.getByRole('button', { name: /^Connector/ }).click();
+  await fitView(page);
+  await connect(page, 'output-4', 'html', 'connector-6', 'input');
+  await connect(page, 'connector-6', 'document', 'output-6', 'document');
+  await expect(node(page, 'connector-6')).toContainText('From HTML');
+  await node(page, 'output-6').click();
+  await expect(preview(page).locator('aside.callout h2')).toHaveCount(2);
 });

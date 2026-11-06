@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  connect, DEFAULT_SNIPPET, downstreamOf, edgeError, GraphEvaluator, hashValue, moveEdge, nodeRegistry, stableStringify, storeFile,
-  topologicalSort, validateGraph, type EvalContext, type Graph, type GraphNode, type NodeRegistry,
+  connect, DEFAULT_SNIPPET, downstreamOf, edgeError, GraphEvaluator, hashValue, moveEdge, nodeRegistry, serialize, stableStringify, storeFile,
+  topologicalSort, validateGraph, type CmsDocument, type EvalContext, type Graph, type GraphNode, type NodeRegistry,
 } from '../../src/engine';
 import { fixture } from './helpers';
 
@@ -62,7 +62,7 @@ describe('node registry', () => {
       ['snippet', ['selection'], ['document']],
       ['insert', ['document', 'selection'], ['document']],
       ['output', ['document'], ['html', 'result']],
-      ['connector', ['result'], ['document']],
+      ['connector', ['any'], ['document', 'selection', 'html', 'result']],
     ]);
   });
 
@@ -481,7 +481,7 @@ describe('connector', () => {
       ],
       edges: [
         ...g.edges,
-        edge('out', 'result', 'con', 'result'),
+        edge('out', 'result', 'con', 'input'),
         edge('con', 'document', 'all', 'document'),
         edge('all', 'selection', 'snip2', 'selection'),
         edge('snip2', 'document', 'out2', 'document'),
@@ -489,21 +489,63 @@ describe('connector', () => {
     };
   }
 
-  it('connects only an Output\'s Result to a Connector', () => {
+  /** `from.port` → Connector, evaluated. */
+  async function through(fromNode: string, fromPort: string, config: object = {}) {
+    const g = pipeline();
+    const graph: Graph = { nodes: [...g.nodes, node('con', 'connector', config)], edges: [...g.edges, edge(fromNode, fromPort, 'con', 'input')] };
+    return (await new GraphEvaluator(nodeRegistry).evaluate(graph, ctx)).results;
+  }
+
+  it('takes any kind of output, and gives every kind', () => {
     const g = chained();
-    expect(edgeError(g, { source: 'out', sourcePort: 'html', target: 'con', targetPort: 'result' }, nodeRegistry)).toMatch(/./);
-    expect(edgeError(g, { source: 'src', sourcePort: 'document', target: 'con', targetPort: 'result' }, nodeRegistry)).toMatch(/./);
-    expect(edgeError(g, { source: 'con', sourcePort: 'document', target: 'sel', targetPort: 'document' }, nodeRegistry)).toMatch(/./); // already has an input
+    const free = { ...g, edges: g.edges.filter((e) => e.target !== 'con') };
+    for (const [source, sourcePort] of [['out', 'html'], ['out', 'result'], ['src', 'document'], ['sel', 'selection']]) {
+      expect(edgeError(free, { source, sourcePort, target: 'con', targetPort: 'input' }, nodeRegistry), `${source}.${sourcePort}`).toBeUndefined();
+    }
+    expect(edgeError(g, { source: 'src', sourcePort: 'document', target: 'con', targetPort: 'input' }, nodeRegistry)).toMatch(/already connected/);
+    // Its outputs are typed: each goes only where that kind fits.
+    expect(edgeError(g, { source: 'con', sourcePort: 'selection', target: 'out2', targetPort: 'document' }, nodeRegistry)).toMatch(/selection output to a document input/);
+    // "any" is for inputs: nothing else takes an any-typed value.
+    expect(edgeError(free, { source: 'con', sourcePort: 'html', target: 'snip2', targetPort: 'selection' }, nodeRegistry)).toMatch(/html output/);
   });
 
   it("passes an Output's document on to more nodes, keeping the earlier changes", async () => {
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(chained(), ctx);
     expect(results.con.status).toBe('ok');
+    expect(results.con.info.from).toBe('document');
     expect(results.con.outputs.document).toBe(results.out.outputs.document);
     expect(results.all.info.matches).toBe(1);
     const page = results.out2.outputs.html as string;
     // The first Snippet's callouts are inside the second Snippet's callout around everything.
     expect(page.match(/class="callout/g)!.length).toBe(3);
     expect(page.indexOf('callout')).toBeLessThan(page.indexOf('<h2'));
+  });
+
+  it('turns a document into a selection (all of it, or each block) and HTML', async () => {
+    const r = await through('src', 'document');
+    expect((r.con.outputs.selection as { matches: unknown[] }).matches).toHaveLength(1);
+    expect(r.con.outputs.html as string).toMatch(/^<!doctype html>/);
+    expect(r.con.outputs.result).toBe(r.src.outputs.document);
+    const blocks = await through('src', 'document', { documentToSelection: 'blocks', fullPage: false });
+    expect((blocks.con.outputs.selection as { matches: unknown[] }).matches.length).toBeGreaterThan(5);
+    expect(blocks.con.outputs.html as string).toMatch(/^<h1>/);
+  });
+
+  it('turns a selection into a document of what it selected, or the whole document', async () => {
+    const r = await through('sel', 'selection');
+    expect(r.con.info.from).toBe('selection');
+    expect(serialize(r.con.outputs.document as CmsDocument)).toBe('<h2>Getting started</h2><h2>Pricing</h2>');
+    expect(r.con.outputs.selection).toBe(r.sel.outputs.selection);
+    const whole = await through('sel', 'selection', { selectionToDocument: 'document' });
+    expect(whole.con.outputs.document).toBe(whole.src.outputs.document);
+  });
+
+  it('reads HTML into a document (scripts removed) and passes the HTML on as it was', async () => {
+    const r = await through('out', 'html');
+    expect(r.con.info.from).toBe('html');
+    expect(r.con.outputs.html).toBe(r.out.outputs.html);
+    const doc = r.con.outputs.document as CmsDocument;
+    expect(serialize(doc)).toContain('Field Guide to Node Gardens');
+    expect(serialize(doc)).not.toContain('<script');
   });
 });

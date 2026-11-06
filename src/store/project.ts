@@ -100,6 +100,8 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
   const unique = nodes.filter((n) => (ids.has(n.id) ? (warnings.push(`A second node "${n.id}" was left out`), false) : ids.add(n.id)));
   const graph: Graph = { nodes: unique, edges: [] };
   for (const e of Array.isArray(p.graph?.edges) ? p.graph.edges : []) {
+    // Connectors used to take only a result, on an input called "result"; it is now "input" and takes anything.
+    if (e && e.targetPort === 'result' && unique.find((n) => n.id === e.target)?.type === 'connector') e.targetPort = 'input';
     const error = e && typeof e.id === 'string' ? edgeError(graph, e, registry) : 'incomplete connection';
     if (error) warnings.push(`A connection was left out: ${error}`);
     else graph.edges.push(e);

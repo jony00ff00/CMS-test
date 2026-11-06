@@ -96,7 +96,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `graph.ts`: `Graph` (`nodes`, `edges` with `sourcePort` / `targetPort`), `NodeDefinition` (typed `inputs` /
   `outputs`, `defaultConfig`, `evaluate`, optional `dependencies` for things outside the config such as a
   file's hash). `edgeError` / `connect` reject unknown ports, mismatched port types (`document`, `selection`,
-  `html`), a second connection into one input (unless the port has `multiple: true`, which then gets an array in
+  `html`, `result`; an `any` input takes all), a second connection into one input (unless the port has `multiple: true`, which then gets an array in
   edge order; reorder with `moveEdge`), the same connection twice, self-loops and loops. `topologicalSort`, `downstreamOf`,
   `validateGraph` (for loaded files). `GraphEvaluator.evaluate(graph, { files })` → per-node `NodeResult`
   (`ok` / `waiting` / `error` / `blocked`, outputs, warnings, info, `cached`) and `ran`. A node's cache key
@@ -136,8 +136,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `copySelection` in `insert.ts` copies what it matched, in document order, via a wrap snippet with a
   `cms-extract` marker; the copy drops `data-json-path` and brings its images and the source's snippet assets;
   connecting a selection to an Insert switches it to that kind in `connect`);
-  `connector` (input `result`, the port type of Output's `result` output, which carries the finished document;
-  passes it on as a `document`, the same object, so snippet assets and JSON meta are kept; no settings).
+  `connector` (one input `input` of port type `any`, which `edgeError` lets every output type into; outputs
+  `document`, `selection`, `html` and `result`, all filled from whatever came in (`connectorInputKind`: a string is
+  HTML, `kind: 'selection'` a selection, anything else a document / result). Documents pass as the same object
+  (snippet assets, JSON meta kept); a selection becomes a new document of its content (`copySelection`, default)
+  or its whole document (`selectionToDocument`); a document becomes a selection of everything or each block
+  (`documentToSelection`); HTML is read with `parseHtml` and passed on unchanged; other HTML out is `serialize`d
+  (`fullPage`, default true). `parseProject` renames old edges into a connector's `result` input to `input`).
 
 ## UI (so far)
 - Nodes can be named (`GraphNode.name`, `renameNode`, one undo step while typing; never re-evaluates). Show nodes
@@ -233,8 +238,9 @@ Tests added, `npm test && npm run build` green, and a screenshot of the UI if it
 M0 scaffold · M1 document engine · M1b JSON import · M2 selectors and anchors · M3 snippet application ·
 M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet library · M8 persistence and export.
 All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P5
-(of P1 text · P2 tables, pictures, groups · P3 source options and slide preview · P4 Slide selector · P5 slide-deck
-Output · P6 layout and media). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+(text · tables, pictures, groups · source options and slide preview · Slide selector · slide-deck Output; the
+PowerPoint work stops there: P6, shape positions, embedded media and theme colours / fonts, is not planned),
+Connector that turns any input into any output. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

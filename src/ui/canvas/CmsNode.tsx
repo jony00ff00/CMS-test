@@ -154,7 +154,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       const several = typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : '';
       return `${several}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
     case 'connector':
-      return typeof info.blocks === 'number' ? `Result as a document · ${info.blocks} block${info.blocks === 1 ? '' : 's'}` : 'Connect an Output’s Result';
+      return typeof info.from === 'string' ? `From ${info.from === 'html' ? 'HTML' : `a ${info.from}`} · any kind out` : 'Connect anything';
     default:
       return '';
   }
