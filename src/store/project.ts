@@ -89,7 +89,10 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
     }
   }
 
-  const nodes = (Array.isArray(p.graph?.nodes) ? p.graph.nodes : []).filter((n) => {
+  const rawNodes = Array.isArray(p.graph?.nodes) ? p.graph.nodes : [];
+  const rawEdges = Array.isArray(p.graph?.edges) ? p.graph.edges : [];
+  upgradeInsertNodes(rawNodes, rawEdges, warnings);
+  const nodes = rawNodes.filter((n) => {
     const ok = n && typeof n.id === 'string' && typeof n.type === 'string' && registry[n.type];
     if (!ok) warnings.push(`A node of unknown type "${String(n?.type)}" was left out`);
     return ok;
@@ -99,7 +102,7 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
   const ids = new Set<string>();
   const unique = nodes.filter((n) => (ids.has(n.id) ? (warnings.push(`A second node "${n.id}" was left out`), false) : ids.add(n.id)));
   const graph: Graph = { nodes: unique, edges: [] };
-  for (const e of Array.isArray(p.graph?.edges) ? p.graph.edges : []) {
+  for (const e of rawEdges) {
     // Connectors used to take only a result, on an input called "result"; it is now "input" and takes anything.
     if (e && e.targetPort === 'result' && unique.find((n) => n.id === e.target)?.type === 'connector') e.targetPort = 'input';
     const error = e && typeof e.id === 'string' ? edgeError(graph, e, registry) : 'incomplete connection';
@@ -137,4 +140,39 @@ export function fromBase64(text: string): Uint8Array {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+/**
+ * Insert nodes (before Object nodes) held their content and where it goes. Now a Selector gives the place (its
+ * Point output) and an Object holds the content: each Insert becomes a Selector (with the old place) feeding an
+ * Object with the same id, so connections out of it stay as they were.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function upgradeInsertNodes(nodes: any[], edges: any[], warnings: string[]) {
+  const taken = new Set(nodes.map((n) => n?.id));
+  let upgraded = 0;
+  for (const n of [...nodes]) {
+    if (n?.type !== 'insert' || typeof n.id !== 'string') continue;
+    const where = n.config?.where ?? { mode: 'point' };
+    let id = `${n.id}-point`;
+    for (let i = 2; taken.has(id); i++) id = `${n.id}-point-${i}`;
+    taken.add(id);
+    const selectorConfig =
+      where.mode === 'selector' && where.selector ? { ...where.selector, place: where.place ?? 'after' } : { mode: 'point', ...(where.point ? { point: where.point } : {}) };
+    const position = n.position ? { x: n.position.x - 260, y: n.position.y + 140 } : undefined;
+    nodes.splice(nodes.indexOf(n), 0, { id, type: 'selector', name: n.name ? `${n.name} (point)` : undefined, config: selectorConfig, ...(position && { position }) });
+    n.type = 'object';
+    n.config = { content: n.config?.content ?? { kind: 'imageUrl', url: '', alt: '' } };
+    for (const e of edges) {
+      if (e?.target === n.id && e.targetPort === 'document') e.target = id;
+    }
+    edges.push({ id: `${id}-to-${n.id}`, source: id, sourcePort: 'point', target: n.id, targetPort: 'point' });
+    upgraded++;
+  }
+  for (const n of nodes) if (n && n.name === undefined) delete n.name;
+  if (upgraded) {
+    warnings.push(
+      `${upgraded} Insert node${upgraded === 1 ? ' is' : 's are'} now ${upgraded === 1 ? 'an Object node' : 'Object nodes'}: where ${upgraded === 1 ? 'it goes' : 'they go'} is set by a new Selector (its Point output)`,
+    );
+  }
 }

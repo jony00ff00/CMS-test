@@ -2,7 +2,9 @@
 import type { NodeRegistry } from '../graph';
 import { connector, connectorInputKind } from './connector';
 import { documentSource } from './document-source';
-import { insert } from './insert';
+import { combinator } from './combinator';
+import { extractor } from './extractor';
+import { object } from './object';
 import { output } from './output';
 import { selector } from './selector';
 import { snippet } from './snippet';
@@ -11,14 +13,18 @@ export const nodeRegistry: NodeRegistry = {
   [documentSource.type]: documentSource,
   [selector.type]: selector,
   [snippet.type]: snippet,
-  [insert.type]: insert,
+  [extractor.type]: extractor,
+  [object.type]: object,
   [output.type]: output,
   [connector.type]: connector,
+  [combinator.type]: combinator,
 };
 
-export { connector, connectorInputKind, documentSource, insert, output, selector, snippet };
+export { combinator, connector, connectorInputKind, documentSource, extractor, object, output, selector, snippet };
 export type { ConnectorConfig, ConnectorInputKind } from './connector';
-export type { InsertNodeConfig } from './insert';
-export { DEFAULT_SNIPPET, type SnippetNodeConfig } from './snippet';
+export type { ObjectNodeConfig } from './object';
+export type { CombinatorConfig } from './combinator';
+export type { SelectorNodeConfig } from './selector';
+export { cleanClassName, customSnippet, DEFAULT_SNIPPET, type CustomSnippet, type SnippetNodeConfig } from './snippet';
 export type { DocumentSourceConfig } from './document-source';
 export type { OutputConfig } from './output';

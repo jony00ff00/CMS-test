@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   buildInsertion, caretTarget, createAnchor, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, indexDocument, INSERT_MARKER_CSS,
-  insertionPointAt, markInsertionPoint, rangeOf, serialize, type CmsDocument, type InsertNodeConfig, type InsertWhere, type Match,
-  type Selection, type SelectorConfig,
+  insertionPointAt, markInsertionPoint, rangeOf, serialize, type CmsDocument, type InsertWhere, type Match, type ObjectNodeConfig,
+  type PointValue, type Selection, type SelectorConfig, type SelectorNodeConfig,
 } from '../../engine';
 import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
@@ -25,11 +25,22 @@ interface PreviewSource {
   html?: string;
   /** The selected manual Selector that text can be added to. */
   manualSelectorId?: string;
-  /** The selected Insert node: show where it inserts, and let a click pick the point. */
-  insert?: { nodeId: string; where: InsertWhere; block: boolean };
-  /** The selected node is an Insert node (both views). */
+  /** Show where a point is (marker); with `nodeId` (a Selector in point mode) a click picks the point. */
+  insert?: { nodeId?: string; where: InsertWhere; block: boolean };
+  /** The selected node is an Object node (both views: where it goes, and the result). */
   insertNodeId?: string;
   message?: string;
+}
+
+/**
+ * The same `where` object for the same Selector settings: the page is rebuilt when it changes, and a rebuild
+ * closes the "Point here" popup, so it must not change on unrelated updates (e.g. the autosave time).
+ */
+const pointWheres = new WeakMap<object, InsertWhere>();
+function pointWhere(config: Extract<SelectorConfig, { mode: 'point' }>): InsertWhere {
+  let where = pointWheres.get(config);
+  if (!where) pointWheres.set(config, (where = { mode: 'point', point: config.point }));
+  return where;
 }
 
 function inputOf(s: EditorState, nodeId: string, port: string) {
@@ -41,25 +52,39 @@ function inputOf(s: EditorState, nodeId: string, port: string) {
 
 function previewSource(s: EditorState, showResult: boolean): PreviewSource {
   const selected = s.graph.nodes.find((n) => n.id === s.selectedId);
-  if (selected?.type === 'insert') {
-    const config = selected.config as InsertNodeConfig;
+  if (selected?.type === 'object') {
+    const config = selected.config as ObjectNodeConfig;
     if (showResult) {
       const result = s.results[selected.id];
       const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
       return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, message: result?.message ?? 'Waiting…' };
     }
-    const input = inputOf(s, selected.id, 'document');
+    const edge = s.graph.edges.find((e) => e.target === selected.id && e.targetPort === 'point');
+    const pointer = edge && s.graph.nodes.find((n) => n.id === edge.source);
+    const r = edge && s.results[edge.source];
+    const point = r?.status === 'ok' ? (r.outputs[edge!.sourcePort] as PointValue | undefined) : undefined;
     const built = buildInsertion(config.content, s.files);
     // Until the content is complete, guess from its kind whether it is block content.
     const block = 'nodes' in built ? built.block : config.content.kind === 'video' || config.content.kind === 'videoUrl' || config.content.kind === 'code';
-    const placed = config.where.mode === 'selector' || !!config.where.point;
+    // Clicks move the point when it comes straight from a Selector in point mode.
+    const pickable = pointer?.type === 'selector' && (pointer.config as SelectorConfig).mode === 'point';
     return {
-      label: `Input of ${nodeLabel(selected)} · ${placed ? 'the marker shows where the insertion goes; click to move it' : 'click where the insertion should go'}`,
+      label: `Where ${nodeLabel(selected)} goes${pointer ? ` (the Point of ${nodeLabel(pointer)})` : ''}${pickable ? ' · click to move it' : ''}`,
+      doc: point?.document,
+      insert: point ? { nodeId: pickable ? pointer!.id : undefined, where: point.where, block } : undefined,
+      insertNodeId: selected.id,
+      message: !edge ? "Connect a Selector's Point to this Object." : point ? undefined : (r?.message ?? 'Waiting…'),
+    };
+  }
+  if (selected?.type === 'selector' && (selected.config as SelectorConfig).mode === 'point') {
+    const input = inputOf(s, selected.id, 'document');
+    const config = selected.config as Extract<SelectorConfig, { mode: 'point' }>;
+    return {
+      label: `Input of ${nodeLabel(selected)} · ${config.point ? 'the marker shows the point; click to move it' : 'click where the point should be'}`,
       doc: input?.doc,
       from: input?.from,
-      insert: { nodeId: selected.id, where: config.where, block },
-      insertNodeId: selected.id,
-      message: !input ? 'Connect a document to this Insert node.' : input.doc ? undefined : 'Waiting…',
+      insert: { nodeId: selected.id, where: pointWhere(config), block: false },
+      message: !input ? 'Connect a document to this Selector.' : input.doc ? undefined : 'Waiting…',
     };
   }
   if (selected?.type === 'selector') {
@@ -76,7 +101,7 @@ function previewSource(s: EditorState, showResult: boolean): PreviewSource {
       message: !input ? 'Connect a document to this Selector.' : (result?.message ?? (input.doc ? undefined : 'Waiting…')),
     };
   }
-  if (selected && (selected.type === 'documentSource' || selected.type === 'snippet' || selected.type === 'connector')) {
+  if (selected && ['documentSource', 'snippet', 'connector', 'extractor', 'combinator'].includes(selected.type)) {
     const result = s.results[selected.id];
     const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
     return { label: `Output of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, message: result?.message ?? 'Waiting…' };
@@ -196,7 +221,7 @@ export function Preview({ height, onHeightChange, onDetachedChange, minimised, o
       if (msg.type === 'selection-cleared') setPicked(undefined);
       if (msg.type === 'caret') {
         const current = sourceRef.current;
-        const target = current.insert && current.doc ? caretTarget(current.doc, msg.offset) : undefined;
+        const target = current.insert?.nodeId && current.doc ? caretTarget(current.doc, msg.offset) : undefined;
         setCaret(target ? { offset: msg.offset, rect: msg.rect, name: target.name } : undefined);
       }
     };
@@ -210,13 +235,13 @@ export function Preview({ height, onHeightChange, onDetachedChange, minimised, o
     iframe.current?.contentWindow?.postMessage({ source: BRIDGE_SOURCE, type: 'clear-selection' }, '*');
   };
 
-  /** Put the selected Insert node's insertion here. */
+  /** Move the point of the Selector (in point mode) here. */
   const placeInsertion = (choice: 'cursor' | 'before' | 'after') => {
-    if (!caret || !source.insert || !source.doc) return;
+    if (!caret || !source.insert?.nodeId || !source.doc) return;
     const point = insertionPointAt(source.doc, caret.offset, choice);
     setCaret(undefined);
     if (!point) return;
-    editorStore.getState().updateConfig<InsertNodeConfig>(source.insert.nodeId, (c) => ({ ...c, where: { mode: 'point', point } }));
+    editorStore.getState().updateConfig<SelectorNodeConfig>(source.insert.nodeId, (c) => ({ ...c, mode: 'point', point }) as SelectorNodeConfig);
   };
 
   const save = (target: 'new' | 'existing') => {
@@ -272,17 +297,17 @@ export function Preview({ height, onHeightChange, onDetachedChange, minimised, o
             </button>
           </div>
         )}
-        {caret && source.insert && frameBox && (
+        {caret && source.insert?.nodeId && frameBox && (
           <div
             className="selection-actions insert-actions"
             role="dialog"
-            aria-label="Insert here"
+            aria-label="Point here"
             style={{
               left: clamp(frameBox.left + caret.rect.x, frameBox.left + 8, Math.min(frameBox.right, win.innerWidth) - 420),
               top: clamp(frameBox.top + caret.rect.y + 12, frameBox.top + 8, Math.min(frameBox.bottom, win.innerHeight) - 48),
             }}
           >
-            <span className="quote">Insert</span>
+            <span className="quote">Point</span>
             {!source.insert.block && (
               <button type="button" onClick={() => placeInsertion('cursor')}>
                 At the cursor
@@ -326,7 +351,7 @@ export function Preview({ height, onHeightChange, onDetachedChange, minimised, o
       <div className="preview-head">
         <h2>Preview</h2>
         <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
-        {!popup && !minimised && page && source.doc && !source.insertNodeId && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+        {!popup && !minimised && page && source.doc && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
         {!popup && !minimised && insertToggle}
         {popup ? (
           <span className="preview-actions">
@@ -353,7 +378,7 @@ export function Preview({ height, onHeightChange, onDetachedChange, minimised, o
               <div className="preview-head">
                 <h2>Preview</h2>
                 <span className="muted small">{label}</span>
-                {page && source.doc && !source.insertNodeId && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+                {page && source.doc && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
                 {insertToggle}
                 <span className="preview-actions">
                   <button type="button" onClick={attach}>

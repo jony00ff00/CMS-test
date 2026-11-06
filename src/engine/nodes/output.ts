@@ -36,7 +36,7 @@ export const output: NodeDefinition<OutputConfig> = {
     { name: 'result', type: 'result', label: 'Result' },
   ],
   defaultConfig: () => ({ format: 'html', fullDocument: true, inlineAssets: true }),
-  mergesInputs: (config) => (config.combine ?? 'merge') === 'merge',
+  mergePorts: (config) => ((config.combine ?? 'merge') === 'merge' ? ['document'] : undefined),
   async evaluate(inputs, config): Promise<NodeOutput> {
     const docs = inputs.document as CmsDocument[];
     const doc = combineDocuments(docs);

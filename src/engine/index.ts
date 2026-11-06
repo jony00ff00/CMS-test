@@ -20,5 +20,6 @@ export * from './library';
 export * from './hash';
 export * from './graph';
 export * from './merge';
+export * from './convert';
 export * from './nodes';
 export const ENGINE_VERSION = '0.5.0';

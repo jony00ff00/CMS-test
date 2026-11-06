@@ -176,7 +176,7 @@ describe('inserting at a picked point', () => {
 
   it('waits for a point to be picked', async () => {
     const r = await insertContent(html(), { mode: 'point' }, { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' }, files);
-    expect(r.waiting).toBe('Click in the preview where the insertion should go');
+    expect(r.waiting).toBe('Pick the point: select its Selector and click in the preview');
   });
 
   it('never changes the document it is given', async () => {
@@ -221,17 +221,19 @@ describe('preview marker', () => {
   });
 });
 
-describe('Insert node', () => {
-  it('runs in a graph and re-runs when its uploaded file changes', async () => {
+describe('Object node', () => {
+  it('runs in a graph at a Selector’s Point and re-runs when its uploaded file changes', async () => {
     const source = storeFile('a.html', '<h2>A</h2><p>x</p>', 'src');
     const graph: Graph = {
       nodes: [
         { id: 's', type: 'documentSource', config: { fileId: 'src' } },
-        { id: 'i', type: 'insert', config: { content: { kind: 'image', fileId: 'png', alt: 'Logo' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h2' }, place: 'after' } } },
+        { id: 'p', type: 'selector', config: { mode: 'css', selector: 'h2', place: 'after' } },
+        { id: 'i', type: 'object', config: { content: { kind: 'image', fileId: 'png', alt: 'Logo' } } },
         { id: 'o', type: 'output', config: { fullDocument: false } },
       ],
       edges: [
-        { id: 'e1', source: 's', sourcePort: 'document', target: 'i', targetPort: 'document' },
+        { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
+        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
         { id: 'e2', source: 'i', sourcePort: 'document', target: 'o', targetPort: 'document' },
       ],
     };
@@ -244,16 +246,64 @@ describe('Insert node', () => {
     expect(second.ran).toEqual(['i', 'o']);
   });
 
-  it('waits until there is something to insert', async () => {
+  it('goes before, after or inside each match, as the Selector’s Point output says', async () => {
+    const source = storeFile('a.html', '<h2>A</h2><p>x</p>', 'src');
+    const run = async (place: string) => {
+      const graph: Graph = {
+        nodes: [
+          { id: 's', type: 'documentSource', config: { fileId: 'src' } },
+          { id: 'p', type: 'selector', config: { mode: 'css', selector: 'p', place } },
+          { id: 'i', type: 'object', config: { content: { kind: 'code', code: '<b>!</b>', render: 'html' } } },
+        ],
+        edges: [
+          { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
+          { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
+        ],
+      };
+      const r = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files: { src: source } });
+      return serialize(r.results.i.outputs.document as CmsDocument);
+    };
+    expect(await run('before')).toBe('<h2>A</h2><b>!</b><p>x</p>');
+    expect(await run('end')).toBe('<h2>A</h2><p>x<b>!</b></p>');
+  });
+
+  it('waits for a point picked in the preview, and until there is something to add', async () => {
+    const files = { src: storeFile('a.html', '<p>x</p>', 'src') };
+    const graph = (pointConfig: object): Graph => ({
+      nodes: [
+        { id: 's', type: 'documentSource', config: { fileId: 'src' } },
+        { id: 'p', type: 'selector', config: pointConfig },
+        { id: 'i', type: 'object', config: nodeRegistry.object.defaultConfig() },
+      ],
+      edges: [
+        { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
+        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
+      ],
+    });
+    const unpicked = await new GraphEvaluator(nodeRegistry).evaluate(graph({ mode: 'point' }), { files });
+    expect(unpicked.results.p).toMatchObject({ status: 'waiting', message: 'Click in the preview to pick the point' });
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(graph({ mode: 'css', selector: 'p' }), { files });
+    expect(r.results.i).toMatchObject({ status: 'waiting', message: 'Enter the address of the image or video' });
+  });
+
+  it('adds at a point picked in the preview (a Selector in point mode)', async () => {
+    const doc = parseHtml('<p>One two three</p><p>Four</p>');
+    const point = insertionPointAt(doc, buildTextIndex(doc.tree).text.indexOf('two') + 3, 'cursor')!;
     const graph: Graph = {
       nodes: [
         { id: 's', type: 'documentSource', config: { fileId: 'src' } },
-        { id: 'i', type: 'insert', config: nodeRegistry.insert.defaultConfig() },
+        { id: 'p', type: 'selector', config: { mode: 'point', point } },
+        { id: 'i', type: 'object', config: { content: { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' } } },
       ],
-      edges: [{ id: 'e1', source: 's', sourcePort: 'document', target: 'i', targetPort: 'document' }],
+      edges: [
+        { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
+        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
+      ],
     };
-    const r = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files: { src: storeFile('a.html', '<p>x</p>', 'src') } });
-    expect(r.results.i).toMatchObject({ status: 'waiting', message: 'Enter the address of the image or video' });
+    const r = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files: { src: storeFile('a.html', serialize(doc), 'src') } });
+    expect(serialize(r.results.i.outputs.document as CmsDocument)).toContain('<p>One two<img');
+    // As a selection, a point is the text next to it.
+    expect(r.results.p.info.matches).toBe(1);
   });
 });
 
@@ -351,19 +401,21 @@ describe('inserting selected content', () => {
         { id: 'a', type: 'documentSource', config: { fileId: 'a' } },
         { id: 'b', type: 'documentSource', config: { fileId: 'b' } },
         { id: 'sel', type: 'selector', config: { mode: 'all' } },
-        { id: 'ins', type: 'insert', config: { content: { kind: 'selection' }, where: after('h1') } },
-        { id: 'plain', type: 'insert', config: nodeRegistry.insert.defaultConfig() },
+        { id: 'pt', type: 'selector', config: { mode: 'css', selector: 'h1', place: 'after' } },
+        { id: 'ins', type: 'object', config: { content: { kind: 'selection' } } },
+        { id: 'plain', type: 'object', config: nodeRegistry.object.defaultConfig() },
       ],
       edges: [
-        { id: 'e1', source: 'a', sourcePort: 'document', target: 'ins', targetPort: 'document' },
+        { id: 'e1', source: 'a', sourcePort: 'document', target: 'pt', targetPort: 'document' },
+        { id: 'e1b', source: 'pt', sourcePort: 'point', target: 'ins', targetPort: 'point' },
         { id: 'e2', source: 'b', sourcePort: 'document', target: 'sel', targetPort: 'document' },
         { id: 'e3', source: 'sel', sourcePort: 'selection', target: 'ins', targetPort: 'selection' },
-        { id: 'e4', source: 'a', sourcePort: 'document', target: 'plain', targetPort: 'document' },
+        { id: 'e4', source: 'pt', sourcePort: 'point', target: 'plain', targetPort: 'point' },
       ],
     };
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(g, { files: { a: html, b: notes } });
     expect(serialize(results.ins.outputs.document as CmsDocument)).toBe('<h1>A</h1><blockquote>Quoted</blockquote><p>Text</p>');
-    // Without the Selection input connected, an Insert node still runs (here: waiting for an address).
+    // Without the Selection input connected, an Object node still runs (here: waiting for an address).
     expect(results.plain.status).toBe('waiting');
     expect(results.plain.message).toMatch(/address/i);
   });

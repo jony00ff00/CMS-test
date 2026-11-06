@@ -5,9 +5,10 @@ import type { SourceFile } from './source';
 
 /** What travels along an edge. Edges only connect ports of the same type. */
 /**
- * `result`: an Output's finished document. `any` (inputs only, the Connector's): takes every other type.
+ * `point`: where something goes in a document (a Selector's Point). `result`: an Output's finished document.
+ * `any` (inputs only, the Connector's and Combinator's): takes every other type.
  */
-export type PortType = 'document' | 'selection' | 'html' | 'result' | 'any';
+export type PortType = 'document' | 'selection' | 'point' | 'html' | 'result' | 'any';
 
 export interface PortDef {
   name: string;
@@ -52,10 +53,11 @@ export interface NodeDefinition<Config = unknown> {
   /** Extra things the result depends on besides config and inputs (e.g. the content hash of a file). */
   dependencies?(config: Config, ctx: EvalContext): unknown;
   /**
-   * For nodes with a `multiple` input: when this returns true, several inputs that come from the same document
-   * are combined by applying each input's changes in turn (see merge.ts), and the node gets one document.
+   * Inputs whose documents are combined into one (in this order): when they are changed versions of the same
+   * document, the evaluator runs each later input's nodes on the previous input's result (see merge.ts) and passes
+   * the one merged document into the first of these ports. Undefined: no merging.
    */
-  mergesInputs?(config: Config): boolean;
+  mergePorts?(config: Config): string[] | undefined;
   /** Must not change its inputs or config. Inputs are keyed by input port name. */
   evaluate(inputs: Record<string, unknown>, config: Config, ctx: EvalContext): Promise<NodeOutput>;
 }

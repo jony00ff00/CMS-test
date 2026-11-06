@@ -220,15 +220,47 @@ describe('deleting', () => {
   });
 });
 
-describe('project files and Insert nodes', () => {
-  it('keeps the image or video an Insert node uses', () => {
+describe('project files and Object nodes', () => {
+  it('keeps the image or video an Object node uses', () => {
     const img = storeFile('logo.png', new Uint8Array([137, 80, 78, 71]));
     const graph: Graph = {
-      nodes: [{ id: 'insert-1', type: 'insert', config: { content: { kind: 'image', fileId: img.id, alt: '' }, where: { mode: 'point' } } }],
+      nodes: [{ id: 'object-1', type: 'object', config: { content: { kind: 'image', fileId: img.id, alt: '' } } }],
       edges: [],
     };
     const { project } = parseProject(projectToJson({ graph, files: { [img.id]: img }, library: {} }));
     expect(project.files[img.id]?.hash).toBe(img.hash);
+  });
+
+  it('turns Insert nodes from older projects into a Selector (where) and an Object (what)', () => {
+    const anchor = { id: 'a1', target: 'text', textQuote: { exact: 'x', prefix: '', suffix: '' } };
+    const old = {
+      nodes: [
+        { id: 'src', type: 'documentSource', config: {} },
+        { id: 'insert-2', type: 'insert', name: 'Logo', position: { x: 400, y: 100 }, config: { content: { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h2' }, place: 'before' } } },
+        { id: 'insert-3', type: 'insert', config: { content: { kind: 'code', code: 'x', render: 'block' }, where: { mode: 'point', point: { anchor, place: 'after' } } } },
+        { id: 'out', type: 'output', config: {} },
+      ],
+      edges: [
+        { id: 'e1', source: 'src', sourcePort: 'document', target: 'insert-2', targetPort: 'document' },
+        { id: 'e2', source: 'insert-2', sourcePort: 'document', target: 'insert-3', targetPort: 'document' },
+        { id: 'e3', source: 'insert-3', sourcePort: 'document', target: 'out', targetPort: 'document' },
+      ],
+    };
+    const { project, warnings } = parseProject(JSON.stringify({ format: 'node-cms-project', version: 1, graph: old, files: [], library: {} }));
+    expect(warnings).toEqual(['2 Insert nodes are now Object nodes: where they go is set by a new Selector (its Point output)']);
+    const byId = Object.fromEntries(project.graph.nodes.map((n) => [n.id, n]));
+    expect(byId['insert-2']).toMatchObject({ type: 'object', name: 'Logo', config: { content: { kind: 'imageUrl' } } });
+    expect(byId['insert-2'].config).not.toHaveProperty('where');
+    expect(byId['insert-2-point']).toMatchObject({ type: 'selector', name: 'Logo (point)', position: { x: 140, y: 240 }, config: { mode: 'css', selector: 'h2', place: 'before' } });
+    expect(byId['insert-3-point']).toMatchObject({ type: 'selector', config: { mode: 'point', point: { anchor, place: 'after' } } });
+    const edges = project.graph.edges.map((e) => `${e.source}.${e.sourcePort}>${e.target}.${e.targetPort}`).sort();
+    expect(edges).toEqual([
+      'insert-2-point.point>insert-2.point',
+      'insert-2.document>insert-3-point.document',
+      'insert-3-point.point>insert-3.point',
+      'insert-3.document>out.document',
+      'src.document>insert-2-point.document',
+    ]);
   });
 });
 

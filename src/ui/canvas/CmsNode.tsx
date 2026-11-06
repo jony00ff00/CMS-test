@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, useState } from 'react';
-import { describeInsertion, nodeRegistry, refStatus, type GraphNode, type InsertNodeConfig, type NodeResult, type SelectorConfig, type SnippetNodeConfig } from '../../engine';
+import { describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -117,6 +117,17 @@ const SLIDE_PART_LABELS = { slide: 'Slides', title: 'Slide titles', content: 'Sl
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 'es'}`;
 
+function describeSelector(c: SelectorConfig): string {
+  return c.mode === 'css' ? c.selector || '(empty)'
+    : c.mode === 'regex' ? `/${c.pattern}/${c.flags ?? ''}`
+    : c.mode === 'heading' ? `Section "${c.text}"`
+    : c.mode === 'jsonField' ? c.path
+    : c.mode === 'all' ? (c.scope === 'blocks' ? 'Every block' : 'Everything')
+    : c.mode === 'slide' ? `${SLIDE_PART_LABELS[c.part ?? 'slide']} · ${c.slides?.trim() ? `slides ${c.slides.trim()}` : 'all slides'}${c.title?.trim() ? ` titled “${c.title.trim()}”` : ''}`
+    : c.mode === 'point' ? 'A point'
+    : `${c.anchors.length} saved selection${c.anchors.length === 1 ? '' : 's'}`;
+}
+
 function summarize(node: GraphNode, result: NodeResult | undefined): string {
   const info = result?.info ?? {};
   switch (node.type) {
@@ -124,35 +135,34 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       if (!info.file) return 'No file chosen';
       if (typeof info.slideCount !== 'number') return `${info.file}`;
       return `${info.file} · ${info.slides === info.slideCount ? '' : `${info.slides} of `}${info.slideCount} slide${info.slideCount === 1 ? '' : 's'}${info.hiddenSlides ? ` (${info.hiddenSlides} hidden)` : ''}`;
-    case 'selector': {
-      const c = node.config as SelectorConfig;
-      const what =
-        c.mode === 'css' ? c.selector || '(empty)'
-        : c.mode === 'regex' ? `/${c.pattern}/${c.flags ?? ''}`
-        : c.mode === 'heading' ? `Section "${c.text}"`
-        : c.mode === 'jsonField' ? c.path
-        : c.mode === 'all' ? (c.scope === 'blocks' ? 'Every block' : 'Everything')
-        : c.mode === 'slide' ? `${SLIDE_PART_LABELS[c.part ?? 'slide']} · ${c.slides?.trim() ? `slides ${c.slides.trim()}` : 'all slides'}${c.title?.trim() ? ` titled “${c.title.trim()}”` : ''}`
-        : `${c.anchors.length} saved selection${c.anchors.length === 1 ? '' : 's'}`;
-      return typeof info.matches === 'number' ? `${what} · ${plural(info.matches, 'match')}` : what;
+    case 'selector':
+    case 'extractor': {
+      const c = node.config as SelectorNodeConfig;
+      if (c.mode === 'point') return c.point ? `A point${info.needsAttention ? ' (needs attention)' : ''}` : 'Click in the preview to pick the point';
+      const kept = node.type === 'extractor' && typeof info.matches === 'number' ? ' · the rest removed' : '';
+      return `${describeSelector(c)}${typeof info.matches === 'number' ? ` · ${plural(info.matches, 'match')}` : ''}${kept}`;
     }
     case 'snippet': {
       const c = node.config as SnippetNodeConfig;
       const applied = typeof info.applied === 'number' ? ` · applied ${info.applied}×` : '';
-      const version = c.ref ? ` v${c.ref.version}` : ' (custom)';
-      return `${c.snippet.name}${version}${applied}`;
+      const name = c.custom ? `Custom .${c.custom.className}` : `${c.snippet.name}${c.ref ? ` v${c.ref.version}` : ' (custom)'}`;
+      const extra = c.css?.trim() || c.js?.trim() ? ' + own CSS/JS' : '';
+      return `${name}${extra}${applied}`;
     }
-    case 'insert': {
-      const c = node.config as InsertNodeConfig;
-      const where = c.where.mode === 'selector' ? `${c.where.place} each match` : c.where.point ? 'at a picked point' : 'no point yet';
-      return `${describeInsertion(c.content)} · ${where}`;
+    case 'object': {
+      const c = node.config as ObjectNodeConfig;
+      const added = typeof info.inserted === 'number' ? ` · added ${info.inserted}×` : '';
+      return `${describeInsertion(c.content)}${added}`;
     }
+    case 'combinator':
+      return info.combined !== undefined
+        ? `A + B · ${info.combined === 2 ? 'merged' : info.combined}`
+        : typeof info.kinds === 'string' ? `One input (${info.kinds})` : 'Connect A and B';
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
       if (info.format === 'slides') return `Slide deck · ${info.slides} slide${info.slides === 1 ? '' : 's'}`;
       if (typeof info.bytes !== 'number') return 'Nothing to show yet';
-      const several = typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : '';
-      return `${several}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
+      return `${typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : ''}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
     case 'connector':
       return typeof info.from === 'string' ? `From ${info.from === 'html' ? 'HTML' : `a ${info.from}`} · any kind out` : 'Connect anything';
     default:

@@ -5,6 +5,7 @@ import { resolveAnchors, type ResolveOptions } from './anchors';
 import { elementMatch, enclosingBlock, headingLevel, indexDocument, sameMatch, sectionMatch, slidesOf, textOf, type DocIndex } from './doc-index';
 import { parseSlideRange } from './pptx';
 import { queryJsonPaths } from './json';
+import type { InsertionPoint } from './insert';
 import type { Anchor, CmsDocument, Match, Selection, SelectionMatch } from './types';
 
 export type SelectorConfig =
@@ -32,6 +33,11 @@ export type SelectorConfig =
       mode: 'all';
       /** "document" (default): everything as one match. "blocks": each top-level block as its own match. */
       scope?: 'document' | 'blocks';
+    }
+  | {
+      /** A point picked in the preview (where an Object goes); as a selection, the text next to it. */
+      mode: 'point';
+      point?: InsertionPoint;
     }
   | {
       mode: 'slide';
@@ -77,6 +83,12 @@ export function runSelector(doc: CmsDocument, config: SelectorConfig): Selection
     case 'slide':
       matches = selectSlides(ix, config, warnings);
       break;
+    case 'point': {
+      const r = config.point ? resolveAnchors(ix, [config.point.anchor])[0] : undefined;
+      if (config.point && !r?.match) warnings.push(`The point needs attention: ${r?.reason ?? 'not found'}`);
+      matches = r?.match ? [{ ...withText(ix, r.match), anchorId: r.anchorId, status: r.status, confidence: r.confidence }] : [];
+      break;
+    }
     default:
       warnings.push(`Unknown selector mode "${(config as { mode: string }).mode}"`);
       matches = [];

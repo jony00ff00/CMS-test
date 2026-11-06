@@ -1,12 +1,11 @@
 import type { ChangeEvent } from 'react';
 import {
-  blockName, cssWidth, IMAGE_EXTENSIONS, mediaType, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertKind, type InsertNodeConfig,
-  type InsertPlace, type InsertWhere, type Selection, type SelectorConfig, type Width,
+  blockName, cssWidth, IMAGE_EXTENSIONS, mediaType, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertionPoint, type InsertKind,
+  type InsertPlace, type ObjectNodeConfig, type Selection, type SelectorNodeConfig, type Width,
 } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
 import { CheckboxField, CodeField, SelectField, TextField } from './fields';
-import { SELECTOR_MODES, SelectorFields, useInputDocument } from './SelectorEditor';
 
 const KINDS: { value: InsertKind; label: string }[] = [
   { value: 'code', label: 'Code' },
@@ -26,72 +25,78 @@ const EMPTY: Record<InsertKind, InsertContent> = {
   selection: { kind: 'selection' },
 };
 
-const PLACES: { value: InsertPlace; label: string }[] = [
+export const PLACES: { value: InsertPlace; label: string }[] = [
   { value: 'after', label: 'After it' },
   { value: 'before', label: 'Before it' },
   { value: 'end', label: 'Inside it, at the end' },
   { value: 'start', label: 'Inside it, at the start' },
 ];
 
-export function InsertEditor({ node }: { node: GraphNode }) {
-  const config = node.config as InsertNodeConfig;
-  const { content, where } = config;
-  const input = useInputDocument(node.id);
+export function ObjectEditor({ node }: { node: GraphNode }) {
+  const config = node.config as ObjectNodeConfig;
+  const { content } = config;
   const store = editorStore.getState();
-  const update = (patch: Partial<InsertNodeConfig>) => store.updateConfig<InsertNodeConfig>(node.id, (c) => ({ ...c, ...patch }));
+  const update = (patch: Partial<ObjectNodeConfig>) => store.updateConfig<ObjectNodeConfig>(node.id, (c) => ({ ...c, ...patch }));
   const edit = (patch: Partial<InsertContent>) => update({ content: { ...content, ...patch } as InsertContent });
-  const setWhere = (w: InsertWhere) => update({ where: w });
 
   return (
     <>
       <SelectField
-        label="Insert"
+        label="Object"
         value={content.kind}
         options={KINDS}
         onChange={(kind) => update({ content: kind === content.kind ? content : { ...EMPTY[kind] } })}
       />
       <ContentFields node={node} content={content} onChange={edit} />
-
-      <fieldset className="params where">
-        <legend>Where</legend>
-        <SelectField
-          label="Place it"
-          value={where.mode}
-          options={[
-            { value: 'point', label: 'At a point I click in the preview' },
-            { value: 'selector', label: 'Next to every match of a selector' },
-          ]}
-          onChange={(mode) =>
-            setWhere(
-              mode === where.mode ? where
-              : mode === 'point' ? { mode: 'point' }
-              : { mode: 'selector', selector: { mode: 'css', selector: 'h2' }, place: 'after' },
-            )
-          }
-        />
-        {where.mode === 'point' ? (
-          <PointSummary nodeId={node.id} where={where} />
-        ) : (
-          <>
-            <SelectorFields
-              config={where.selector}
-              input={input}
-              modes={SELECTOR_MODES.filter((m) => m.value !== 'manual')}
-              onChange={(selector: SelectorConfig) => setWhere({ ...where, selector })}
-            />
-            <SelectField label="Relative to each match" value={where.place} options={PLACES} onChange={(place) => setWhere({ ...where, place })} />
-          </>
-        )}
-      </fieldset>
+      <PointSource nodeId={node.id} />
     </>
   );
 }
 
-function PointSummary({ nodeId, where }: { nodeId: string; where: Extract<InsertWhere, { mode: 'point' }> }) {
+const EVERY_MATCH: Record<InsertPlace, string> = {
+  after: 'after every match',
+  before: 'before every match',
+  start: 'inside every match, at the start',
+  end: 'inside every match, at the end',
+};
+
+/** Where the Object goes: the Selector connected to its Point input. */
+function PointSource({ nodeId }: { nodeId: string }) {
+  const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'point'));
+  const from = useEditor((s) => (edge ? s.graph.nodes.find((n) => n.id === edge.source) : undefined));
+  const store = editorStore.getState();
+  if (!from) {
+    return (
+      <p className="hint warn-text">
+        Connect a Selector's <strong>Point</strong> output to say where this goes: a point you click in the preview
+        (Select by: “A point I click in the preview”), or next to every match.
+      </p>
+    );
+  }
+  const c = from.config as SelectorNodeConfig;
+  const where = from.type !== 'selector'
+    ? ''
+    : c.mode === 'point'
+      ? c.point ? 'at the point picked in the preview' : 'at a point not picked yet'
+      : EVERY_MATCH[c.place ?? 'after'];
+  return (
+    <div className="field">
+      <span className="field-label">Where</span>
+      <p className="small">
+        <button type="button" className="link" onClick={() => store.select(from.id)}>
+          {nodeLabel(from)}
+        </button>
+        {where && ` · ${where}`}
+      </p>
+    </div>
+  );
+}
+
+/** What a point picked in the preview is next to. */
+export function PointSummary({ nodeId, point }: { nodeId: string; point?: InsertionPoint }) {
   const result = useEditor((s) => s.results[nodeId]);
-  const point = where.point;
   if (!point) {
-    return <p className="hint">With this node selected, click in the preview where the insertion should go.</p>;
+    return <p className="hint">With this Selector selected, click in the preview where the point should be.</p>;
   }
   const quote = (point.anchor.textQuote?.exact ?? '').replace(/\n/g, ' ');
   // Text before the cursor: its end matters. A whole block: its start.
@@ -255,7 +260,7 @@ function SelectionSource({ nodeId }: { nodeId: string }) {
   if (!source) {
     return (
       <p className="hint warn-text">
-        Connect a Selector's Selection output to this node's Selection input. What it selects is copied here; the
+        Connect a Selector's Selection output to this Object's Selection input. What it selects is copied here; the
         Selector can look at this document or another one.
       </p>
     );

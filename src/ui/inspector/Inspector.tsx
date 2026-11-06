@@ -3,7 +3,9 @@ import { editorStore, useEditor } from '../../store/editor-store';
 import { LibraryEditor } from '../library/LibraryEditor';
 import { TextField } from './fields';
 import { ConnectorEditor } from './ConnectorEditor';
-import { InsertEditor } from './InsertEditor';
+import { CombinatorEditor } from './CombinatorEditor';
+import { ExtractorEditor } from './ExtractorEditor';
+import { ObjectEditor } from './ObjectEditor';
 import { OutputEditor } from './OutputEditor';
 import { ResultPanel } from './ResultPanel';
 import { SelectorEditor } from './SelectorEditor';
@@ -15,9 +17,11 @@ const EDITORS = {
   documentSource: SourceEditor,
   selector: SelectorEditor,
   snippet: SnippetEditor,
-  insert: InsertEditor,
+  extractor: ExtractorEditor,
+  object: ObjectEditor,
   output: OutputEditor,
   connector: ConnectorEditor,
+  combinator: CombinatorEditor,
 } as const;
 
 export function Inspector({ onMinimise }: { onMinimise: () => void }) {

@@ -3,7 +3,7 @@ import { editorStore, useEditor } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
 import { CheckboxField, SelectField } from './fields';
 
-const KIND_LABELS = { document: 'a document', selection: 'a selection', html: 'HTML' } as const;
+const KIND_LABELS = { document: 'a document', selection: 'a selection', point: 'a point', html: 'HTML' } as const;
 
 /** Where the Connector's input comes from, and the choices for turning it into the other kinds. */
 export function ConnectorEditor({ node }: { node: GraphNode }) {

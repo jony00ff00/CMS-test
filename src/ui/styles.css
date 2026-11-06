@@ -13,7 +13,11 @@
   --port-selection: #d97706;
   --port-html: #059669;
   --port-result: #dc2626;
+  --port-point: #0891b2;
   --node-connector: #6b7280;
+  --node-object: #0d9488;
+  --node-extractor: #4f46e5;
+  --node-combinator: #be185d;
   --node-output: #dc2626;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
@@ -81,7 +85,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-snippet { border-left-color: #7c3aed; }
 .palette-output { border-left-color: var(--node-output); }
 .palette-connector { border-left-color: var(--node-connector); }
-.palette-insert { border-left-color: #0d9488; }
+.palette-object { border-left-color: var(--node-object); }
+.palette-extractor { border-left-color: var(--node-extractor); }
+.palette-combinator { border-left-color: var(--node-combinator); }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
 
@@ -196,7 +202,9 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-snippet { border-top-color: #7c3aed; }
 .cms-node-output { border-top-color: var(--node-output); }
 .cms-node-connector { border-top-color: var(--node-connector); }
-.cms-node-insert { border-top-color: #0d9488; }
+.cms-node-object { border-top-color: var(--node-object); }
+.cms-node-extractor { border-top-color: var(--node-extractor); }
+.cms-node-combinator { border-top-color: var(--node-combinator); }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
 .cms-node header { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem 0.2rem; }
@@ -217,12 +225,15 @@ body.preview-window { margin: 0; height: 100vh; }
 .react-flow__handle.handle-selection { background: var(--port-selection); }
 .react-flow__handle.handle-html { background: var(--port-html); }
 .react-flow__handle.handle-result { background: var(--port-result); }
-.react-flow__handle.handle-any { background: conic-gradient(var(--port-document) 0 25%, var(--port-selection) 0 50%, var(--port-html) 0 75%, var(--port-result) 0); }
+.react-flow__handle.handle-point { background: var(--port-point); border-radius: 2px; }
+.react-flow__handle.handle-any { background: conic-gradient(var(--port-document) 0 20%, var(--port-selection) 0 40%, var(--port-point) 0 60%, var(--port-html) 0 80%, var(--port-result) 0); }
 .react-flow__handle.connectingto:not(.valid) { background: var(--danger); }
 .react-flow__edge.edge-document .react-flow__edge-path { stroke: var(--port-document); }
 .react-flow__edge.edge-selection .react-flow__edge-path { stroke: var(--port-selection); }
 .react-flow__edge.edge-html .react-flow__edge-path { stroke: var(--port-html); }
 .react-flow__edge.edge-result .react-flow__edge-path { stroke: var(--port-result); stroke-dasharray: 6 3; }
+.react-flow__edge.edge-point .react-flow__edge-path { stroke: var(--port-point); stroke-dasharray: 2 4; stroke-linecap: round; }
+.combinator-inputs { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; font-size: 0.85rem; }
 .react-flow__edge .react-flow__edge-path { stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3.5; }
 .minimap .react-flow__minimap-svg { display: block; }

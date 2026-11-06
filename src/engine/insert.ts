@@ -55,6 +55,16 @@ export type InsertWhere =
   | { mode: 'point'; point?: InsertionPoint }
   | { mode: 'selector'; selector: SelectorConfig; place: InsertPlace };
 
+/**
+ * What a Selector's Point output carries: the document and where in it things go (a picked point, or a place
+ * next to every match of the Selector). An Object node puts its content there.
+ */
+export interface PointValue {
+  kind: 'point';
+  document: CmsDocument;
+  where: InsertWhere;
+}
+
 export interface InsertResult {
   document: CmsDocument;
   warnings: string[];
@@ -351,7 +361,7 @@ export function insertionTargets(doc: CmsDocument, where: InsertWhere, block: bo
   let needsAttention = false;
 
   if (where.mode === 'point') {
-    if (!where.point) return { matches: [], place: 'after', warnings, needsAttention, waiting: 'Click in the preview where the insertion should go' };
+    if (!where.point) return { matches: [], place: 'after', warnings, needsAttention, waiting: 'Pick the point: select its Selector and click in the preview' };
     const r = resolveAnchor(ix, where.point.anchor);
     if (!r.match) {
       return { matches: [], place: 'after', warnings: [`The insertion point needs attention: ${r.reason}`], needsAttention: true };

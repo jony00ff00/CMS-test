@@ -54,15 +54,17 @@ describe('hashing', () => {
 
 describe('node registry', () => {
   it('has the node types with typed ports', () => {
-    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'insert', 'output', 'connector']);
+    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'extractor', 'object', 'output', 'connector', 'combinator']);
     const ports = Object.values(nodeRegistry).map((d) => [d.type, d.inputs.map((p) => p.type), d.outputs.map((p) => p.type)]);
     expect(ports).toEqual([
       ['documentSource', [], ['document']],
-      ['selector', ['document'], ['selection']],
+      ['selector', ['document'], ['selection', 'point']],
       ['snippet', ['selection'], ['document']],
-      ['insert', ['document', 'selection'], ['document']],
+      ['extractor', ['document'], ['document']],
+      ['object', ['point', 'selection'], ['document']],
       ['output', ['document'], ['html', 'result']],
       ['connector', ['any'], ['document', 'selection', 'html', 'result']],
+      ['combinator', ['any', 'any'], ['document', 'selection', 'html', 'result']],
     ]);
   });
 
@@ -305,13 +307,15 @@ describe('an Output with several inputs', () => {
       node('src', 'documentSource', { fileId: 'html' }),
       node('sel', 'selector', { mode: 'css', selector: 'h1' }),
       node('snip', 'snippet'),
-      node('ins', 'insert', { content: { kind: 'code', code: '<p>Inserted</p>', render: 'html' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h1' }, place: 'after' } }),
+      node('pt', 'selector', { ...{ mode: 'css', selector: 'h1' }, place: 'after' }),
+      node('ins', 'object', { content: { kind: 'code', code: '<p>Inserted</p>', render: 'html' } }),
       node('out', 'output', { fullDocument: false, combine: 'append' }),
     ],
     edges: [
       edge('src', 'document', 'sel', 'document'),
       edge('sel', 'selection', 'snip', 'selection'),
-      edge('src', 'document', 'ins', 'document'),
+      edge('src', 'document', 'pt', 'document'),
+      edge('pt', 'point', 'ins', 'point'),
       { id: 'a', source: 'snip', sourcePort: 'document', target: 'out', targetPort: 'document' },
       { id: 'b', source: 'ins', sourcePort: 'document', target: 'out', targetPort: 'document' },
     ],
@@ -361,19 +365,21 @@ describe('an Output with several inputs', () => {
 });
 
 describe('combining the changes of several inputs (the default)', () => {
-  const insertAfterH1 = { content: { kind: 'code', code: '<p>Inserted</p>', render: 'html' }, where: { mode: 'selector', selector: { mode: 'css', selector: 'h1' }, place: 'after' } };
+  const insertAfterH1 = { content: { kind: 'code', code: '<p>Inserted</p>', render: 'html' } };
   const graph = (order: ('snip' | 'ins')[] = ['snip', 'ins']): Graph => ({
     nodes: [
       node('src', 'documentSource', { fileId: 'html' }),
       node('sel', 'selector', { mode: 'css', selector: 'h2' }),
       node('snip', 'snippet'),
-      node('ins', 'insert', insertAfterH1),
+      node('pt', 'selector', { mode: 'css', selector: 'h1', place: 'after' }),
+      node('ins', 'object', insertAfterH1),
       node('out', 'output', { fullDocument: false }),
     ],
     edges: [
       edge('src', 'document', 'sel', 'document'),
       edge('sel', 'selection', 'snip', 'selection'),
-      edge('src', 'document', 'ins', 'document'),
+      edge('src', 'document', 'pt', 'document'),
+      edge('pt', 'point', 'ins', 'point'),
       ...order.map((id) => ({ id: `${id}-out`, source: id, sourcePort: 'document', target: 'out', targetPort: 'document' })),
     ],
   });
@@ -390,7 +396,7 @@ describe('combining the changes of several inputs (the default)', () => {
 
   it('keeps each node’s own result, and hides the copies it ran', async () => {
     const r = await new GraphEvaluator(nodeRegistry).evaluate(graph(), ctx);
-    expect(Object.keys(r.results).sort()).toEqual(['ins', 'out', 'sel', 'snip', 'src']);
+    expect(Object.keys(r.results).sort()).toEqual(['ins', 'out', 'pt', 'sel', 'snip', 'src']);
     expect(r.results.ins.outputs.document).toBeDefined();
     const insOnly = (r.results.ins.outputs.document as { tree: unknown }).tree;
     expect(JSON.stringify(insOnly)).not.toContain('callout');
@@ -448,13 +454,15 @@ describe('combining the changes of several inputs (the default)', () => {
         node('src', 'documentSource', { fileId: 'json', json: { mode: 'fields', fields: [{ path: '$.faq[*].a', format: 'markdown' }] } }),
         node('sel', 'selector', { mode: 'jsonField', path: '$.faq[0].a' }),
         node('snip', 'snippet'),
-        node('ins', 'insert', { content: { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' }, where: { mode: 'selector', selector: { mode: 'jsonField', path: '$.faq[1].a' }, place: 'end' } }),
+        node('pt', 'selector', { ...{ mode: 'jsonField', path: '$.faq[1].a' }, place: 'end' }),
+      node('ins', 'object', { content: { kind: 'imageUrl', url: 'https://x.test/a.png', alt: 'A' } }),
         node('out', 'output', { format: 'json' }),
       ],
       edges: [
         edge('src', 'document', 'sel', 'document'),
         edge('sel', 'selection', 'snip', 'selection'),
-        edge('src', 'document', 'ins', 'document'),
+        edge('src', 'document', 'pt', 'document'),
+      edge('pt', 'point', 'ins', 'point'),
         { id: 'a', source: 'snip', sourcePort: 'document', target: 'out', targetPort: 'document' },
         { id: 'b', source: 'ins', sourcePort: 'document', target: 'out', targetPort: 'document' },
       ],

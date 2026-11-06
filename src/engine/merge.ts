@@ -49,10 +49,13 @@ export function planMerges(graph: Graph, registry: NodeRegistry): MergePlan {
 
   for (const target of graph.nodes) {
     const def = registry[target.type];
-    if (!def?.mergesInputs?.(target.config as never)) continue;
-    for (const port of def.inputs.filter((p) => p.multiple)) {
-      const inputs = graph.edges.filter((e) => e.target === target.id && e.targetPort === port.name);
+    const ports = def?.mergePorts?.(target.config as never);
+    if (!ports?.length) continue;
+    {
+      const inputs = ports.flatMap((port) => graph.edges.filter((e) => e.target === target.id && e.targetPort === port));
       if (inputs.length < 2) continue;
+      // Only documents can be merged (a selection or HTML has no changes to apply again).
+      if (!inputs.every((e) => portType(e.source, e.sourcePort) === 'document')) continue;
 
       // The latest document all inputs come from.
       const sets = inputs.map((e) => ancestors(e.source));
@@ -92,9 +95,9 @@ export function planMerges(graph: Graph, registry: NodeRegistry): MergePlan {
       });
 
       edges = [
-        ...edges.filter((e) => !(e.target === target.id && e.targetPort === port.name)),
+        ...edges.filter((e) => !(e.target === target.id && ports.includes(e.targetPort))),
         ...added,
-        { id: `${target.id}${SEP}combined`, source: prev.node, sourcePort: prev.port, target: target.id, targetPort: port.name },
+        { id: `${target.id}${SEP}combined`, source: prev.node, sourcePort: prev.port, target: target.id, targetPort: ports[0] },
       ];
       merged[target.id] = inputs.length;
     }

@@ -1,6 +1,6 @@
 # Node CMS
 
-Node-based CMS: Document Source → Selector → Snippet → Output.
+Node-based CMS: Document Source → Selector → Snippet → Output (plus Extractor, Object, Connector, Combinator).
 Sources (.html, .docx, .pptx, .json) become one internal Document (a hast tree). Selectors pick parts of it,
 Snippet nodes wrap or add to those parts, and Output previews or exports the result.
 
@@ -76,6 +76,10 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `DocIndex` when resolving many anchors. On slides, anchors store `slide: { number, title }`: candidates on the
   slide with that title (or that number, untitled) win and are needed for the quick accept; one found only on
   another slide is `moved` at ×0.85 confidence (`OTHER_SLIDE_FACTOR`).
+- Snippet node: `custom` ({ className, wrap: none | div | span }) makes the snippet (`customSnippet`: attributes
+  `class="…"`, or a wrapper with the class) instead of `snippet`; `css` / `js` on any Snippet node are added as a
+  snippet asset `node-<hash>` (once per distinct code). Store: `makeCustomSnippet`; `useLibrarySnippet` /
+  `detachSnippet` clear `custom`; `saveNodeSnippetToLibrary` saves a custom one with its CSS / JS.
 - `snippets.ts`: `applySnippet(selection, snippet, { params, snapToBlock })` (async: Handlebars loads on demand)
   → `{ document, warnings, applied }`. Modes: wrap, prepend, append (`inside` for first/last child), replace,
   attributes (merges class and style; selected text gets a <span>). Template variables: `{{content}}` (the
@@ -125,20 +129,33 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
   `snippet` (`snippet` = the node's own copy, `ref` = `{ id, version }` when it came from the library,
   `params`, `snapToBlock`; default is the library's Callout v1), `output` (input `document` takes several connections. `combine: 'merge'` (default, `mergesInputs`) applies every
-  input's changes to one document: `planMerges` in `merge.ts` finds the latest document all inputs share and runs
+  input's changes to one document (`mergePorts(config)` on a node definition lists the ports to merge, in order; only
+  `document`-typed sources merge): `planMerges` in `merge.ts` finds the latest document all inputs share and runs
   hidden copies (`<output>~<i>~<id>`) of each later input's nodes on the previous input's result, so selectors and
   points re-resolve on the changed text; the copies' results are dropped, `info.combined` is set. Inputs with no
   shared document, and `combine: 'append'`, go one after another (`combineDocuments` in `combine.ts`); JSON export
   refuses only in that case; `format` html | json | slides (always a complete page; info `slides`), `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
   preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
-  `insert` (`content`, `where`; depends on its media file's hash; reports `needsAttention` when its point is gone;
-  optional `selection` input (`PortDef.optional`: the node runs without it) used by content `{ kind: 'selection' }`:
-  `copySelection` in `insert.ts` copies what it matched, in document order, via a wrap snippet with a
-  `cms-extract` marker; the copy drops `data-json-path` and brings its images and the source's snippet assets;
-  connecting a selection to an Insert switches it to that kind in `connect`);
+  `selector` (`SelectorNodeConfig` = a `SelectorConfig` + `place`): outputs `selection` and `point` (port type
+  `point`, a `PointValue` { kind: 'point', document, where: `InsertWhere` }): mode `point` (picked in the preview;
+  waits until picked) gives `{ mode: 'point', point }`, every other mode `{ mode: 'selector', selector, place }`
+  (place default after);
+  `object` (was Insert: `content` only; input `point` (required) + optional `selection` input (`PortDef.optional`:
+  the node runs without it) used by content `{ kind: 'selection' }`; `insertContent` at the point's `where`; depends
+  on its media file's hash; reports `needsAttention` when its point is gone). `copySelection` in `insert.ts` copies
+  what a selection matched, in document order, via a wrap snippet with a `cms-extract` marker; the copy drops
+  `data-json-path` and brings its images and the source's snippet assets; connecting a selection to an Object
+  switches it to that kind in `connect`. `parseProject` turns old `insert` nodes into a Selector `<id>-point`
+  (their `where`) feeding an Object with the same id;
+  `extractor` (a `SelectorConfig`; outputs a document of only what it picked: `documentFromSelection` in
+  `convert.ts`);
+  `combinator` (inputs `a` / `b`, both `any` and optional; `combine` merge (default; `mergePorts` ['a', 'b']: two
+  changed versions of one document become one; two selections / points in the same document become one selection)
+  or append (A then B, `combineDocuments`); outputs like the Connector's);
   `connector` (one input `input` of port type `any`, which `edgeError` lets every output type into; outputs
-  `document`, `selection`, `html` and `result`, all filled from whatever came in (`connectorInputKind`: a string is
-  HTML, `kind: 'selection'` a selection, anything else a document / result). Documents pass as the same object
+  `document`, `selection`, `html` and `result`, all filled from whatever came in by `convertValue` in `convert.ts`
+  (`valueKind`: a string is HTML, `kind: 'selection'` a selection, `kind: 'point'` a point (its document, and as a
+  selection the places it stands for), anything else a document / result). Documents pass as the same object
   (snippet assets, JSON meta kept); a selection becomes a new document of its content (`copySelection`, default)
   or its whole document (`selectionToDocument`); a document becomes a selection of everything or each block
   (`documentToSelection`); HTML is read with `parseHtml` and passed on unchanged; other HTML out is `serialize`d
@@ -154,7 +171,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   edge type (`DeletableEdge.tsx`): a delete button at the middle while selected. In e2e, click a connection by
   position between its handles (a straight one has no height).
 - Node colours: CSS `--node-*` / `--port-*`, and `NODE_COLORS` (`src/ui/node-colors.ts`) for the minimap; keep them
-  the same. Connector is grey.
+  the same. Connector is grey; the `point` port and its dotted connections are cyan.
 - "Save project file…" opens `SaveDialog` (`src/ui/canvas/SaveDialog.tsx`, a `<dialog>`): a file name
   (`projectFileName`, `.node-cms.json`, remembered in localStorage `node-cms:project-name`), then the browser's own
   save dialog (`showSaveFilePicker`, to pick the folder; cancelling it keeps our dialog open), or a download where
@@ -189,11 +206,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - Document Source with a .pptx: a "Slides" fieldset (`SlideOptions` in `SourceEditor.tsx`): notes, include hidden,
   look like slides, "Which slides" text, and a checklist of the deck's slides (from `meta.pptx`) that writes the
   range (all ticked → no range, so new slides come in too; hidden ones are disabled unless included).
-- Insert node selected: the preview shows its input with the insertion marker ("Where it goes"), or its output
-  ("Result"). A click in the preview (the bridge reports `caret` offsets) opens "Insert here": At the cursor
-  (not for block content), Before / After this <block>. Its inspector reuses `SelectorFields` from
-  `SelectorEditor.tsx` for the "next to every match" mode. `chooseMediaFile` adds an image or video file.
-  Project files save every `fileId` found anywhere in a node's settings.
+- Selector in point mode selected: the preview shows its input with the marker; a click (the bridge reports `caret`
+  offsets) opens "Point here": At the cursor, Before / After this <block> (sets the Selector's `point`). Object
+  selected: "Where it goes" (its Point's document with the marker; clicks move the point when it comes straight from
+  a point-mode Selector) or "Result". The Selector's inspector has "Point output" (place) for the other modes;
+  `PointSummary` / `PLACES` live in `ObjectEditor.tsx`. The Extractor's inspector reuses `SelectorFields` without
+  "by hand" and point. `chooseMediaFile` adds an image or video file. Project files save every `fileId` found
+  anywhere in a node's settings.
 - Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
   shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives
   an element anchor, anything else a text anchor. Highlighting never changes the text, so offsets stay valid.
@@ -240,7 +259,8 @@ M4 graph engine · M5 canvas UI · M6 preview and visual selection · M7 snippet
 All planned milestones are done; since then: resizable / separate-window preview, Insert node, PowerPoint P1–P5
 (text · tables, pictures, groups · source options and slide preview · Slide selector · slide-deck Output; the
 PowerPoint work stops there: P6, shape positions, embedded media and theme colours / fonts, is not planned),
-Connector that turns any input into any output. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+Connector that turns any input into any output, Extractor, Point output and Object node (replacing Insert),
+Combinator, simple custom snippets with node-only CSS / JS. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

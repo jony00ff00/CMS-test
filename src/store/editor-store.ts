@@ -5,8 +5,8 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import {
   connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type EdgeCandidate, type Graph,
-  type GraphNode, type InsertNodeConfig, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
-  latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
+  type GraphNode, type ObjectNodeConfig, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
+  cleanClassName, customSnippet, latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
 } from '../engine';
 import { sampleHtml, sampleJson } from '../samples';
 import { seedLibrary } from '../snippets/seed';
@@ -68,6 +68,8 @@ export interface EditorState {
   updateNodeSnippet(nodeId: string): void;
   /** Turn a Snippet node's library snippet into its own copy that can be edited in the node. */
   detachSnippet(nodeId: string): void;
+  /** Make a Snippet node a simple custom one: a class name, an optional wrapper, and its own CSS and JavaScript. */
+  makeCustomSnippet(nodeId: string): void;
   /** Save a Snippet node's own snippet into the library (as a new snippet, or a new version of its linked one). */
   saveNodeSnippetToLibrary(nodeId: string): Snippet | undefined;
   /** Add a Snippet node that uses a library snippet. */
@@ -76,7 +78,7 @@ export interface EditorState {
   /** Add a file and use it in a Document Source node. */
   chooseFile(nodeId: string, name: string, data: StoredFile['data']): void;
   loadExample(kind: 'html' | 'json'): void;
-  /** Add an image or video file and use it in an Insert node. */
+  /** Add an image or video file and use it in an Object node. */
   chooseMediaFile(nodeId: string, name: string, data: Uint8Array): void;
   /** Add a saved selection to a manual Selector node. */
   addAnchor(selectorId: string, anchor: Anchor): void;
@@ -280,11 +282,11 @@ export function createEditorStore(options: EditorOptions = {}) {
         get().notify('error', result.error);
         return result.error;
       }
-      // Connecting a selection to an Insert node means "insert this": switch it to selected content (same undo step).
+      // Connecting a selection to an Object node means "insert this": switch it to selected content (same undo step).
       const target = result.graph.nodes.find((n) => n.id === edge.target);
       let graph = result.graph;
-      if (target?.type === 'insert' && edge.targetPort === 'selection' && (target.config as InsertNodeConfig).content.kind !== 'selection') {
-        graph = { ...graph, nodes: graph.nodes.map((n) => (n === target ? { ...n, config: { ...(n.config as InsertNodeConfig), content: { kind: 'selection' } } } : n)) };
+      if (target?.type === 'object' && edge.targetPort === 'selection' && (target.config as ObjectNodeConfig).content.kind !== 'selection') {
+        graph = { ...graph, nodes: graph.nodes.map((n) => (n === target ? { ...n, config: { ...(n.config as ObjectNodeConfig), content: { kind: 'selection' } } } : n)) };
       }
       set({ graph });
       return undefined;
@@ -345,6 +347,7 @@ export function createEditorStore(options: EditorOptions = {}) {
         snippet: structuredClone(snippet),
         ref: { id, version: snippet.version },
         params: c.ref?.id === id ? carryParams(c.params, snippet.params) : undefined,
+        custom: undefined,
       }));
     },
 
@@ -358,8 +361,18 @@ export function createEditorStore(options: EditorOptions = {}) {
       get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({
         ...c,
         ref: undefined,
+        custom: undefined,
         // Its own id, so its CSS is never mixed up with the library version's.
         snippet: { ...c.snippet, id: `${c.snippet.id}-${nodeId}`, name: c.snippet.name },
+      }));
+    },
+
+    makeCustomSnippet(nodeId) {
+      get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({
+        ...c,
+        ref: undefined,
+        params: undefined,
+        custom: c.custom ?? { className: cleanClassName(`custom-${nodeId}`), wrap: 'none' },
       }));
     },
 
@@ -368,9 +381,17 @@ export function createEditorStore(options: EditorOptions = {}) {
       if (!node) return undefined;
       return batch(() => {
       const config = node.config as SnippetNodeConfig;
-      const id = config.ref && get().library[config.ref.id] ? config.ref.id : snippetIdFor(get().library, config.snippet.name);
-      const saved = get().saveSnippet({ ...config.snippet, id });
-      get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({ ...c, snippet: structuredClone(saved), ref: { id, version: saved.version } }));
+      // A custom snippet goes to the library with its CSS and JavaScript (which then leave the node).
+      const own = config.custom ? { ...customSnippet(config.custom), css: config.css?.trim() || undefined, js: config.js?.trim() || undefined } : config.snippet;
+      const name = config.custom ? cleanClassName(config.custom.className) : own.name;
+      const id = config.ref && get().library[config.ref.id] ? config.ref.id : snippetIdFor(get().library, name);
+      const saved = get().saveSnippet({ ...own, id, name });
+      get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({
+        ...c,
+        snippet: structuredClone(saved),
+        ref: { id, version: saved.version },
+        ...(c.custom && { custom: undefined, css: undefined, js: undefined }),
+      }));
       return saved;
       });
     },

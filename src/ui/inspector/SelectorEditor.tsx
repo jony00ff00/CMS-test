@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
-import type { Anchor, CmsDocument, GraphNode, ResolveStatus, Selection, SelectorConfig, SelectorMode, SlidePart } from '../../engine';
+import type { Anchor, CmsDocument, GraphNode, ResolveStatus, Selection, SelectorConfig, SelectorMode, SelectorNodeConfig, SlidePart } from '../../engine';
+import { PLACES, PointSummary } from './ObjectEditor';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
 import { CheckboxField, SelectField, TextField } from './fields';
@@ -12,6 +13,7 @@ export const SELECTOR_MODES: { value: SelectorMode; label: string }[] = [
   { value: 'manual', label: 'Selected by hand' },
   { value: 'all', label: 'Everything (select all)' },
   { value: 'slide', label: 'Slides (from a .pptx)' },
+  { value: 'point', label: 'A point I click in the preview' },
 ];
 
 const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
@@ -22,6 +24,7 @@ const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
   manual: { mode: 'manual', anchors: [] },
   all: { mode: 'all', scope: 'document' },
   slide: { mode: 'slide', part: 'slide' },
+  point: { mode: 'point' },
 };
 
 /** The document coming into a node, e.g. for JSON field path suggestions. */
@@ -33,15 +36,30 @@ export function useInputDocument(nodeId: string, port = 'document') {
 }
 
 export function SelectorEditor({ node }: { node: GraphNode }) {
-  const config = node.config as SelectorConfig;
+  const config = node.config as SelectorNodeConfig;
   const input = useInputDocument(node.id);
+  // The Point output's place belongs to the node, not to the selector: keep it when the selector changes.
+  const set = (next: SelectorNodeConfig) => editorStore.getState().updateConfig(node.id, next);
   return (
-    <SelectorFields
-      config={config}
-      input={input}
-      onChange={(next) => editorStore.getState().updateConfig(node.id, next)}
-      manual={(c, patch) => <ManualSelections node={node} config={c} onChange={(anchors) => patch({ anchors })} />}
-    />
+    <>
+      <SelectorFields
+        config={config}
+        input={input}
+        onChange={(next) => set({ ...next, ...(config.place && { place: config.place }) } as SelectorNodeConfig)}
+        manual={(c, patch) => <ManualSelections node={node} config={c} onChange={(anchors) => patch({ anchors })} />}
+      />
+      {config.mode === 'point' ? (
+        <PointSummary nodeId={node.id} point={config.point} />
+      ) : (
+        <SelectField
+          label="Point output"
+          value={config.place ?? 'after'}
+          options={PLACES}
+          hint="Where an Object connected to the Point output goes, relative to each match."
+          onChange={(place) => set({ ...config, place })}
+        />
+      )}
+    </>
   );
 }
 

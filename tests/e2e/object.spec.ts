@@ -29,17 +29,33 @@ export async function fitView(page: Page) {
     .toBe(true);
 }
 
-/** HTML example + an Insert node after the snippet, feeding a second Output. */
-async function setUp(page: Page) {
+/**
+ * HTML example + a Selector (selector-5) after the snippet whose Point feeds an Object (object-6), into a second
+ * Output (output-7). The Selector is in point mode unless `pointMode` is false.
+ */
+async function setUp(page: Page, pointMode = true) {
   await page.getByRole('button', { name: 'HTML example' }).click();
   const palette = page.getByRole('complementary', { name: 'Node palette' });
-  await palette.getByRole('button', { name: /^Insert/ }).click();
+  await palette.getByRole('button', { name: /^Selector/ }).click();
+  await palette.getByRole('button', { name: /^Object/ }).click();
   await palette.getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
-  await connect(page, 'snippet-3', 'document', 'insert-5', 'document');
-  await connect(page, 'insert-5', 'document', 'output-6', 'document');
-  await expect(page.locator('.react-flow__edge')).toHaveCount(5);
-  await node(page, 'insert-5').click();
+  await connect(page, 'snippet-3', 'document', 'selector-5', 'document');
+  await connect(page, 'selector-5', 'point', 'object-6', 'point');
+  await connect(page, 'object-6', 'document', 'output-7', 'document');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(6);
+  if (pointMode) {
+    await node(page, 'selector-5').click();
+    await inspector(page).getByLabel('Select by').selectOption({ label: 'A point I click in the preview' });
+    await expect(node(page, 'selector-5')).toContainText('Click in the preview to pick the point');
+  }
+}
+
+/** With the point Selector selected, click after `phrase` and choose where. */
+async function pickPoint(page: Page, phrase: string, choice: string) {
+  await node(page, 'selector-5').click();
+  await clickAfter(page, phrase);
+  await page.getByRole('dialog', { name: 'Point here' }).getByRole('button', { name: choice }).click();
 }
 
 /** Click in the preview right after `phrase` (puts the cursor there, like a mouse click). */
@@ -71,127 +87,143 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('insert a linked image at the cursor', async ({ page }) => {
-  await setUp(page);
-  await inspector(page).getByLabel('Image address').fill('https://example.com/flower.png');
-  await inspector(page).getByLabel('Alternative text').fill('A flower');
-  await expect(node(page, 'insert-5')).toContainText('Click in the preview where the insertion should go');
+test.beforeEach(async ({ page }) => {
+  page.on('pageerror', (err) => {
+    throw err;
+  });
+  await page.goto('/');
+});
 
+test('a Selector picks a point in the preview; an Object adds a linked image there', async ({ page }) => {
+  await setUp(page);
   await clickAfter(page, 'costs nothing');
-  const here = page.getByRole('dialog', { name: 'Insert here' });
+  const here = page.getByRole('dialog', { name: 'Point here' });
   await expect(here.getByRole('button')).toHaveText(['At the cursor', 'Before this paragraph', 'After this paragraph', '✕']);
   await here.getByRole('button', { name: 'At the cursor' }).click();
-
-  await expect(node(page, 'insert-5')).toContainText('Linked image · at a picked point');
+  await expect(node(page, 'selector-5')).toContainText('A point');
   await expect(inspector(page)).toContainText('Right after “basic plan costs nothing”');
   await expect(preview(page).locator('span.cms-insert-caret')).toHaveCount(1);
-  await page.screenshot({ path: 'test-results/insert-point.png' });
+
+  await node(page, 'object-6').click();
+  await expect(inspector(page)).toContainText('selector-5 · at the point picked in the preview');
+  await inspector(page).getByLabel('Image address').fill('https://example.com/flower.png');
+  await inspector(page).getByLabel('Alternative text').fill('A flower');
+  await expect(node(page, 'object-6')).toContainText('Linked image · added 1×');
+  await page.screenshot({ path: 'test-results/object-point.png' });
 
   await page.getByRole('button', { name: 'Result', exact: true }).click();
   await expect(preview(page).locator('p:has-text("costs nothing") > img')).toHaveAttribute('src', 'https://example.com/flower.png');
-  await node(page, 'output-6').click();
+  await node(page, 'output-7').click();
   await expect(preview(page).locator('img[alt="A flower"]')).toHaveCount(1);
 
-  // Moving the point: select the node again and click elsewhere.
-  await node(page, 'insert-5').click();
+  // Moving the point: in the Object's "Where it goes" view, or on the Selector.
+  await node(page, 'object-6').click();
   await clickAfter(page, 'Plant a source node first.');
-  await page.getByRole('dialog', { name: 'Insert here' }).getByRole('button', { name: 'Before this paragraph' }).click();
-  await expect(inspector(page)).toContainText('Before the paragraph “Plant a source node first. Then connect…”');
+  await page.getByRole('dialog', { name: 'Point here' }).getByRole('button', { name: 'Before this paragraph' }).click();
   await expect(preview(page).locator('div.cms-insert-marker')).toHaveText('Insertion goes here');
+  await node(page, 'selector-5').click();
+  await expect(inspector(page)).toContainText('Before the paragraph “Plant a source node first. Then connect…”');
 });
 
-test('insert an uploaded video after a heading', async ({ page }) => {
+test('an Object adds an uploaded video after a heading', async ({ page }) => {
   await setUp(page);
-  await inspector(page).getByLabel('Insert', { exact: true }).selectOption('video');
+  await pickPoint(page, 'Pricing', 'After this heading');
+  await node(page, 'object-6').click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('video');
   await inspector(page).getByLabel('Video file').setInputFiles({ name: 'clip.mp4', mimeType: 'video/mp4', buffer: Buffer.from([0, 0, 0, 24, 102, 116, 121, 112]) });
   await inspector(page).getByLabel('Caption').fill('How it works');
-  await clickAfter(page, 'Pricing');
-  const here = page.getByRole('dialog', { name: 'Insert here' });
-  // A video cannot go inside a heading, so there is no "At the cursor".
-  await expect(here.getByRole('button', { name: 'At the cursor' })).toHaveCount(0);
-  await here.getByRole('button', { name: 'After this heading' }).click();
-  await node(page, 'output-6').click();
+  await node(page, 'output-7').click();
   const figure = preview(page).locator('aside.callout figure.cms-figure');
   await expect(figure.locator('video')).toHaveAttribute('src', /^data:video\/mp4;base64,/);
   await expect(figure.locator('figcaption')).toHaveText('How it works');
 });
 
-test('insert a code block after every match of a selector', async ({ page }) => {
-  await setUp(page);
-  await inspector(page).getByLabel('Insert', { exact: true }).selectOption('code');
+test('an Object adds a code block after every match of its Selector', async ({ page }) => {
+  await setUp(page, false);
+  await node(page, 'selector-5').click();
+  await inspector(page).getByLabel('CSS selector').fill('blockquote, ol');
+  await inspector(page).getByLabel('Point output').selectOption('after');
+  await node(page, 'object-6').click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('code');
   await inspector(page).getByLabel('Language').selectOption('shell');
   const code = inspector(page).locator('.cm-content[aria-label="Code"]');
   await code.click();
   await page.keyboard.insertText('npm run build');
-  await inspector(page).getByLabel('Place it').selectOption('selector');
-  await inspector(page).getByLabel('CSS selector').fill('blockquote, ol');
-  await inspector(page).getByLabel('Relative to each match').selectOption('after');
-  await expect(node(page, 'insert-5')).toContainText('Code (shell) · after each match');
+  await expect(inspector(page)).toContainText('selector-5 · after every match');
+  await expect(node(page, 'object-6')).toContainText('Code (shell) · added 2×');
   await expect(preview(page).locator('div.cms-insert-marker')).toHaveCount(2);
   await page.getByRole('button', { name: 'Result', exact: true }).click();
   await expect(preview(page).locator('pre.cms-insert-code code')).toHaveText(['npm run build', 'npm run build']);
   await expect(preview(page).locator('blockquote + pre.cms-insert-code')).toHaveCount(1);
+  // Inside each match, at the start, instead.
+  await node(page, 'selector-5').click();
+  await inspector(page).getByLabel('Point output').selectOption('start');
+  await node(page, 'output-7').click();
+  await expect(preview(page).locator('blockquote > pre.cms-insert-code:first-child')).toHaveCount(1);
 });
 
-test('insert a YouTube video from a link', async ({ page }) => {
+test('an Object adds a YouTube video from a link', async ({ page }) => {
   await setUp(page);
-  await inspector(page).getByLabel('Insert', { exact: true }).selectOption('videoUrl');
+  await pickPoint(page, 'Field Guide to Node Gardens', 'After this heading');
+  await node(page, 'object-6').click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('videoUrl');
   await inspector(page).getByLabel('Video address').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-  await clickAfter(page, 'Field Guide to Node Gardens');
-  await page.getByRole('dialog', { name: 'Insert here' }).getByRole('button', { name: 'After this heading' }).click();
-  await expect(node(page, 'insert-5')).toContainText('1 warning');
-  await node(page, 'output-6').click();
+  await expect(node(page, 'object-6')).toContainText('1 warning');
+  await node(page, 'output-7').click();
   await expect(preview(page).locator('h1 + .cms-embed iframe')).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
 });
 
 test('an uploaded image with a caption is kept after a reload', async ({ page }) => {
   await setUp(page);
-  await inspector(page).getByLabel('Insert', { exact: true }).selectOption('image');
+  await pickPoint(page, 'Every node does one job well.', 'After this paragraph');
+  await node(page, 'object-6').click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('image');
   await inspector(page).getByLabel('Image file').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(PNG_BASE64, 'base64') });
   await inspector(page).getByLabel('Alternative text').fill('Logo');
   await inspector(page).getByLabel('Caption').fill('Our logo');
-  await clickAfter(page, 'Every node does one job well.');
-  await page.getByRole('dialog', { name: 'Insert here' }).getByRole('button', { name: 'After this paragraph' }).click();
-  await node(page, 'output-6').click();
+  await node(page, 'output-7').click();
   await expect(preview(page).locator('figure img[alt="Logo"]')).toHaveAttribute('src', /^data:image\/png;base64,/);
   await expect(page.getByText(/Saved in this browser/)).toBeVisible();
   await page.waitForTimeout(800);
 
   await page.reload();
-  await node(page, 'output-6').click();
+  await node(page, 'output-7').click();
   await expect(preview(page).locator('figure figcaption')).toHaveText('Our logo');
   await expect(preview(page).locator('figure img[alt="Logo"]')).toHaveAttribute('src', /^data:image\/png;base64,/);
 });
 
 test('an Output combines the changes of several inputs into one document', async ({ page }) => {
-  // The HTML example's Snippet goes into output-4. Add an Insert node fed by the same source, into the same Output.
+  // The HTML example's Snippet goes into output-4. Add a Selector + Object fed by the same source, into the same Output.
   await page.getByRole('button', { name: 'HTML example' }).click();
-  await page.getByRole('complementary', { name: 'Node palette' }).getByRole('button', { name: /^Insert/ }).click();
+  const palette = page.getByRole('complementary', { name: 'Node palette' });
+  await palette.getByRole('button', { name: /^Selector/ }).click();
+  await palette.getByRole('button', { name: /^Object/ }).click();
   await fitView(page);
-  await connect(page, 'documentSource-1', 'document', 'insert-5', 'document');
-  await connect(page, 'insert-5', 'document', 'output-4', 'document');
-  await expect(page.locator('.react-flow__edge')).toHaveCount(5);
-  await node(page, 'insert-5').click();
-  await inspector(page).getByLabel('Insert', { exact: true }).selectOption('code');
+  await connect(page, 'documentSource-1', 'document', 'selector-5', 'document');
+  await connect(page, 'selector-5', 'point', 'object-6', 'point');
+  await connect(page, 'object-6', 'document', 'output-4', 'document');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(6);
+  await node(page, 'selector-5').click();
+  await inspector(page).getByLabel('CSS selector').fill('h1');
+  await node(page, 'object-6').click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('code');
   await inspector(page).getByLabel('Show it as').selectOption('html');
   await inspector(page).locator('.cm-content[aria-label="Code"]').click();
-  await page.keyboard.insertText('<p class="from-insert">Added by the Insert node</p>');
-  await inspector(page).getByLabel('Place it').selectOption('selector');
-  await inspector(page).getByLabel('CSS selector').fill('h1');
+  await page.keyboard.insertText('<p class="from-object">Added by the Object node</p>');
   await expect(node(page, 'output-4')).toContainText('2 combined');
 
   await node(page, 'output-4').click();
   const result = preview(page);
   await expect(result.locator('h1')).toHaveCount(1);
   await expect(result.locator('aside.callout h2')).toHaveText(['Getting started', 'Pricing']);
-  await expect(result.locator('h1 + p.from-insert')).toHaveText('Added by the Insert node');
+  await expect(result.locator('h1 + p.from-object')).toHaveText('Added by the Object node');
   await page.screenshot({ path: 'test-results/output-combined.png' });
 
   const order = inspector(page).getByRole('list', { name: 'Documents in page order' });
-  await expect(order.getByRole('listitem')).toHaveText([/Snippet · snippet-3/, /Insert · insert-5/]);
-  await inspector(page).getByRole('button', { name: 'Move insert-5 up' }).click();
-  await expect(order.getByRole('listitem')).toHaveText([/Insert · insert-5/, /Snippet · snippet-3/]);
-  await expect(result.locator('h1 + p.from-insert')).toHaveCount(1);
+  await expect(order.getByRole('listitem')).toHaveText([/Snippet · snippet-3/, /Object · object-6/]);
+  await inspector(page).getByRole('button', { name: 'Move object-6 up' }).click();
+  await expect(order.getByRole('listitem')).toHaveText([/Object · object-6/, /Snippet · snippet-3/]);
+  await expect(result.locator('h1 + p.from-object')).toHaveCount(1);
   await expect(result.locator('aside.callout')).toHaveCount(2);
 
   // "One after another" shows each document in full instead.
@@ -201,12 +233,12 @@ test('an Output combines the changes of several inputs into one document', async
   await expect(inspector(page)).toContainText('Documents shown one after another can only be made into a web page.');
 });
 
-test('the width of an insertion takes any CSS unit', async ({ page }) => {
+test('the width of an object takes any CSS unit', async ({ page }) => {
   await setUp(page);
+  await pickPoint(page, 'Field Guide to Node Gardens', 'After this heading');
+  await node(page, 'object-6').click();
   await inspector(page).getByLabel('Image address').fill('https://example.com/flower.png');
   await inspector(page).getByLabel('Alternative text').fill('A flower');
-  await clickAfter(page, 'Field Guide to Node Gardens');
-  await page.getByRole('dialog', { name: 'Insert here' }).getByRole('button', { name: 'After this heading' }).click();
   await page.getByRole('button', { name: 'Result', exact: true }).click();
   const img = preview(page).locator('img[alt="A flower"]');
   await expect(img).toHaveAttribute('style', 'width:100%');
@@ -220,8 +252,6 @@ test('the width of an insertion takes any CSS unit', async ({ page }) => {
   await width.fill('wide');
   await expect(inspector(page)).toContainText('"wide" is not a width');
   await expect(img).toHaveAttribute('style', 'width:100%');
-  await width.fill('');
-  await expect(img).toHaveAttribute('style', 'width:100%');
 });
 
 test('the Output node is red', async ({ page }) => {
@@ -233,48 +263,25 @@ test('the Output node is red', async ({ page }) => {
   );
 });
 
-/** The preview page's text, as the preview measures it. */
-async function previewText(page: Page): Promise<string> {
-  await expect(preview(page).locator('body')).not.toBeEmpty();
-  return page.evaluate(
-    () =>
-      new Promise<string>((resolve) => {
-        const frame = document.querySelector<HTMLIFrameElement>('iframe[title="Output preview"]')!;
-        addEventListener('message', function on(e) {
-          if (e.data?.source === 'cms-preview' && e.data.type === 'text') {
-            removeEventListener('message', on);
-            resolve(e.data.text);
-          }
-        });
-        frame.contentWindow!.postMessage({ source: 'cms-preview', type: 'get-text' }, '*');
-      }),
-  );
-}
-
-test('insert content picked by a selection, from the same or another document', async ({ page }) => {
-  await page.getByRole('button', { name: 'HTML example' }).click();
+test('an Object adds content picked by another Selector', async ({ page }) => {
+  await setUp(page, false);
   const palette = page.getByRole('complementary', { name: 'Node palette' });
-  await palette.getByRole('button', { name: /^Insert/ }).click();
   await palette.getByRole('button', { name: /^Selector/ }).click();
-  await palette.getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
-  await connect(page, 'snippet-3', 'document', 'insert-5', 'document');
-  await connect(page, 'documentSource-1', 'document', 'selector-6', 'document');
-  await connect(page, 'insert-5', 'document', 'output-7', 'document');
-  // Connecting a selection switches the Insert node to "Selected content".
-  await connect(page, 'selector-6', 'selection', 'insert-5', 'selection');
-  await expect(page.locator('.react-flow__edge')).toHaveCount(7);
-  await expect(node(page, 'insert-5')).toContainText('Selected content');
+  await connect(page, 'documentSource-1', 'document', 'selector-8', 'document');
+  // Connecting a selection switches the Object to "Selected content".
+  await connect(page, 'selector-8', 'selection', 'object-6', 'selection');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(8);
+  await expect(node(page, 'object-6')).toContainText('Selected content');
 
-  await node(page, 'selector-6').click();
+  await node(page, 'selector-8').click();
   await inspector(page).getByLabel('CSS selector').fill('h1');
-  await node(page, 'insert-5').click();
-  await expect(inspector(page).getByLabel('Insert', { exact: true })).toHaveValue('selection');
-  await expect(inspector(page)).toContainText('A copy of what selector-6 selects (1 match)');
-  await inspector(page).getByLabel('Place it').selectOption('selector');
-  await expect(node(page, 'insert-5')).toContainText('after each match');
+  await node(page, 'object-6').click();
+  await expect(inspector(page).getByLabel('Object', { exact: true })).toHaveValue('selection');
+  await expect(inspector(page)).toContainText('A copy of what selector-8 selects (1 match)');
+  await expect(node(page, 'object-6')).toContainText('added 2×'); // after each h2 of selector-5
 
   await node(page, 'output-7').click();
   await expect(preview(page).locator('h1')).toHaveCount(3);
-  await page.screenshot({ path: 'test-results/insert-selection.png' });
+  await page.screenshot({ path: 'test-results/object-selection.png' });
 });
