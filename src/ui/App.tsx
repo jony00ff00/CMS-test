@@ -7,6 +7,9 @@ import { NoticeToast } from './Notice';
 import { useUndoShortcuts } from './canvas/ProjectToolbar';
 import { Preview } from './preview/Preview';
 import { clampHeight, PREVIEW_HEIGHT } from './preview/PreviewResizer';
+import { useEditor } from '../store/editor-store';
+import { nodeLabel } from './node-label';
+import { PanelRail, useMinimisedPanels } from './panels';
 
 const HEIGHT_KEY = 'node-cms:preview-height';
 
@@ -41,14 +44,35 @@ export function App() {
   const [height, setHeight] = usePreviewHeight();
   const [detached, setDetached] = useState(false);
   const onDetachedChange = useCallback((d: boolean) => setDetached(d), []);
-  const style = { '--preview-height': detached ? 'auto' : `${height}px` } as CSSProperties;
+  const [minimised, setMinimised] = useMinimisedPanels();
+  const selected = useEditor((s) => s.graph.nodes.find((n) => n.id === s.selectedId));
+  const style = {
+    '--preview-height': detached || minimised.preview ? 'auto' : `${height}px`,
+    '--palette-width': minimised.palette ? 'var(--rail-width)' : '220px',
+    '--inspector-width': minimised.inspector ? 'var(--rail-width)' : '340px',
+  } as CSSProperties;
   return (
     <ReactFlowProvider>
       <div className="app" style={style}>
-        <Palette />
+        {minimised.palette ? (
+          <PanelRail panel="palette" onRestore={() => setMinimised('palette', false)} />
+        ) : (
+          <Palette onMinimise={() => setMinimised('palette', true)} />
+        )}
         <Canvas />
-        <Inspector />
-        <Preview height={height} onHeightChange={setHeight} onDetachedChange={onDetachedChange} />
+        {minimised.inspector ? (
+          <PanelRail panel="inspector" note={selected && nodeLabel(selected)} onRestore={() => setMinimised('inspector', false)} />
+        ) : (
+          <Inspector onMinimise={() => setMinimised('inspector', true)} />
+        )}
+        {/* The preview stays mounted when minimised: it may be showing in its own window. */}
+        <Preview
+          height={height}
+          onHeightChange={setHeight}
+          onDetachedChange={onDetachedChange}
+          minimised={minimised.preview}
+          onMinimisedChange={(m) => setMinimised('preview', m)}
+        />
         <NoticeToast />
       </div>
     </ReactFlowProvider>

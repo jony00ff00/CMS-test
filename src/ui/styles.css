@@ -45,13 +45,32 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 
 .app {
   display: grid;
-  grid-template-columns: 220px 1fr 340px;
+  --rail-width: 36px;
+  grid-template-columns: var(--palette-width, 220px) minmax(0, 1fr) var(--inspector-width, 340px);
   grid-template-rows: minmax(0, 1fr) var(--preview-height, 260px);
   grid-template-areas: 'palette canvas inspector' 'preview preview inspector';
   height: 100%;
 }
 .panel { background: var(--panel); padding: 1rem; overflow: auto; }
 .palette { grid-area: palette; border-right: 1px solid var(--border); }
+.panel-head { display: flex; align-items: baseline; gap: 0.5rem; }
+.panel-head .panel-toggle { margin-left: auto; }
+.panel-toggle { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border-color: transparent; color: var(--muted); align-self: center; }
+.panel-toggle:hover:not(:disabled) { color: var(--accent); }
+.panel-rail { background: var(--panel); display: flex; min-height: 0; }
+.panel-rail.palette { grid-area: palette; border-right: 1px solid var(--border); }
+.panel-rail.inspector { grid-area: inspector; border-left: 1px solid var(--border); }
+.panel-rail-button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 0.6rem 0; border: 0; border-radius: 0;
+  background: transparent; color: var(--muted); min-height: 0; overflow: hidden;
+}
+.panel-rail-button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.panel-rail-label, .panel-rail-note { writing-mode: vertical-rl; white-space: nowrap; }
+.panel-rail-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.panel-rail-note { font-size: 0.75rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; max-height: 60vh; }
+.preview.is-minimised { padding: 0.4rem 1rem; }
+.preview.is-minimised .preview-head h2 { margin: 0; }
+.preview.is-minimised .preview-head { align-items: center; }
 .palette ul { list-style: none; padding: 0; margin: 0; }
 .palette li { margin-bottom: 0.5rem; }
 .palette-item { width: 100%; text-align: left; display: grid; gap: 0.15rem; padding: 0.5rem 0.65rem; border-left: 4px solid var(--border); }

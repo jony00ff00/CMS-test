@@ -10,6 +10,7 @@ import { nodeLabel } from '../node-label';
 import { BRIDGE_SOURCE, withBridge, type BridgeMessage } from './bridge';
 import { openPreviewWindow, type PreviewWindow } from './preview-window';
 import { PreviewResizer } from './PreviewResizer';
+import { MinimiseButton, RestoreButton } from '../panels';
 
 /** What the preview shows, worked out from the selected node. */
 interface PreviewSource {
@@ -108,9 +109,12 @@ export interface PreviewProps {
   onHeightChange: (height: number) => void;
   /** Called when the preview moves to its own window, or back. */
   onDetachedChange: (detached: boolean) => void;
+  /** Minimised: only the header bar shows here (a separate window keeps showing the page). */
+  minimised: boolean;
+  onMinimisedChange: (minimised: boolean) => void;
 }
 
-export function Preview({ height, onHeightChange, onDetachedChange }: PreviewProps) {
+export function Preview({ height, onHeightChange, onDetachedChange, minimised, onMinimisedChange }: PreviewProps) {
   const s = useEditor((state) => state);
   const [showResult, setShowResult] = useState(false);
   useEffect(() => setShowResult(false), [s.selectedId]);
@@ -310,14 +314,20 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
     </span>
   );
 
+  const toggle = minimised ? (
+    <RestoreButton panel="preview" onClick={() => onMinimisedChange(false)} />
+  ) : (
+    <MinimiseButton panel="preview" onClick={() => onMinimisedChange(true)} />
+  );
+
   return (
-    <section className={`preview${popup ? ' is-detached' : ''}`} aria-label="Preview">
-      {!popup && <PreviewResizer height={height} onChange={onHeightChange} />}
+    <section className={`preview${popup ? ' is-detached' : ''}${minimised ? ' is-minimised' : ''}`} aria-label="Preview">
+      {!popup && !minimised && <PreviewResizer height={height} onChange={onHeightChange} />}
       <div className="preview-head">
         <h2>Preview</h2>
         <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
-        {!popup && page && source.doc && !source.insertNodeId && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
-        {!popup && insertToggle}
+        {!popup && !minimised && page && source.doc && !source.insertNodeId && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+        {!popup && !minimised && insertToggle}
         {popup ? (
           <span className="preview-actions">
             <button type="button" onClick={() => popup.win.focus()}>
@@ -326,12 +336,14 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
             <button type="button" onClick={attach}>
               Bring it back here
             </button>
+            {toggle}
           </span>
         ) : (
           <span className="preview-actions">
             <button type="button" className="ghost" onClick={detach} title="Open the preview in a separate window, e.g. on another screen">
               Open in new window
             </button>
+            {toggle}
           </span>
         )}
       </div>
@@ -353,7 +365,7 @@ export function Preview({ height, onHeightChange, onDetachedChange }: PreviewPro
             </div>,
             popup.container,
           )
-        : surface(window)}
+        : !minimised && surface(window)}
     </section>
   );
 }

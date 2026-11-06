@@ -8,6 +8,7 @@ import { ResultPanel } from './ResultPanel';
 import { SelectorEditor } from './SelectorEditor';
 import { SnippetEditor } from './SnippetEditor';
 import { SourceEditor } from './SourceEditor';
+import { MinimiseButton } from '../panels';
 
 const EDITORS = {
   documentSource: SourceEditor,
@@ -17,7 +18,8 @@ const EDITORS = {
   output: OutputEditor,
 } as const;
 
-export function Inspector() {
+export function Inspector({ onMinimise }: { onMinimise: () => void }) {
+  const minimise = <MinimiseButton panel="inspector" onClick={onMinimise} />;
   const node = useEditor((s) => s.graph.nodes.find((n) => n.id === s.selectedId));
   const result = useEditor((s) => (s.selectedId ? s.results[s.selectedId] : undefined));
   const openSnippetId = useEditor((s) => s.openSnippetId);
@@ -31,6 +33,7 @@ export function Inspector() {
           <button type="button" className="ghost" onClick={() => editorStore.getState().openSnippet(undefined)}>
             Close
           </button>
+          {minimise}
         </div>
         <div className="inspector-body" key={openSnippetId}>
           <LibraryEditor id={openSnippetId} />
@@ -42,7 +45,10 @@ export function Inspector() {
   if (!node) {
     return (
       <aside className="panel inspector" aria-label="Inspector">
-        <h2>Inspector</h2>
+        <div className="panel-head">
+          <h2>Inspector</h2>
+          {minimise}
+        </div>
         <p className="muted">Select a node to edit it.</p>
         <p className="muted small">Connect an output (right side of a node) to an input of the same kind (left side). Delete with Backspace.</p>
       </aside>
@@ -62,6 +68,7 @@ export function Inspector() {
           <button type="button" className="ghost danger" title="Delete this node and its connections (Backspace)" onClick={() => editorStore.getState().removeElements([node.id], [])}>
             Delete
           </button>
+          {minimise}
         </span>
       </div>
       {/* key: a fresh editor for each node, so local state never leaks between nodes */}

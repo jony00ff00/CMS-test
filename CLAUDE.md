@@ -109,6 +109,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   one undo step; also Ctrl/Cmd+D outside fields) and Delete (`removeElements`). Connections use the `deletable`
   edge type (`DeletableEdge.tsx`): a delete button at the middle while selected. In e2e, click a connection by
   position between its handles (a straight one has no height).
+- Panels can be minimised (`src/ui/panels.tsx`: `useMinimisedPanels`, remembered in localStorage
+  `node-cms:minimised-panels`; `MinimiseButton` in each panel's header). A minimised palette or inspector is replaced
+  by a 36 px `PanelRail` (the inspector's shows the selected node); grid widths come from `--palette-width` /
+  `--inspector-width`. A minimised preview stays mounted (it may be showing in its own window) as a header bar
+  without the iframe or resizer; `--preview-height` is then `auto`.
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
   app). Holds `graph`, `files`, `selectedId`, `results`, `notice`. Changes to the graph or files re-evaluate
   after 150 ms; position-only changes do not. Stale evaluations are dropped. `whenIdle()` for tests.
