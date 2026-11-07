@@ -62,7 +62,7 @@ test('a selected connection shows a delete button on the canvas', async ({ page 
   await remove.click();
   await expect(edge(page, 'e2')).toHaveCount(0);
   await expect(page.locator('.react-flow__edge')).toHaveCount(2);
-  await expect(node(page, 'snippet-3')).toContainText('Connect the Selection input');
+  await expect(node(page, 'snippet-3')).toContainText('Connect the Selection or document input');
 
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.locator('.react-flow__edge')).toHaveCount(3);

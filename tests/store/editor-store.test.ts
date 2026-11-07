@@ -27,10 +27,10 @@ describe('editor store', () => {
   it('rejects bad connections with a notice', () => {
     const store = make();
     const s = store.getState();
-    s.addNode('documentSource');
-    s.addNode('snippet');
-    const error = s.connect({ source: 'documentSource-1', sourcePort: 'document', target: 'snippet-2', targetPort: 'selection' });
-    expect(error).toBe('Cannot connect a document output to a selection input');
+    s.addNode('selector');
+    s.addNode('output');
+    const error = s.connect({ source: 'selector-1', sourcePort: 'selection', target: 'output-2', targetPort: 'document' });
+    expect(error).toBe('Cannot connect a selection output to a document input');
     expect(store.getState().notice).toMatchObject({ kind: 'error', text: error });
     expect(store.getState().graph.edges).toEqual([]);
   });

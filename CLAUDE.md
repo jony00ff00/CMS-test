@@ -128,7 +128,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   preview-only markers (`data-cms-preview`, which the bridge ignores when it measures text).
 - `nodes/`: `documentSource` (`fileId`, `json` mapping, `docx` style map), `selector` (a `SelectorConfig`),
   `snippet` (`snippet` = the node's own copy, `ref` = `{ id, version }` when it came from the library,
-  `params`, `snapToBlock`; default is the library's Callout v1), `output` (input `document` takes several connections. `combine: 'merge'` (default, `mergesInputs`) applies every
+  `params`, `snapToBlock`; default is the library's Callout v1; its input `selection` has port type `any`: a
+  selection as before, or a document / HTML / point through `convertValue`, `documentScope` document (default, one
+  match) | blocks; `info.input` says which; the inspector's "Apply to" shows for a document or HTML), `output` (input `document` takes several connections. `combine: 'merge'` (default, `mergesInputs`) applies every
   input's changes to one document (`mergePorts(config)` on a node definition lists the ports to merge, in order; only
   `document`-typed sources merge): `planMerges` in `merge.ts` finds the latest document all inputs share and runs
   hidden copies (`<output>~<i>~<id>`) of each later input's nodes on the previous input's result, so selectors and
@@ -155,8 +157,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   past h6: h6 with a warning). Connecting anything to an Object's `content` switches it to that kind in `connect`.
   `parseProject` turns old `insert` nodes into a Selector `<id>-point` (their `where`) feeding an Object with the
   same id;
-  `extractor` (a `SelectorConfig`, any mode but point; outputs a document of only what it picked:
-  `documentFromSelection` in `convert.ts`; its outputs also carry `selection`, not a port, for the preview and the
+  `extractor` (`ExtractorConfig` = a `SelectorConfig`, any mode but point, + `keepContext` (default true);
+  outputs a document of only what it picked: `documentFromSelection(selection, { context })` in `convert.ts`;
+  `copySelection`'s `context` option keeps the elements around each match (tag and attributes, a pruned copy of
+  the tree, so pieces of one element share it), so CSS aimed at them or at a wrapper still applies; off: only the
+  picked content, as the Object and Connector copy it; its outputs also carry `selection`, not a port, for the preview and the
   saved selections' status);
   `combinator` (inputs `a` / `b`, both `any` and optional; `combine` merge (default; `mergePorts` ['a', 'b']: two
   changed versions of one document become one; two selections / points in the same document become one selection)

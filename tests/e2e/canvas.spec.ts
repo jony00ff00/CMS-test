@@ -69,11 +69,11 @@ test('build the default 4-node graph by hand', async ({ page }) => {
 
 test('rejects a connection between different port types and says why', async ({ page }) => {
   const palette = page.getByRole('complementary', { name: 'Node palette' });
-  await palette.getByRole('button', { name: /^Document Source/ }).click();
-  await palette.getByRole('button', { name: /^Snippet/ }).click();
+  await palette.getByRole('button', { name: /^Selector/ }).click();
+  await palette.getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
-  await connect(page, 'documentSource-1', 'document', 'snippet-2', 'selection');
-  await expect(page.getByRole('alert')).toHaveText(/Cannot connect a document output to a selection input/);
+  await connect(page, 'selector-1', 'selection', 'output-2', 'document');
+  await expect(page.getByRole('alert')).toHaveText(/Cannot connect a selection output to a document input/);
   await expect(page.locator('.react-flow__edge')).toHaveCount(0);
 });
 
@@ -125,7 +125,7 @@ test('delete a node with the keyboard', async ({ page }) => {
   await page.keyboard.press('Backspace');
   await expect(page.locator('.react-flow__node')).toHaveCount(3);
   await expect(page.locator('.react-flow__edge')).toHaveCount(1);
-  await expect(node(page, 'snippet-3')).toContainText('Connect the Selection input');
+  await expect(node(page, 'snippet-3')).toContainText('Connect the Selection or document input');
   await expect(page.getByText('Nothing to show yet.')).toBeVisible();
 });
 

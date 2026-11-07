@@ -59,7 +59,7 @@ describe('node registry', () => {
     expect(ports).toEqual([
       ['documentSource', [], ['document']],
       ['selector', ['document'], ['selection', 'point']],
-      ['snippet', ['selection'], ['document']],
+      ['snippet', ['any'], ['document']],
       ['extractor', ['document'], ['document']],
       ['object', ['point', 'any'], ['document']],
       ['output', ['document'], ['html', 'result']],
@@ -86,9 +86,11 @@ describe('connections', () => {
   it('rejects mismatched types, unknown ports and nodes, self-loops and double inputs', () => {
     const g = graph();
     const err = (e: Parameters<typeof edgeError>[1], gr = g) => edgeError(gr, e, nodeRegistry);
-    expect(err({ source: 'src', sourcePort: 'document', target: 'snip', targetPort: 'selection' })).toBe(
-      'Cannot connect a document output to a selection input',
+    expect(err({ source: 'sel', sourcePort: 'selection', target: 'out', targetPort: 'document' })).toBe(
+      'Cannot connect a selection output to a document input',
     );
+    // A Snippet takes a selection or a whole document.
+    expect(err({ source: 'src', sourcePort: 'document', target: 'snip', targetPort: 'selection' })).toBeUndefined();
     expect(err({ source: 'src', sourcePort: 'nope', target: 'sel', targetPort: 'document' })).toBe('Document Source has no output "nope"');
     expect(err({ source: 'src', sourcePort: 'document', target: 'sel', targetPort: 'nope' })).toBe('Selector has no input "nope"');
     expect(err({ source: 'ghost', sourcePort: 'document', target: 'sel', targetPort: 'document' })).toBe(
@@ -239,7 +241,7 @@ describe('evaluation', () => {
 
     const unconnected: Graph = { nodes: [node('snip', 'snippet')], edges: [] };
     const r = await new GraphEvaluator(nodeRegistry).evaluate(unconnected, ctx);
-    expect(r.results.snip).toMatchObject({ status: 'waiting', message: 'Connect the Selection input' });
+    expect(r.results.snip).toMatchObject({ status: 'waiting', message: 'Connect the Selection or document input' });
 
     const missingFile = setConfig(pipeline(), 'src', { fileId: 'deleted' });
     expect((await new GraphEvaluator(nodeRegistry).evaluate(missingFile, ctx)).results.src.message).toMatch(/no longer in the project/);
@@ -514,7 +516,7 @@ describe('connector', () => {
     // Its outputs are typed: each goes only where that kind fits.
     expect(edgeError(g, { source: 'con', sourcePort: 'selection', target: 'out2', targetPort: 'document' }, nodeRegistry)).toMatch(/selection output to a document input/);
     // "any" is for inputs: nothing else takes an any-typed value.
-    expect(edgeError(free, { source: 'con', sourcePort: 'html', target: 'snip2', targetPort: 'selection' }, nodeRegistry)).toMatch(/html output/);
+    expect(edgeError(free, { source: 'con', sourcePort: 'html', target: 'out2', targetPort: 'document' }, nodeRegistry)).toMatch(/html output/);
   });
 
   it("passes an Output's document on to more nodes, keeping the earlier changes", async () => {

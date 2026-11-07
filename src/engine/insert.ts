@@ -278,31 +278,49 @@ const extractSnippet: Snippet = {
 /**
  * A copy of everything a selection picked, in document order (text ranges keep their inline formatting).
  * The copy loses `data-json-path`: it is not the JSON field itself, and two blocks for one field would confuse
- * write-back. Images it uses and the snippet CSS / JS of its document come along.
+ * write-back. Images it uses and the snippet CSS / JS of its document come along. With `context`, so do the
+ * elements around each match (their tag and attributes, not their other content).
  */
-export async function copySelection(selection: Selection): Promise<Built> {
+export async function copySelection(selection: Selection, options: { context?: boolean } = {}): Promise<Built> {
   const warnings = [...selection.warnings];
   if (selection.matches.length === 0) return { nodes: [], assets: [], block: false, warnings: [...warnings, 'The selection is empty, so nothing was inserted'] };
   const marked = await applySnippet(selection, extractSnippet);
   const nodes: ElementContent[] = [];
-  const collect = (children: Nodes[], inside: boolean) => {
-    for (const c of children) {
-      if (c.type !== 'element') {
-        if (inside) nodes.push(structuredClone(c) as ElementContent);
-        continue;
+  if (options.context) {
+    // The elements around each match come along (without their other content), so CSS aimed at them, or at a
+    // wrapper such as a callout, still applies: text from a <p class="tip"> stays in a <p class="tip">.
+    const prune = (children: Nodes[]): ElementContent[] =>
+      children.flatMap((c): ElementContent[] => {
+        if (c.type !== 'element') return [];
+        if (c.tagName === EXTRACT) {
+          const copy = structuredClone(c);
+          unwrapMarkers(copy);
+          return copy.children;
+        }
+        const kept = prune(c.children);
+        return kept.length ? [{ ...c, properties: { ...c.properties }, children: kept }] : [];
+      });
+    nodes.push(...prune(marked.document.tree.children as Nodes[]));
+  } else {
+    const collect = (children: Nodes[], inside: boolean) => {
+      for (const c of children) {
+        if (c.type !== 'element') {
+          if (inside) nodes.push(structuredClone(c) as ElementContent);
+          continue;
+        }
+        if (c.tagName === EXTRACT) {
+          collect(c.children, true); // nested (overlapping matches): copied once
+          continue;
+        }
+        if (inside) {
+          const copy = structuredClone(c);
+          unwrapMarkers(copy);
+          nodes.push(copy);
+        } else collect(c.children, false);
       }
-      if (c.tagName === EXTRACT) {
-        collect(c.children, true); // nested (overlapping matches): copied once
-        continue;
-      }
-      if (inside) {
-        const copy = structuredClone(c);
-        unwrapMarkers(copy);
-        nodes.push(copy);
-      } else collect(c.children, false);
-    }
-  };
-  collect(marked.document.tree.children as Nodes[], false);
+    };
+    collect(marked.document.tree.children as Nodes[], false);
+  }
 
   const doc = selection.document;
   const assets: Asset[] = [];

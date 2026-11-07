@@ -32,7 +32,8 @@ describe('Extractor', () => {
       edges: [edge('src', 'document', 'sec', 'document'), edge('src', 'document', 'txt', 'document')],
     });
     expect(html(r.sec.outputs.document)).toBe('<h2>Two</h2><p>Second</p>');
-    expect(html(r.txt.outputs.document)).toBe('Intro <em>here</em>');
+    // The paragraph around the text comes along (so CSS for it still applies).
+    expect(html(r.txt.outputs.document)).toBe('<p>Intro <em>here</em></p>');
   });
 
   it('keeps parts selected by hand, and passes their selection on for the preview', async () => {
@@ -46,7 +47,7 @@ describe('Extractor', () => {
       nodes: [node('src', 'documentSource', { fileId: 'html' }), node('x', 'extractor', { mode: 'manual', anchors: [anchor('Second', 's'), anchor('Intro', 'i')] })],
       edges: [edge('src', 'document', 'x', 'document')],
     });
-    expect(html(r.x.outputs.document)).toBe('IntroSecond');
+    expect(html(r.x.outputs.document)).toBe('<p>Intro</p><p>Second</p>');
     const selection = r.x.outputs.selection as Selection;
     expect(selection.matches.map((m) => m.anchorId).sort()).toEqual(['i', 's']);
     expect(r.x.info).toMatchObject({ matches: 2 });

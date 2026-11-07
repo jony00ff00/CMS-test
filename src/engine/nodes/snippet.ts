@@ -1,3 +1,4 @@
+import { convertValue, valueKind } from '../convert';
 import type { NodeDefinition } from '../graph';
 import { hashString } from '../hash';
 import { applySnippet } from '../snippets';
@@ -23,6 +24,8 @@ export interface SnippetNodeConfig {
   /** CSS and JavaScript for this node only, added to the page next to the snippet's own. */
   css?: string;
   js?: string;
+  /** When a document (or HTML) comes in instead of a selection: apply to all of it (default) or to each top-level block. */
+  documentScope?: 'document' | 'blocks';
 }
 
 /** Class names are kept to letters, digits, - and _, so they are safe in CSS and in the class attribute. */
@@ -60,12 +63,18 @@ export const snippet: NodeDefinition<SnippetNodeConfig> = {
   type: 'snippet',
   label: 'Snippet',
   description: 'Wraps, adds to or replaces the selected content using a code snippet',
-  inputs: [{ name: 'selection', type: 'selection', label: 'Selection' }],
+  // A selection, or a whole document (e.g. an Extractor's): see `documentScope`. HTML is read as a document.
+  inputs: [{ name: 'selection', type: 'any', label: 'Selection or document' }],
   outputs: [{ name: 'document', type: 'document', label: 'Document' }],
   defaultConfig: () => ({ snippet: structuredClone(DEFAULT_SNIPPET), ref: { id: DEFAULT_SNIPPET.id, version: DEFAULT_SNIPPET.version } }),
   async evaluate(inputs, config) {
     const snippet = config.custom ? customSnippet(config.custom) : config.snippet;
-    const result = await applySnippet(inputs.selection as Selection, snippet, {
+    const kind = valueKind(inputs.selection);
+    const selection: Selection =
+      kind === 'selection'
+        ? (inputs.selection as Selection)
+        : (await convertValue(inputs.selection, { documentToSelection: config.documentScope === 'blocks' ? 'blocks' : 'document' })).selection;
+    const result = await applySnippet(selection, snippet, {
       params: config.params,
       snapToBlock: config.snapToBlock,
     });
@@ -77,6 +86,10 @@ export const snippet: NodeDefinition<SnippetNodeConfig> = {
       const assets = result.document.meta.snippetAssets ?? [];
       if (!assets.some((a) => a.key === asset.key)) result.document.meta.snippetAssets = [...assets, asset];
     }
-    return { outputs: { document: result.document }, warnings: result.warnings, info: { applied: result.applied } };
+    return {
+      outputs: { document: result.document },
+      warnings: result.warnings,
+      info: { applied: result.applied, ...(kind !== 'selection' && { input: kind === 'html' ? 'HTML' : kind === 'point' ? 'a point' : config.documentScope === 'blocks' ? 'each block' : 'whole document' }) },
+    };
   },
 };

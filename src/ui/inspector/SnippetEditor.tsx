@@ -1,4 +1,4 @@
-import { cleanClassName, refStatus, type GraphNode, type SnippetNodeConfig } from '../../engine';
+import { cleanClassName, refStatus, valueKind, type GraphNode, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CheckboxField, CodeField, SelectField, TextField } from './fields';
 import { ParamValues, SnippetFields } from './SnippetFields';
@@ -16,6 +16,12 @@ export function SnippetEditor({ node }: { node: GraphNode }) {
   const linked = !config.custom && !!ref && !status?.missing;
   // An edited copy of a library snippet (from "Edit here instead"), with all of a snippet's settings.
   const copy = !config.custom && !linked;
+  // What comes in: a selection, or a document / HTML (then the snippet applies to all of it, or to each block).
+  const inputKind = useEditor((s) => {
+    const e = s.graph.edges.find((x) => x.target === node.id && x.targetPort === 'selection');
+    const r = e && s.results[e.source];
+    return e && r?.status === 'ok' ? valueKind(r.outputs[e.sourcePort]) : undefined;
+  });
 
   const choices = [
     ...Object.values(library).map((versions) => {
@@ -75,6 +81,18 @@ export function SnippetEditor({ node }: { node: GraphNode }) {
             <OwnCode config={config} onChange={update} />
           </details>
         </>
+      )}
+      {(inputKind === 'document' || inputKind === 'html') && (
+        <SelectField
+          label="Apply to"
+          value={config.documentScope ?? 'document'}
+          options={[
+            { value: 'document', label: 'The whole document (once)' },
+            { value: 'blocks', label: 'Each top-level block' },
+          ]}
+          hint="A document is connected instead of a selection."
+          onChange={(documentScope) => update({ documentScope: documentScope === 'blocks' ? 'blocks' : undefined })}
+        />
       )}
       <CheckboxField
         label="Snap text selections to whole blocks"

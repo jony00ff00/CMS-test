@@ -66,10 +66,10 @@ describe('project files', () => {
           { id: 'a', type: 'documentSource', config: {} },
           { id: 'b', type: 'teleporter', config: {} },
           { id: 'a', type: 'selector', config: {} },
-          { id: 'c', type: 'snippet', config: {} },
+          { id: 'c', type: 'object', config: {} },
         ],
         edges: [
-          { id: 'e1', source: 'a', sourcePort: 'document', target: 'c', targetPort: 'selection' },
+          { id: 'e1', source: 'a', sourcePort: 'document', target: 'c', targetPort: 'point' },
           { id: 'e2', source: 'a', sourcePort: 'document', target: 'gone', targetPort: 'document' },
         ],
       },
@@ -84,7 +84,7 @@ describe('project files', () => {
       'A file (x.docx) could not be read and was left out',
       'A node of unknown type "teleporter" was left out',
       'A second node "a" was left out',
-      'A connection was left out: Cannot connect a document output to a selection input',
+      'A connection was left out: Cannot connect a document output to a point input',
       'A connection was left out: Both ends of a connection must be nodes in the graph',
       'The snippet "bad" could not be read and was left out',
     ]);

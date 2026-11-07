@@ -181,3 +181,35 @@ test('a library snippet can get its own CSS for this node', async ({ page }) => 
   await node(page, 'output-4').click();
   await expect(preview(page).locator('aside.callout').first()).toHaveCSS('border-left-color', 'rgb(22, 163, 74)');
 });
+
+test('a Snippet takes a whole document: all of it, or each block', async ({ page }) => {
+  await palette(page).getByRole('button', { name: /^Snippet/ }).click();
+  await fitView(page);
+  await connect(page, 'documentSource-1', 'document', 'snippet-5', 'selection');
+  await node(page, 'snippet-5').click();
+  await expect(node(page, 'snippet-5')).toContainText('applied 1×');
+  await expect(preview(page).locator('body > aside.callout')).toHaveCount(1);
+  await inspector(page).getByLabel('Apply to').selectOption('blocks');
+  await expect(node(page, 'snippet-5')).toContainText('applied 10×');
+  await expect(preview(page).locator('body > aside.callout')).toHaveCount(10);
+  await page.screenshot({ path: 'test-results/snippet-document.png' });
+});
+
+test('an Extractor picking text by hand keeps the element around it, so its CSS still applies', async ({ page }) => {
+  page.once('dialog', (d) => void d.accept()); // "Replace the current graph with the example?"
+  await page.getByRole('button', { name: 'Two documents' }).click();
+  await node(page, 'extractor-4').click();
+  await inspector(page).getByLabel('Select by').selectOption({ label: 'Selected by hand' });
+  await selectInPreview(page, 'Water a new node once');
+  await page.getByRole('dialog', { name: 'Selected text' }).getByRole('button', { name: 'Add to Watering section' }).click();
+  await expect(node(page, 'extractor-4')).toContainText('1 saved selection · 1 match');
+  await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Kept' }).click();
+  const kept = preview(page).locator('p.tip');
+  await expect(kept).toHaveText('Water a new node once');
+  await expect(kept).toHaveCSS('color', 'rgb(22, 101, 52)'); // .tip from the notes' own <style>
+  await page.screenshot({ path: 'test-results/extractor-keeps-look.png' });
+
+  await inspector(page).getByLabel('Keep the elements around what it picks').uncheck();
+  await expect(preview(page).locator('p.tip')).toHaveCount(0);
+  await expect(preview(page).locator('body')).toContainText('Water a new node once');
+});

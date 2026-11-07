@@ -35,8 +35,8 @@ export interface Converted {
 }
 
 /** A new document of only what a selection picked (in document order; it keeps its look, not its JSON fields). */
-export async function documentFromSelection(selection: Selection): Promise<{ document: CmsDocument; warnings: string[] }> {
-  const copy = await copySelection(selection);
+export async function documentFromSelection(selection: Selection, options: { context?: boolean } = {}): Promise<{ document: CmsDocument; warnings: string[] }> {
+  const copy = await copySelection(selection, options);
   const source = selection.document;
   return {
     document: {

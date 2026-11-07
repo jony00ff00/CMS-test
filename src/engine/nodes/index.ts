@@ -23,6 +23,7 @@ export const nodeRegistry: NodeRegistry = {
 export { combinator, connector, connectorInputKind, documentSource, extractor, object, output, selector, snippet };
 export type { ConnectorConfig, ConnectorInputKind } from './connector';
 export type { ObjectNodeConfig } from './object';
+export type { ExtractorConfig } from './extractor';
 export type { CombinatorConfig } from './combinator';
 export type { SelectorNodeConfig } from './selector';
 export { cleanClassName, customSnippet, DEFAULT_SNIPPET, type CustomSnippet, type SnippetNodeConfig } from './snippet';
