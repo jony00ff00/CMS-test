@@ -2,8 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { editorStore } from '../../store/editor-store';
 import { download } from '../download';
 
+import { PROJECT_EXTENSION, savePickerOptions } from './save-options';
+
+export { PROJECT_EXTENSION };
+
 const NAME_KEY = 'node-cms:project-name';
-export const PROJECT_EXTENSION = '.node-cms.json';
 
 /** The browser's "save as" dialog (Chromium-based browsers): lets people pick the folder and confirm. */
 interface SaveFilePicker {
@@ -54,10 +57,7 @@ export function SaveDialog({ onClose }: { onClose: () => void }) {
       setBusy(true);
       setError(undefined);
       try {
-        const handle = await picker.call(window, {
-          suggestedName: fileName,
-          types: [{ description: 'Node CMS project', accept: { 'application/json': [PROJECT_EXTENSION, '.json'] } }],
-        });
+        const handle = await picker.call(window, savePickerOptions(fileName));
         const writable = await handle.createWritable();
         await writable.write(new Blob([content], { type: 'application/json' }));
         await writable.close();

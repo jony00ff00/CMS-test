@@ -191,7 +191,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - "Save project file…" opens `SaveDialog` (`src/ui/canvas/SaveDialog.tsx`, a `<dialog>`): a file name
   (`projectFileName`, `.node-cms.json`, remembered in localStorage `node-cms:project-name`), then the browser's own
   save dialog (`showSaveFilePicker`, to pick the folder; cancelling it keeps our dialog open), or a download where
-  that API is missing. e2e stubs `showSaveFilePicker` (`save-dialog.spec.ts`) or sets it to undefined.
+  that API is missing. Its options live in `save-options.ts` (`savePickerOptions`): file types may only use simple
+  extensions (Chromium refuses `.node-cms.json`), so the type is `.json`. e2e stubs `showSaveFilePicker`
+  (`save-dialog.spec.ts`) or sets it to undefined; `save-picker.spec.ts` gives the real Chromium the same options.
 - Panels can be minimised (`src/ui/panels.tsx`: `useMinimisedPanels`, remembered in localStorage
   `node-cms:minimised-panels`; `MinimiseButton` in each panel's header). Layout: four columns, palette · canvas ·
   inspector · preview (the preview is the rightmost sidebar). A minimised palette or inspector is replaced by a
