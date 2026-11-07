@@ -6,10 +6,20 @@ import { BLOCK_TAGS, parseHtml } from './document';
 import type { StoredFile } from './graph';
 import { runSelector, type SelectorConfig } from './selectors';
 import { applySnippet } from './snippets';
-import type { Anchor, Asset, CmsDocument, Match, Selection, Snippet } from './types';
+import type { Anchor, Asset, CmsDocument, Match, Selection, Snippet, SnippetAsset } from './types';
+import { hashString } from './hash';
 
 export type InsertContent =
-  | { kind: 'code'; code: string; language?: string; /** "block": shown as code. "html": added to the page as HTML. */ render: 'block' | 'html' }
+  | {
+      kind: 'code';
+      code: string;
+      language?: string;
+      /** "block": shown as code. "html": added to the page as HTML. */
+      render: 'block' | 'html';
+      /** CSS and JavaScript added to the page once (like a snippet's), e.g. to style or run the inserted HTML. */
+      css?: string;
+      js?: string;
+    }
   | { kind: 'image'; fileId?: string; alt: string; caption?: string; width?: Width; href?: string }
   | { kind: 'video'; fileId?: string; caption?: string; width?: Width; autoplay?: boolean; loop?: boolean; muted?: boolean }
   | { kind: 'imageUrl'; url: string; alt: string; caption?: string; width?: Width; href?: string }
@@ -122,6 +132,14 @@ interface Built {
   styles?: string[];
 }
 
+/** The CSS and JavaScript of inserted code, as a page asset added once per distinct code. */
+function codeAssets(content: Extract<InsertContent, { kind: 'code' }>): SnippetAsset[] | undefined {
+  const css = content.css?.trim();
+  const js = content.js?.trim();
+  if (!css && !js) return undefined;
+  return [{ key: `object-${hashString(`${css ?? ''}\u0000${js ?? ''}`)}`, name: 'Inserted code', ...(css && { css }), ...(js && { js }) }];
+}
+
 /** The elements to insert. Returns a reason instead when the content is not complete yet. */
 export function buildInsertion(content: InsertContent, files: Record<string, StoredFile>): Built | { waiting: string } | { error: string } {
   const warnings: string[] = [];
@@ -149,7 +167,7 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
         warnings.push(...parsed.meta.warnings);
         const nodes = parsed.tree.children as ElementContent[];
         if (nodes.length === 0) return { error: 'The HTML is empty once scripts and the like are removed' };
-        return { nodes, assets: [], block: nodes.some((n) => n.type === 'element' && BLOCK_TAGS.has(n.tagName)), warnings };
+        return { nodes, assets: [], block: nodes.some((n) => n.type === 'element' && BLOCK_TAGS.has(n.tagName)), warnings, snippetAssets: codeAssets(content) };
       }
       const code = el('code', content.language ? { className: [`language-${content.language}`] } : {}, [text(content.code)]);
       return {
@@ -157,6 +175,7 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
         assets: [],
         block: true,
         warnings,
+        snippetAssets: codeAssets(content),
       };
     }
     case 'image':
@@ -592,7 +611,7 @@ export const INSERT_MARKER_CSS = `
 export function describeInsertion(content: InsertContent): string {
   switch (content.kind) {
     case 'code':
-      return content.render === 'html' ? 'HTML code' : `Code${content.language ? ` (${content.language})` : ''}`;
+      return `${content.render === 'html' ? 'HTML code' : `Code${content.language ? ` (${content.language})` : ''}`}${content.css?.trim() || content.js?.trim() ? ' + CSS/JS' : ''}`;
     case 'image':
       return 'Image';
     case 'video':

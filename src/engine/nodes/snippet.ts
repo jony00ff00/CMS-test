@@ -6,7 +6,7 @@ import type { Selection, Snippet, SnippetAsset } from '../types';
 
 /** A custom snippet made from a class name: what the CSS and JavaScript of the node then target. */
 export interface CustomSnippet {
-  /** Given to the selected content (or to the wrapper around it). */
+  /** Given to the selected content (or to the wrapper around it): one or more class names, separated by spaces. */
   className: string;
   /** "none" (default): the class goes on the selected elements (selected text gets a <span>). "div" / "span": a wrapper. */
   wrap?: 'none' | 'div' | 'span';
@@ -28,17 +28,24 @@ export interface SnippetNodeConfig {
   documentScope?: 'document' | 'blocks';
 }
 
-/** Class names are kept to letters, digits, - and _, so they are safe in CSS and in the class attribute. */
+/** A class name is kept to letters, digits, - and _, so it is safe in CSS and in the class attribute. */
 export const cleanClassName = (name: string) => name.trim().replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
+
+/** Several class names separated by spaces (as in HTML), each cleaned, each once; "custom" when there are none. */
+export function cleanClassNames(names: string): string[] {
+  const list = [...new Set(names.split(/\s+/).filter(Boolean).map(cleanClassName))];
+  return list.length ? list : ['custom'];
+}
 
 /** The snippet a custom node applies: a class on the selected content, or a wrapper with that class. */
 export function customSnippet(custom: CustomSnippet): Snippet {
-  const className = cleanClassName(custom.className);
+  const classes = cleanClassNames(custom.className);
+  const className = classes.join(' ');
   const wrap = custom.wrap ?? 'none';
   return {
     kind: 'snippet',
-    id: `custom-${className}`,
-    name: `Custom (.${className})`,
+    id: `custom-${classes.join('-')}`,
+    name: `Custom (${classes.map((c) => `.${c}`).join('')})`,
     version: 1,
     mode: wrap === 'none' ? 'attributes' : 'wrap',
     template: wrap === 'none' ? `class="${className}"` : `<${wrap} class="${className}">{{content}}</${wrap}>`,

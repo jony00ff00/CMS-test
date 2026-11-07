@@ -28,7 +28,7 @@ test('the project is kept in the browser and opens again after a reload', async 
   // A custom snippet saved to the library: the library is part of what is kept.
   await node(page, 'snippet-3').click();
   await inspector(page).getByLabel('Snippet', { exact: true }).selectOption({ label: 'Custom (only this node)' });
-  await inspector(page).getByLabel('Class name').fill('kept');
+  await inspector(page).getByLabel('Class names').fill('kept');
   await inspector(page).getByRole('button', { name: 'Save to library' }).click();
   await expect(page.getByText(/Saved in this browser/)).toBeVisible();
   await page.waitForTimeout(800); // let the last change be saved

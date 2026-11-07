@@ -26,6 +26,6 @@ export type { ObjectNodeConfig } from './object';
 export type { ExtractorConfig } from './extractor';
 export type { CombinatorConfig } from './combinator';
 export type { SelectorNodeConfig } from './selector';
-export { cleanClassName, customSnippet, DEFAULT_SNIPPET, type CustomSnippet, type SnippetNodeConfig } from './snippet';
+export { cleanClassName, cleanClassNames, customSnippet, DEFAULT_SNIPPET, type CustomSnippet, type SnippetNodeConfig } from './snippet';
 export type { DocumentSourceConfig } from './document-source';
 export type { OutputConfig } from './output';

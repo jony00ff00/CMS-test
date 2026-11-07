@@ -77,7 +77,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   slide with that title (or that number, untitled) win and are needed for the quick accept; one found only on
   another slide is `moved` at ×0.85 confidence (`OTHER_SLIDE_FACTOR`).
 - Snippet node: `custom` ({ className, wrap: none | div | span }) makes the snippet (`customSnippet`: attributes
-  `class="…"`, or a wrapper with the class) instead of `snippet`; `css` / `js` on any Snippet node are added as a
+  `class="…"`, or a wrapper with the classes; `className` holds one or more names separated by spaces, read with
+  `cleanClassNames` (each cleaned by `cleanClassName`, each once, "custom" when empty)) instead of `snippet`; `css` / `js` on any Snippet node are added as a
   snippet asset `node-<hash>` (once per distinct code). Store: `makeCustomSnippet`; `useLibrarySnippet` /
   `detachSnippet` clear `custom`; `saveNodeSnippetToLibrary` saves a custom one with its CSS / JS.
 - `snippets.ts`: `applySnippet(selection, snippet, { params, snapToBlock })` (async: Handlebars loads on demand)
@@ -115,7 +116,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   value is the HTML inside its block plus any wrappers around that block alone (e.g. `<details>`); text fields
   that are still plain paragraphs go back as text; untouched fields keep their original value exactly (compared
   with a fresh import). Content outside fields and wrappers around several fields are reported as warnings.
-- `insert.ts`: content to insert (`code` as a block or as HTML, `image` / `video` from an uploaded file in the
+- `insert.ts`: content to insert (`code` as a block or as HTML, with optional `css` / `js` added to the page once as a
+  snippet asset `object-<hash>` (`codeAssets`), `image` / `video` from an uploaded file in the
   store, `imageUrl` / `videoUrl` by address; YouTube and Vimeo become embeds; only http(s) addresses) and where:
   `{ mode: 'point', point: { anchor, place } }` (picked in the preview) or `{ mode: 'selector', selector, place }`;
   places are before / after / start / end. Widths (`cssWidth`): any CSS length with a unit, a plain number means

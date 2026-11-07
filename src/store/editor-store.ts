@@ -6,7 +6,7 @@ import { createStore } from 'zustand/vanilla';
 import {
   connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type EdgeCandidate, type Graph,
   type GraphNode, type ObjectNodeConfig, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
-  cleanClassName, customSnippet, latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
+  cleanClassName, cleanClassNames, customSnippet, latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
 } from '../engine';
 import { sampleHtml, sampleJson, sampleNotesHtml } from '../samples';
 import { seedLibrary } from '../snippets/seed';
@@ -552,7 +552,7 @@ export function createEditorStore(options: EditorOptions = {}) {
       const config = node.config as SnippetNodeConfig;
       // A custom snippet goes to the library with its CSS and JavaScript (which then leave the node).
       const own = config.custom ? { ...customSnippet(config.custom), css: config.css?.trim() || undefined, js: config.js?.trim() || undefined } : config.snippet;
-      const name = config.custom ? cleanClassName(config.custom.className) : own.name;
+      const name = config.custom ? cleanClassNames(config.custom.className).join(' ') : own.name;
       const id = config.ref && get().library[config.ref.id] ? config.ref.id : snippetIdFor(get().library, name);
       const saved = get().saveSnippet({ ...own, id, name });
       get().updateConfig<SnippetNodeConfig>(nodeId, (c) => ({

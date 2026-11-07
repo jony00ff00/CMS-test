@@ -145,7 +145,7 @@ test('a custom snippet: a class name, and CSS and JavaScript for this node only'
   await node(page, 'snippet-3').click();
   await inspector(page).getByLabel('Snippet', { exact: true }).selectOption({ label: 'Custom (only this node)' });
   await expect(inspector(page).getByLabel('Template')).toHaveCount(0);
-  await inspector(page).getByLabel('Class name').fill('shout');
+  await inspector(page).getByLabel('Class names').fill('shout');
   await expect(inspector(page)).toContainText('The selected content gets the class .shout');
   const css = inspector(page).locator('.cm-content[aria-label="CSS"]');
   await css.click();
@@ -159,15 +159,22 @@ test('a custom snippet: a class name, and CSS and JavaScript for this node only'
   await expect(h2).toHaveCSS('color', 'rgb(220, 38, 38)');
   await expect(h2).toHaveAttribute('data-shouted', 'yes');
   await node(page, 'snippet-3').click();
+  // Several class names, separated by spaces.
+  await inspector(page).getByLabel('Class names').fill('shout loud');
+  await expect(inspector(page)).toContainText('The selected content gets the classes .shout .loud');
+  await expect(node(page, 'snippet-3')).toContainText('Custom .shout.loud + own CSS/JS');
   await page.screenshot({ path: 'test-results/snippet-custom.png' });
+  await node(page, 'output-4').click();
+  await expect(preview(page).locator('h2.shout.loud')).toHaveCount(2);
+  await node(page, 'snippet-3').click();
 
   // A wrapper around it instead, and saving it to the library keeps the CSS and JavaScript.
-  await inspector(page).getByLabel('Put the class on').selectOption('div');
+  await inspector(page).getByLabel('Put the classes on').selectOption('div');
   await node(page, 'output-4').click();
-  await expect(preview(page).locator('div.shout > h2')).toHaveCount(2);
+  await expect(preview(page).locator('div.shout.loud > h2')).toHaveCount(2);
   await node(page, 'snippet-3').click();
   await inspector(page).getByRole('button', { name: 'Save to library' }).click();
-  await expect(inspector(page).getByLabel('Snippet', { exact: true })).toHaveValue('shout');
+  await expect(inspector(page).getByLabel('Snippet', { exact: true })).toHaveValue('shout-loud');
   await node(page, 'output-4').click();
   await expect(preview(page).locator('div.shout > h2').first()).toHaveCSS('color', 'rgb(220, 38, 38)');
 });

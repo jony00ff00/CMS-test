@@ -112,7 +112,9 @@ describe('Combinator', () => {
 
 describe('Snippet: custom and its own CSS / JavaScript', () => {
   it('a custom snippet puts a class on the selected content, or a wrapper with it', () => {
-    expect(customSnippet({ className: 'my box!' })).toMatchObject({ mode: 'attributes', template: 'class="my-box"' });
+    // Spaces separate class names, as in HTML; other characters that do not belong in one become -.
+    expect(customSnippet({ className: 'my box!' })).toMatchObject({ mode: 'attributes', template: 'class="my box"' });
+    expect(customSnippet({ className: 'my.box' })).toMatchObject({ template: 'class="my-box"' });
     expect(customSnippet({ className: 'note', wrap: 'div' })).toMatchObject({ mode: 'wrap', template: '<div class="note">{{content}}</div>' });
   });
 

@@ -138,6 +138,26 @@ test('an Object adds an uploaded video after a heading', async ({ page }) => {
   await expect(figure.locator('figcaption')).toHaveText('How it works');
 });
 
+test('code in an Object can bring its own CSS and JavaScript', async ({ page }) => {
+  await setUp(page, false);
+  await node(page, 'object-6').click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('code');
+  await inspector(page).getByLabel('Show it as').selectOption('html');
+  await inspector(page).locator('.cm-content[aria-label="Code"]').click();
+  await page.keyboard.insertText('<div class="banner">Hello</div>');
+  await inspector(page).getByText('CSS and JavaScript for this code').click();
+  await inspector(page).locator('.cm-content[aria-label="CSS"]').click();
+  await page.keyboard.insertText('.banner { color: rgb(5, 150, 105); }');
+  await inspector(page).locator('.cm-content[aria-label="JavaScript"]').click();
+  await page.keyboard.insertText("document.querySelectorAll('.banner').forEach((el) => el.setAttribute('data-ran', 'yes'));");
+  await expect(node(page, 'object-6')).toContainText('HTML code + CSS/JS · added 2×');
+  await page.getByRole('button', { name: 'Result', exact: true }).click();
+  const banner = preview(page).locator('div.banner').first();
+  await expect(banner).toHaveCSS('color', 'rgb(5, 150, 105)');
+  await expect(banner).toHaveAttribute('data-ran', 'yes');
+  await page.screenshot({ path: 'test-results/object-code-css-js.png' });
+});
+
 test('an Object adds a code block after every match of its Selector', async ({ page }) => {
   await setUp(page, false);
   await node(page, 'selector-5').click();

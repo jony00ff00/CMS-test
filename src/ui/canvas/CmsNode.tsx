@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, useState } from 'react';
-import { describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
+import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -145,7 +145,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     case 'snippet': {
       const c = node.config as SnippetNodeConfig;
       const applied = typeof info.applied === 'number' ? ` · applied ${info.applied}×` : '';
-      const name = c.custom ? `Custom .${c.custom.className}` : `${c.snippet.name}${c.ref ? ` v${c.ref.version}` : ' (custom)'}`;
+      const name = c.custom ? `Custom ${cleanClassNames(c.custom.className).map((x) => `.${x}`).join('')}` : `${c.snippet.name}${c.ref ? ` v${c.ref.version}` : ' (custom)'}`;
       const extra = c.css?.trim() || c.js?.trim() ? ' + own CSS/JS' : '';
       return `${name}${extra}${applied}`;
     }

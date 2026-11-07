@@ -221,6 +221,23 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
             value={content.code}
             onChange={(code) => onChange({ code })}
           />
+          <details className="advanced node-code" open={!!(content.css?.trim() || content.js?.trim())}>
+            <summary>CSS and JavaScript for this code</summary>
+            <CodeField
+              label="CSS"
+              language="css"
+              value={content.css ?? ''}
+              hint="Added to the page once, e.g. to style the inserted HTML (give it a class and target that)."
+              onChange={(css) => onChange({ css: css || undefined })}
+            />
+            <CodeField
+              label="JavaScript"
+              language="javascript"
+              value={content.js ?? ''}
+              hint="Runs once when the page has loaded (in the preview too, which is sandboxed). Script tags in the code itself are removed; put scripts here."
+              onChange={(js) => onChange({ js: js || undefined })}
+            />
+          </details>
         </>
       );
     case 'image':

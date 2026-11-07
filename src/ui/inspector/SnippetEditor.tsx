@@ -1,4 +1,4 @@
-import { cleanClassName, refStatus, valueKind, type GraphNode, type SnippetNodeConfig } from '../../engine';
+import { cleanClassNames, refStatus, valueKind, type GraphNode, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { CheckboxField, CodeField, SelectField, TextField } from './fields';
 import { ParamValues, SnippetFields } from './SnippetFields';
@@ -109,33 +109,44 @@ function CustomFields({ node, config }: { node: GraphNode; config: SnippetNodeCo
   const store = editorStore.getState();
   const custom = config.custom!;
   const update = (patch: Partial<SnippetNodeConfig>) => store.updateConfig<SnippetNodeConfig>(node.id, (c) => ({ ...c, ...patch }));
-  const className = cleanClassName(custom.className);
+  const classes = cleanClassNames(custom.className);
+  const typed = custom.className.trim().split(/\s+/).filter(Boolean).join(' ');
   const wrap = custom.wrap ?? 'none';
   return (
     <>
       <p className="muted small">
-        The selected content gets the class <code>.{className}</code>; write CSS and JavaScript for it below. Only this
-        node adds them to the page.
+        The selected content gets {classes.length === 1 ? 'the class' : 'the classes'}{' '}
+        {classes.map((c, i) => (
+          <span key={c}>
+            {i > 0 && ' '}
+            <code>.{c}</code>
+          </span>
+        ))}
+        ; write CSS and JavaScript for {classes.length === 1 ? 'it' : 'them'} below. Only this node adds them to the page.
       </p>
       <TextField
-        label="Class name"
+        label="Class names"
         monospace
         value={custom.className}
-        hint={custom.className.trim() !== className ? `Used as “${className}” (letters, digits, - and _ only).` : undefined}
+        hint={
+          typed !== classes.join(' ')
+            ? `Used as “${classes.join(' ')}” (separate names with spaces; each has letters, digits, - and _ only).`
+            : 'One or more, separated by spaces, as in HTML: e.g. “note highlight”.'
+        }
         onChange={(v) => update({ custom: { ...custom, className: v } })}
       />
       <SelectField
-        label="Put the class on"
+        label="Put the classes on"
         value={wrap}
         options={[
           { value: 'none', label: 'The selected content itself' },
           { value: 'div', label: 'A new box around it (<div>)' },
           { value: 'span', label: 'A new inline wrapper around it (<span>)' },
         ]}
-        hint={wrap === 'none' ? 'Selected text (not whole elements) gets a <span> with the class.' : undefined}
+        hint={wrap === 'none' ? `Selected text (not whole elements) gets a <span> with the class${classes.length === 1 ? '' : 'es'}.` : undefined}
         onChange={(w) => update({ custom: { ...custom, wrap: w } })}
       />
-      <OwnCode config={config} onChange={update} className={className} />
+      <OwnCode config={config} onChange={update} classes={classes} />
       <button type="button" onClick={() => store.saveNodeSnippetToLibrary(node.id)}>
         Save to library
       </button>
@@ -143,8 +154,10 @@ function CustomFields({ node, config }: { node: GraphNode; config: SnippetNodeCo
   );
 }
 
-function OwnCode({ config, onChange, className }: { config: SnippetNodeConfig; onChange: (p: Partial<SnippetNodeConfig>) => void; className?: string }) {
-  const target = className ? `.${className}` : 'the snippet’s classes';
+function OwnCode({ config, onChange, classes }: { config: SnippetNodeConfig; onChange: (p: Partial<SnippetNodeConfig>) => void; classes?: string[] }) {
+  // CSS and JavaScript examples use the first class; `.a.b` means an element with both.
+  const className = classes?.[0];
+  const target = classes ? classes.map((c) => `.${c}`).join(', ') : 'the snippet’s classes';
   return (
     <>
       <CodeField
