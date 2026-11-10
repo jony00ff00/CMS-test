@@ -58,6 +58,18 @@ export function SourceEditor({ node }: { node: GraphNode }) {
       </div>
       {format === 'json' && file && <JsonMappingEditor file={file} mapping={config.json} onChange={(json) => update({ json })} />}
       {format === 'pptx' && <SlideOptions nodeId={node.id} options={config.pptx ?? {}} onChange={(pptx) => update({ pptx })} />}
+      {format === 'html' && (
+        <CheckboxField
+          label="Keep its scripts and styles (code you trust)"
+          checked={!!config.html?.keepCode}
+          hint={
+            config.html?.keepCode
+              ? 'Scripts, <style> elements and event handlers stay where they are in the page, and run in the preview and the exported page. Use this only for code you or your developers made.'
+              : 'Off: scripts and event handlers are removed, and styles go to the page head (safe for any file). Turn on for a code component, e.g. an interactive graphic, whose text you fill in from another document.'
+          }
+          onChange={(keepCode) => update({ html: keepCode ? { keepCode } : undefined })}
+        />
+      )}
       {format === 'docx' && (
         <TextAreaField
           label="Word style rules"

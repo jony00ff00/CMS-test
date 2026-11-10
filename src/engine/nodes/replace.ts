@@ -1,9 +1,9 @@
 import { convertValue } from '../convert';
 import type { NodeDefinition, NodeOutput } from '../graph';
-import { replaceSelection, type ReplaceOptions } from '../insert';
+import { replaceSelection, type ReplaceMode, type ReplaceOptions } from '../insert';
 import type { Selection } from '../types';
 
-export type ReplaceNodeConfig = ReplaceOptions;
+export type ReplaceNodeConfig = ReplaceOptions & ReplaceMode;
 
 /**
  * Replaces what a Selector picked with content from another node (a selection, a whole document such as an
@@ -22,7 +22,8 @@ export const replace: NodeDefinition<ReplaceNodeConfig> = {
   async evaluate(inputs, config): Promise<NodeOutput> {
     const selection = inputs.selection as Selection;
     // A document (or HTML) means all of it; a selection, what it picked.
-    const converted = await convertValue(inputs.content);
+    // Match by match, a document's blocks are its parts.
+    const converted = await convertValue(inputs.content, { documentToSelection: config.pairs ? 'blocks' : 'document' });
     const result = await replaceSelection(selection, converted.selection, config);
     const warnings = [...converted.warnings.filter((w) => !result.warnings.includes(w)), ...result.warnings];
     return {

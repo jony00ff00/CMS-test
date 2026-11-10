@@ -612,6 +612,17 @@ export async function insertContent(
 /** How the Replace node copies its content in: the options of the Object's "Content from another node". */
 export type ReplaceOptions = Omit<Extract<InsertContent, { kind: 'selection' }>, 'kind'>;
 
+/** What the Replace node replaces, and which content each match gets. */
+export interface ReplaceMode {
+  /** "element" (default): the selected element itself. "inside": what is inside it (the element and its attributes stay). */
+  target?: 'element' | 'inside';
+  /**
+   * Match by match: the 1st match gets the 1st part of the content (the 1st match of a selection, or the 1st block of
+   * a document), the 2nd the 2nd, and so on. Off: every match gets all of it.
+   */
+  pairs?: boolean;
+}
+
 export interface ReplaceResult {
   document: CmsDocument;
   warnings: string[];
@@ -629,69 +640,112 @@ const replaceSnippet: Snippet = {
   params: [],
 };
 
+/** Content that fits inside a paragraph (or heading): one paragraph's content without its <p>, or inline nodes. */
+function inlineOf(built: Built): ElementContent[] | undefined {
+  const items = built.nodes.filter((n) => n.type === 'element' || (n.type === 'text' && n.value.trim()));
+  const single = items.length === 1 && items[0].type === 'element' ? items[0] : undefined;
+  return single && PHRASING_BLOCKS.has(single.tagName) ? single.children : !built.block ? built.nodes : undefined;
+}
+
 /**
  * A copy of the selection's document with every match replaced by a copy of `content` (what another node picked,
  * from any document). Selected text inside a paragraph takes inline content: one paragraph's content goes in
- * without its <p>; other block content replaces the whole paragraph (with a warning).
+ * without its <p>; other block content replaces the whole paragraph (with a warning). With `target: 'inside'`, a
+ * selected element keeps its tag and attributes and only what is inside it is replaced (a paragraph or heading
+ * then takes the content of one paragraph without its <p>). With `pairs`, match i gets part i of the content.
  */
-export async function replaceSelection(selection: Selection, content: Selection, options: ReplaceOptions = {}): Promise<ReplaceResult> {
+export async function replaceSelection(selection: Selection, content: Selection, options: ReplaceOptions & ReplaceMode = {}): Promise<ReplaceResult> {
   const doc = selection.document;
   const warnings = [...selection.warnings];
   if (selection.matches.length === 0) {
     if (!warnings.length) warnings.push('The selection is empty, so nothing was replaced');
     return { document: doc, warnings, replaced: 0 };
   }
-  const built = await copyContent(content, { kind: 'selection', ...options });
-  warnings.push(...built.warnings.filter((w) => !warnings.includes(w)));
-  if (built.nodes.length === 0) {
+  const copyOptions = { kind: 'selection' as const, ...options };
+  const pieces = options.pairs
+    ? await Promise.all(content.matches.map((m) => copyContent({ ...content, matches: [m], warnings: [] }, copyOptions)))
+    : [await copyContent(content, copyOptions)];
+  for (const p of pieces) warnings.push(...p.warnings.filter((w) => !warnings.includes(w)));
+  if (pieces.every((p) => p.nodes.length === 0)) {
     warnings.push('There is no content to put in, so nothing was replaced');
     return { document: doc, warnings, replaced: 0 };
   }
+  if (options.pairs && pieces.length !== selection.matches.length) {
+    const n = selection.matches.length;
+    warnings.push(
+      pieces.length > n
+        ? `The content has ${pieces.length} parts for ${n} match${n === 1 ? '' : 'es'}: the last ${pieces.length - n} ${pieces.length - n === 1 ? 'is' : 'are'} left out`
+        : `The content has ${pieces.length} part${pieces.length === 1 ? '' : 's'} for ${n} matches: the last ${n - pieces.length} stay${n - pieces.length === 1 ? 's' : ''} as ${n - pieces.length === 1 ? 'it was' : 'they were'}`,
+    );
+  }
 
-  // Selected text can only take inline content.
-  const elements = built.nodes.filter((n) => n.type === 'element' || (n.type === 'text' && n.value.trim()));
-  const single = elements.length === 1 && elements[0].type === 'element' ? elements[0] : undefined;
-  const inline = single && single.tagName === 'p' ? single.children : !built.block ? built.nodes : undefined;
+  // One job per place: what goes there (a piece, inline or not), worked out against this document.
   const ix = indexDocument(doc);
-  const textIndexes = new Set<number>();
+  interface Job { match: Match; nodes: ElementContent[] }
+  const fill: Job[] = []; // empty elements: the content goes inside
+  const swap: Job[] = []; // everything else: replaced
   let widened = false;
   const seen = new Set<string>();
-  const matches: Match[] = [];
-  for (const m of selection.matches) {
+  selection.matches.forEach((m, i) => {
+    const piece = options.pairs ? pieces[i] : pieces[0];
+    if (!piece || piece.nodes.length === 0) return;
     let match = m.match;
+    let nodes = piece.nodes;
     if (match.kind === 'text') {
-      if (inline) textIndexes.add(matches.length);
+      const inline = inlineOf(piece);
+      if (inline) nodes = inline;
       else {
         match = enclosingBlock(ix, match.start) ?? match;
         widened ||= match.kind === 'nodes';
       }
+    } else if (options.target === 'inside' && match.end - match.start === 1) {
+      const el = nodeAt(doc, match);
+      if (el?.type === 'element') {
+        // A paragraph, heading or inline element (a link, …) takes inline content.
+        if (PHRASING_BLOCKS.has(el.tagName) || !BLOCK_TAGS.has(el.tagName)) nodes = inlineOf(piece) ?? nodes;
+        const inner: Match = { kind: 'nodes', parent: [...match.parent, match.start], start: 0, end: el.children.length };
+        const key = JSON.stringify(inner);
+        if (seen.has(key)) return;
+        seen.add(key);
+        (el.children.length ? swap : fill).push({ match: el.children.length ? inner : match, nodes });
+        return;
+      }
     }
     const key = JSON.stringify(match);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return;
     seen.add(key);
-    matches.push(match);
-  }
+    swap.push({ match, nodes });
+  });
   if (widened) warnings.push('The content is more than a paragraph’s text, so it replaces the whole paragraph around the selected text');
 
   const fit = options.headings === 'fit';
   const deep: string[] = [];
-  // A text range across blocks leaves one placeholder per block: only the first one gets the content.
-  const filled = new Set<number>();
-  const placed = await place(
-    doc,
-    { matches, place: 'after' },
-    (i, level) => {
-      if (filled.has(i)) return [];
-      filled.add(i);
-      const nodes = structuredClone(textIndexes.has(i) ? inline! : built.nodes);
-      if (fit && level) fitHeadings(nodes, level, deep);
-      return nodes;
-    },
-    replaceSnippet,
-  );
+  const nodesFor = (jobs: Job[], filled: Set<number>) => (i: number, level: number) => {
+    // A text range across blocks leaves one placeholder per block: only the first one gets the content.
+    if (filled.has(i) || !jobs[i]) return [];
+    filled.add(i);
+    const nodes = structuredClone(jobs[i].nodes);
+    if (fit && level) fitHeadings(nodes, level, deep);
+    return nodes;
+  };
+  let out = doc;
+  const placeWarnings: string[] = [];
+  // Empty elements first: filling them moves nothing else, so the other matches stay where they were.
+  const filledEmpty = new Set<number>();
+  if (fill.length) {
+    const r = await place(out, { matches: fill.map((j) => j.match), place: 'end' }, nodesFor(fill, filledEmpty));
+    out = r.document;
+    placeWarnings.push(...r.warnings);
+  }
+  const replaced = new Set<number>();
+  if (swap.length) {
+    const r = await place(out, { matches: swap.map((j) => j.match), place: 'after' }, nodesFor(swap, replaced), replaceSnippet);
+    out = r.document;
+    placeWarnings.push(...r.warnings);
+  }
   if (deep.length) warnings.push(`Some headings would be deeper than level 6, so they stay <h6>: ${[...new Set(deep)].join(', ')}`);
-  addBuiltAssets(placed.document, built);
-  return { document: placed.document, warnings: [...warnings, ...placed.warnings], replaced: filled.size };
+  for (const p of pieces) addBuiltAssets(out, p);
+  return { document: out, warnings: [...warnings, ...placeWarnings], replaced: filledEmpty.size + replaced.size };
 }
 
 /**

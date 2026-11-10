@@ -3,6 +3,7 @@ import type { Element, ElementContent, Nodes, Parent, Root, RootContent, Text } 
 import rehypeParse from 'rehype-parse';
 import rehypeStringify from 'rehype-stringify';
 import { unified } from 'unified';
+import { hashString } from './hash';
 import type { CmsDocument, SourceFormat } from './types';
 
 export const BLOCK_TAGS = new Set([
@@ -22,7 +23,16 @@ const DROP_TAGS = new Set(['script', 'noscript', 'link', 'meta', 'base', 'templa
 export interface ParseOptions {
   fileName?: string;
   origin?: SourceFormat;
+  /**
+   * Only for code you trust (e.g. a component made by your own developers): keep the page's own scripts, styles,
+   * event handlers and embeds where they are, instead of removing them (scripts) or moving them to the head
+   * (styles). Scripts in the <head> run at the end of the body (as a snippet asset `page-<hash>`).
+   */
+  keepCode?: boolean;
 }
+
+/** Elements whose content is code, not text: never part of the text index (the preview's bridge skips them too). */
+export const CODE_TAGS = new Set(['script', 'style', 'template', 'noscript']);
 
 const isElement = (node: Nodes | undefined): node is Element => node?.type === 'element';
 const isBlock = (node: Nodes | undefined) => isElement(node) && BLOCK_TAGS.has(node.tagName);
@@ -54,25 +64,48 @@ export function parseHtml(html: string, options: ParseOptions = {}): CmsDocument
   const body = findElement(full, 'body');
   const titleEl = head && findElement(head, 'title');
 
+  const headScripts: string[] = [];
   if (head) {
     for (const child of head.children) {
       if (isElement(child) && child.tagName === 'style') styles.push(textContent(child));
+      if (options.keepCode && isElement(child) && child.tagName === 'script') {
+        if (typeof child.properties.src === 'string') warnings.push(`A script loaded from ${child.properties.src} in the <head> was left out; put it in the body to keep it`);
+        else headScripts.push(textContent(child));
+      }
     }
   }
 
   const tree: Root = { type: 'root', children: (body?.children ?? []) as RootContent[] };
-  clean(tree, { styles, warnings });
+  if (options.keepCode) keepCode(tree);
+  else clean(tree, { styles, warnings });
   normalizeWhitespace(tree, false);
 
   const h1 = findElement(tree, 'h1');
   const title = (titleEl && textContent(titleEl).trim()) || (h1 && textContent(h1).trim()) || undefined;
 
+  const js = headScripts.filter((s) => s.trim()).join('\n;\n');
   return {
     kind: 'document',
     tree,
-    meta: { origin: options.origin ?? 'html', fileName: options.fileName, title, styles, warnings },
+    meta: {
+      origin: options.origin ?? 'html',
+      fileName: options.fileName,
+      title,
+      styles,
+      warnings,
+      ...(js && { snippetAssets: [{ key: `page-${hashString(js)}`, name: 'Scripts from the page head', js }] }),
+    },
     assets: {},
   };
+}
+
+/** Trusted code: only comments and position data go; scripts, styles and handlers stay where they are. */
+function keepCode(parent: Parent) {
+  parent.children = parent.children.filter((c) => c.type !== 'comment' && c.type !== 'doctype') as Parent['children'];
+  for (const child of parent.children) {
+    delete (child as { position?: unknown }).position;
+    if (isElement(child)) keepCode(child);
+  }
 }
 
 /** Remove comments, scripts, event handlers and position data. Collects <style> CSS. */
@@ -250,6 +283,7 @@ export function buildTextIndex(tree: Root): TextIndex {
       add('\n');
       return;
     }
+    if (isElement(node) && CODE_TAGS.has(node.tagName)) return;
     const block = isBlock(node);
     if (block) breakLine();
     if ('children' in node) node.children.forEach((child, i) => walk(child, [...path, i]));

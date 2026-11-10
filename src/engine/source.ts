@@ -15,6 +15,8 @@ export interface SourceOptions {
   json?: JsonMapping;
   /** Only used for .docx files. */
   docx?: Omit<DocxOptions, 'fileName'>;
+  /** Only used for .html files: `keepCode` keeps the page's scripts and styles (code you trust). */
+  html?: { keepCode?: boolean };
   /** Only used for .pptx files. */
   pptx?: Omit<PptxOptions, 'fileName'>;
 }
@@ -37,7 +39,7 @@ export async function importSource(file: SourceFile, options: SourceOptions = {}
   const format = detectFormat(file.name);
   switch (format) {
     case 'html':
-      return parseHtml(decode(file.data), { fileName: file.name });
+      return parseHtml(decode(file.data), { fileName: file.name, keepCode: options.html?.keepCode });
     case 'json':
       return await importJson(file.data, options.json, { fileName: file.name });
     case 'docx':

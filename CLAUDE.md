@@ -22,7 +22,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 ## Engine API (so far)
 - `types.ts`: `CmsDocument` (hast `tree` of body content, `meta`, `assets`), `Anchor`, `Selection`, `Snippet`.
 - `document.ts`: `parseHtml` (drops scripts, event handlers, `javascript:` URLs and comments; collects `<style>`;
-  collapses whitespace like a browser), `serialize` (`fullDocument`, `inlineAssets`), `buildTextIndex`
+  collapses whitespace like a browser; `keepCode` (Document Source `html.keepCode`, "Keep its scripts and styles
+  (code you trust)"): only comments go, scripts / styles / handlers stay in place, head scripts become a snippet
+  asset `page-<hash>`), `buildTextIndex` skips `CODE_TAGS` (script, style, template, noscript, like the bridge), `serialize` (`fullDocument`, `inlineAssets`), `buildTextIndex`
   (visible text, blocks separated by `\n`, each segment mapped to its text node and path), `locate`, `nodeAtPath`.
 - `docx.ts`: `importDocx` via mammoth, loaded on demand to keep the main bundle small. Images become assets
   referenced as `asset:<id>`. Custom `styleMap` rules take precedence over the defaults.
@@ -178,7 +180,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `replaceSelection` in `insert.ts`: a `replace` snippet with the placeholder, filled with `copyContent` (one copy
   per match; a text range across blocks gets it once). Selected text takes inline content: one `<p>`'s children, or
   inline nodes; block content widens a text match to its block, with a warning. JSON field blocks are kept (replace
-  works inside them); info `replaced`, `from` (only when the content has a file name));
+  works inside them); `ReplaceMode`: `target` element (default) | inside (the element and its attributes stay, its
+  children are replaced; an empty element is filled first, by an append inside; a paragraph, heading or inline
+  element takes `inlineOf` the content) and `pairs` (match i gets part i: each content match copied on its own; the
+  node reads a document as its blocks then; a count mismatch warns and leaves the extra matches unchanged); info
+  `replaced`, `from` (only when the content has a file name));
   `position` (a point-mode Selector and an Object in one: inputs `document` and `content` (`any`); config
   `PositionNodeConfig` = `ReplaceOptions` + `point` (an `InsertionPoint` picked in the preview); `insertContent` with
   `{ mode: 'point', point }` and selection content; waits until the point is picked; info `inserted`, `from`,
@@ -322,14 +328,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`. Examples
   (`loadExample`): `html`, `json`, and `two` ("Two documents": the Watering section of `sampleNotesHtml()`, via an
   Extractor, into the guide before its quote, as a labelled section with fitted headings).
-- `examples/`: example project files (see its README). `npm run example:two-columns` runs
-  `scripts/make-example-two-columns.ts`: it draws PNGs, writes a .docx (docx library) and the project
-  `word-two-columns.node-cms.json` (a Word section in two columns, pictures moved to the right: heading Selector →
-  library snippet `two-columns` (wrap, params `mediaWidth` / `side`) → CSS Selector `.cms-two-col-text p:has(img)` →
-  Snippet replace with an empty template (removes) → CSS Selector `.cms-two-col-media` Point (end) → Object with
-  content from that same Selector → Output). `tests/engine/example-two-columns.test.ts` builds it fresh and checks
-  every node; `tests/e2e/example-two-columns.spec.ts` opens the committed file. Regenerate it after changes that
-  affect it.
+- `examples/` (see its README): `ge16-scrolly.node-cms.json`, a scrollytelling graphic's code
+  (`scrolly/*.html`, Document Source with `keepCode`) filled with text from Word (`scrolly/*.docx`, style map for
+  Kicker / Title / Dek) by three Replace nodes (inside, match by match). `npm run example:scrolly`
+  (`scripts/make-example-scrolly.ts`) writes it; `tests/engine/example-scrolly.test.ts` checks every node, edited
+  text, and that the committed file is up to date; `tests/e2e/example-scrolly.spec.ts` opens it and checks the script runs.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).
@@ -359,7 +362,7 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly example. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

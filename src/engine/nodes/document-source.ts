@@ -9,6 +9,8 @@ export interface DocumentSourceConfig {
   json?: JsonMapping;
   /** For .docx files: extra mammoth style-map rules. */
   docx?: { styleMap?: string[] };
+  /** For .html files: keep the page's own scripts and styles where they are (only for code you trust). */
+  html?: { keepCode?: boolean };
   /** For .pptx files: notes, hidden slides, which slides. */
   pptx?: { includeNotes?: boolean; includeHidden?: boolean; slides?: string; slideStyles?: boolean };
 }
@@ -25,7 +27,7 @@ export const documentSource: NodeDefinition<DocumentSourceConfig> = {
     if (!config.fileId) return { outputs: {}, waiting: 'Choose a .html, .docx, .pptx or .json file' };
     const file = ctx.files[config.fileId];
     if (!file) return { outputs: {}, waiting: 'The chosen file is no longer in the project; choose it again' };
-    const doc = await importSource(file, { json: config.json, docx: config.docx, pptx: config.pptx });
+    const doc = await importSource(file, { json: config.json, docx: config.docx, pptx: config.pptx, html: config.html });
     return {
       outputs: { document: doc },
       warnings: doc.meta.warnings,

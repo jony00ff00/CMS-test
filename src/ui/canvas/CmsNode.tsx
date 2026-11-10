@@ -164,7 +164,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     case 'replace': {
       const c = node.config as ReplaceNodeConfig;
       if (typeof info.replaced !== 'number') return 'Connect a selection and content';
-      const wrap = c.wrap === 'div' ? ' in a box' : c.wrap === 'section' ? ' in a section' : '';
+      const wrap = `${c.wrap === 'div' ? ' in a box' : c.wrap === 'section' ? ' in a section' : ''}${c.pairs ? ' · match by match' : ''}${c.target === 'inside' ? ' · inside' : ''}`;
       return `${info.from ? `From ${info.from}` : 'Content'}${wrap} · replaced ${info.replaced}×`;
     }
     case 'output':

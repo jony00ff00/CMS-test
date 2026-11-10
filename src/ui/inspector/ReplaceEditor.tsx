@@ -2,6 +2,7 @@ import type { GraphNode, ReplaceNodeConfig, Selection } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
 import { ContentSource, CopyOptionsFields } from './ObjectEditor';
+import { CheckboxField, SelectField } from './fields';
 
 /** What the Replace node replaces (its Selection input) and with what (its Content input, copied in). */
 export function ReplaceEditor({ node }: { node: GraphNode }) {
@@ -15,6 +16,26 @@ export function ReplaceEditor({ node }: { node: GraphNode }) {
       </p>
       <SelectionSource nodeId={node.id} />
       <ContentSource nodeId={node.id} owner="Replace node" original="The original stays where it was." />
+      <SelectField
+        label="Replace"
+        value={config.target ?? 'element'}
+        options={[
+          { value: 'element', label: 'The selected element itself' },
+          { value: 'inside', label: 'What is inside it (keep the element and its attributes)' },
+        ]}
+        hint={
+          config.target === 'inside'
+            ? 'E.g. a <p class="intro"> keeps its class and gets the new text; a paragraph or heading takes the content of one paragraph without its <p>.'
+            : undefined
+        }
+        onChange={(target) => update({ target: target === 'inside' ? 'inside' : undefined })}
+      />
+      <CheckboxField
+        label="Match by match"
+        checked={!!config.pairs}
+        hint="The 1st match gets the 1st part of the content (the 1st match of a selection, or the 1st block of a document), the 2nd the 2nd, and so on. Off: every match gets all of it."
+        onChange={(pairs) => update({ pairs: pairs || undefined })}
+      />
       <CopyOptionsFields options={config} onChange={update} placeWord="selection" />
     </>
   );

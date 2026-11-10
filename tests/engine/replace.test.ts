@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  exportJson, GraphEvaluator, importJson, nodeRegistry, parseHtml, replaceSelection, runSelector, serialize, storeFile,
+  exportJson, GraphEvaluator, importJson, indexDocument, nodeRegistry, parseHtml, replaceSelection, runSelector, serialize, storeFile,
   type CmsDocument, type GraphEdge, type GraphNode,
 } from '../../src/engine';
 import { parseProject } from '../../src/store/project';
@@ -103,5 +103,69 @@ describe('the Replace node', () => {
     const { project: p, warnings } = parseProject(JSON.stringify(project));
     expect(p.graph.nodes).toEqual([]);
     expect(warnings.join()).toMatch(/Combinators are no longer available/);
+  });
+});
+
+describe('Replace: inside the element, match by match', () => {
+  const code = () => parseHtml('<header><p class="kicker">K</p><h2 class="title" id="t">T</h2></header><div class="card"><p>Old 1</p></div><div class="card"><p>Old 2</p></div><div class="card"></div>');
+  const text = () => parseHtml('<p>New kicker with <em>style</em></p><h1>New title</h1><p>Step one.</p><p>Step two.</p><p>Step three, <strong>bold</strong>.</p>');
+
+  it('inside: the element and its attributes stay; a paragraph or heading takes one paragraph’s content', async () => {
+    const r = await replaceSelection(runSelector(code(), { mode: 'css', selector: '.kicker, .title' }), runSelector(text(), { mode: 'css', selector: 'p:first-child, h1' }), { target: 'inside', pairs: true });
+    expect(serialize(r.document)).toContain('<header><p class="kicker">New kicker with <em>style</em></p><h2 class="title" id="t">New title</h2></header>');
+    expect(r.replaced).toBe(2);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('match by match into boxes, an empty box included; block content stays blocks', async () => {
+    const steps = runSelector(text(), { mode: 'css', selector: 'h1 ~ p' });
+    const r = await replaceSelection(runSelector(code(), { mode: 'css', selector: '.card' }), steps, { target: 'inside', pairs: true });
+    expect(serialize(r.document)).toContain('<div class="card"><p>Step one.</p></div><div class="card"><p>Step two.</p></div><div class="card"><p>Step three, <strong>bold</strong>.</p></div>');
+    expect(r.replaced).toBe(3);
+  });
+
+  it('says when the counts differ, and leaves the extra matches as they were', async () => {
+    const two = runSelector(text(), { mode: 'regex', pattern: 'Step (one|two)', scope: 'block' });
+    const r = await replaceSelection(runSelector(code(), { mode: 'css', selector: '.card' }), two, { target: 'inside', pairs: true });
+    expect(serialize(r.document)).toContain('<div class="card"><p>Step two.</p></div><div class="card"></div>');
+    expect(r.warnings).toEqual(['The content has 2 parts for 3 matches: the last 1 stays as it was']);
+    const four = runSelector(text(), { mode: 'all', scope: 'blocks' });
+    const more = await replaceSelection(runSelector(code(), { mode: 'css', selector: '.card' }), four, { target: 'inside', pairs: true });
+    expect(more.warnings).toEqual(['The content has 5 parts for 3 matches: the last 2 are left out']);
+  });
+
+  it('the node splits a document into its blocks when matching one by one', async () => {
+    const files = { code: storeFile('code.html', '<div class="card"><p>a</p></div><div class="card"><p>b</p></div>', 'code'), text: storeFile('text.html', '<p>One</p><p>Two</p>', 'text') };
+    const n = (id: string, type: string, config?: unknown): GraphNode => ({ id, type, config: config ?? nodeRegistry[type].defaultConfig() });
+    const e = (source: string, sourcePort: string, target: string, targetPort: string): GraphEdge => ({ id: `${source}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
+    const { results } = await new GraphEvaluator(nodeRegistry).evaluate(
+      {
+        nodes: [n('c', 'documentSource', { fileId: 'code' }), n('t', 'documentSource', { fileId: 'text' }), n('s', 'selector', { mode: 'css', selector: '.card' }), n('r', 'replace', { target: 'inside', pairs: true })],
+        edges: [e('c', 'document', 's', 'document'), e('s', 'selection', 'r', 'selection'), e('t', 'document', 'r', 'content')],
+      },
+      { files },
+    );
+    expect(serialize(results.r.outputs.document as CmsDocument)).toBe('<div class="card"><p>One</p></div><div class="card"><p>Two</p></div>');
+  });
+});
+
+describe('HTML sources: keeping trusted code', () => {
+  const page = '<html><head><style>.a{color:red}</style><script>window.h=1</script></head><body><div id="w" onclick="go()"><style>.in{}</style><p>Text</p><script>window.x = 1 < 2;</script></div></body></html>';
+
+  it('off (default): scripts and handlers go, styles move to the head', () => {
+    const doc = parseHtml(page);
+    expect(serialize(doc)).toBe('<div id="w"><p>Text</p></div>');
+    expect(doc.meta.styles).toEqual(['.a{color:red}', '.in{}']);
+  });
+
+  it('on: scripts, styles and handlers stay where they are; head scripts run at the end; the text index skips code', () => {
+    const doc = parseHtml(page, { keepCode: true });
+    expect(serialize(doc)).toBe('<div id="w" onclick="go()"><style>.in{}</style><p>Text</p><script>window.x = 1 < 2;</script></div>');
+    expect(doc.meta.styles).toEqual(['.a{color:red}']);
+    expect(doc.meta.snippetAssets?.[0]).toMatchObject({ name: 'Scripts from the page head', js: 'window.h=1' });
+    expect(doc.meta.warnings).toEqual([]);
+    expect(indexDocument(doc).text.text).toBe('Text');
+    expect(runSelector(doc, { mode: 'regex', pattern: 'window' }).matches).toEqual([]);
+    expect(serialize(doc, { fullDocument: true })).toContain('<script data-snippet="page-');
   });
 });
