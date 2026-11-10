@@ -45,17 +45,19 @@ export function TextAreaField(props: {
   rows?: number;
   placeholder?: string;
   hint?: ReactNode;
+  /** Ordinary text: not monospaced, spell-checked. */
+  prose?: boolean;
 }) {
   return (
     <Field label={props.label} hint={props.hint}>
       {(id) => (
         <textarea
           id={id}
-          className="mono"
+          className={props.prose ? undefined : 'mono'}
           rows={props.rows ?? 5}
           value={props.value}
           placeholder={props.placeholder}
-          spellCheck={false}
+          spellCheck={!!props.prose}
           onChange={(e) => props.onChange(e.target.value)}
         />
       )}

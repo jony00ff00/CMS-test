@@ -63,6 +63,12 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
   if (selected?.type === 'object') {
     const config = selected.config as ObjectNodeConfig;
     const views = config.content.kind === 'selection' ? OBJECT_CONTENT_VIEWS : OBJECT_VIEWS;
+    // No Point: the Object's output is its content alone, so there is just that to show.
+    if (!s.graph.edges.some((e) => e.target === selected.id && e.targetPort === 'point')) {
+      const result = s.results[selected.id];
+      const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
+      return { label: `${nodeLabel(selected)} on its own (no Point connected)`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, message: result?.message ?? 'Waiting…' };
+    }
     if (view === 'Result') {
       const result = s.results[selected.id];
       const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
@@ -86,7 +92,7 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
     const point = r?.status === 'ok' ? (r.outputs[edge!.sourcePort] as PointValue | undefined) : undefined;
     const built = buildInsertion(config.content, s.files);
     // Until the content is complete, guess from its kind whether it is block content.
-    const block = 'nodes' in built ? built.block : config.content.kind === 'video' || config.content.kind === 'videoUrl' || config.content.kind === 'code';
+    const block = 'nodes' in built ? built.block : config.content.kind === 'video' || config.content.kind === 'videoUrl' || config.content.kind === 'code' || (config.content.kind === 'text' && config.content.as !== 'inline');
     // Clicks move the point when it comes straight from a Selector in point mode.
     const pickable = pointer?.type === 'selector' && (pointer.config as SelectorConfig).mode === 'point';
     return {

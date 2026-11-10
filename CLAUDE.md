@@ -122,7 +122,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   value is the HTML inside its block plus any wrappers around that block alone (e.g. `<details>`); text fields
   that are still plain paragraphs go back as text; untouched fields keep their original value exactly (compared
   with a fresh import). Content outside fields and wrappers around several fields are reported as warnings.
-- `insert.ts`: content to insert (`code` as a block or as HTML, with optional `css` / `js` added to the page once as a
+- `insert.ts`: content to insert (`text`: plain text, never HTML; `as` paragraphs (default: a blank line starts a
+  new `<p>`, a single line break is `<br>`; block) | inline (text nodes, may go inside a paragraph); `code` as a block or as HTML, with optional `css` / `js` added to the page once as a
   snippet asset `object-<hash>` (`codeAssets`), `image` / `video` from an uploaded file in the
   store, `imageUrl` / `videoUrl` by address; YouTube and Vimeo become embeds; only http(s) addresses) and where:
   `{ mode: 'point', point: { anchor, place } }` (picked in the preview) or `{ mode: 'selector', selector, place }`;
@@ -150,7 +151,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `point`, a `PointValue` { kind: 'point', document, where: `InsertWhere` }): mode `point` (picked in the preview;
   waits until picked) gives `{ mode: 'point', point }`, every other mode `{ mode: 'selector', selector, place }`
   (place default after);
-  `object` (was Insert: `content` only; input `point` (required) + optional `content` input of port type `any`
+  `object` (was Insert: `content` only; input `point` (optional: without it the Object gives its content alone as
+  a document, `contentAlone` in `insert.ts`, info `alone`; the preview shows just that, no views) + optional `content` input of port type `any`
   (`PortDef.optional`: the node runs without it; was `selection`, `parseProject` renames old edges) used by content
   `{ kind: 'selection', wrap?, className?, styles?, headings? }` ("Content from another node"): the input goes
   through `convertValue`, so a document (e.g. an Extractor's) means all of it, a selection what it picked, HTML its
@@ -338,7 +340,7 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), Replace node. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

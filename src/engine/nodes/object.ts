@@ -1,7 +1,7 @@
 import type { ElementContent } from 'hast';
 import { convertValue } from '../convert';
 import type { NodeDefinition, NodeOutput } from '../graph';
-import { copyContent, describeInsertion, insertContent, type InsertContent, type PointValue } from '../insert';
+import { contentAlone, copyContent, describeInsertion, insertContent, type InsertContent, type PointValue } from '../insert';
 import type { CmsDocument, Selection } from '../types';
 
 export interface ObjectNodeConfig {
@@ -16,9 +16,10 @@ export interface ObjectNodeConfig {
 export const object: NodeDefinition<ObjectNodeConfig> = {
   type: 'object',
   label: 'Object',
-  description: 'Code, an image, a video or content from another node, added at a Point from a Selector',
+  description: 'Text, code, an image, a video or content from another node, added at a Point from a Selector (or on its own)',
   inputs: [
-    { name: 'point', type: 'point', label: 'Point' },
+    // Without a Point, the Object gives its content alone, as a document of its own.
+    { name: 'point', type: 'point', label: 'Point', optional: true },
     // Only for "Content from another node": what to copy in (a selection or a whole document, e.g. an
     // Extractor's), from this document or another one.
     { name: 'content', type: 'any', label: 'Content', optional: true },
@@ -31,10 +32,21 @@ export const object: NodeDefinition<ObjectNodeConfig> = {
     return fileId ? (ctx.files[fileId]?.hash ?? 'missing') : undefined;
   },
   async evaluate(inputs, config, ctx): Promise<NodeOutput> {
-    const point = inputs.point as PointValue;
+    const point = inputs.point as PointValue | undefined;
     // A document (or HTML) means all of it; a selection, what it picked.
     const converted = inputs.content === undefined ? undefined : await convertValue(inputs.content);
     const selection: Selection | undefined = converted?.selection;
+    if (!point) {
+      const alone = await contentAlone(config.content, ctx.files, selection);
+      if ('waiting' in alone) return { outputs: {}, waiting: alone.waiting };
+      const warnings = [...(converted?.warnings ?? []).filter((w) => !alone.warnings.includes(w)), ...alone.warnings];
+      if (selection && config.content.kind !== 'selection') warnings.push('Content is connected but not used: choose "Content from another node" to add it');
+      const info: Record<string, string | number> = { what: describeInsertion(config.content), alone: 1 };
+      if (selection) info.from = selection.document.meta.fileName ?? 'another node';
+      const outputs: Record<string, unknown> = { document: alone.document };
+      if (selection && config.content.kind === 'selection') outputs.content = alone.document;
+      return { outputs, warnings, info };
+    }
     const result = await insertContent(point.document, point.where, config.content, ctx.files, selection);
     if (result.waiting) return { outputs: {}, waiting: result.waiting };
     const info: Record<string, string | number> = { what: describeInsertion(config.content), inserted: result.inserted };

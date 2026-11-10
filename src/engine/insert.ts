@@ -1,5 +1,5 @@
 // Insert new content (code, images, videos) into a document, at a picked point or at every match of a selector.
-import type { Element, ElementContent, Nodes } from 'hast';
+import type { Element, ElementContent, Nodes, Root } from 'hast';
 import { createAnchor, resolveAnchor } from './anchors';
 import { enclosingBlock, indexDocument, rangeOf } from './doc-index';
 import { BLOCK_TAGS, parseHtml } from './document';
@@ -20,6 +20,11 @@ export type InsertContent =
       css?: string;
       js?: string;
     }
+  /**
+   * Plain text (never read as HTML). "paragraphs" (default): a blank line starts a new paragraph, a single line
+   * break stays a line break. "inline": the text alone, e.g. at the cursor inside a paragraph.
+   */
+  | { kind: 'text'; text: string; as?: 'paragraphs' | 'inline' }
   | { kind: 'image'; fileId?: string; alt: string; caption?: string; width?: Width; href?: string }
   | { kind: 'video'; fileId?: string; caption?: string; width?: Width; autoplay?: boolean; loop?: boolean; muted?: boolean }
   | { kind: 'imageUrl'; url: string; alt: string; caption?: string; width?: Width; href?: string }
@@ -177,6 +182,18 @@ export function buildInsertion(content: InsertContent, files: Record<string, Sto
         warnings,
         snippetAssets: codeAssets(content),
       };
+    }
+    case 'text': {
+      if (!content.text.trim()) return { waiting: 'Write the text to add' };
+      const lines = (t: string): ElementContent[] =>
+        t.split('\n').flatMap((line, i) => (i ? [el('br', {}), text(line)] : [text(line)]));
+      if (content.as === 'inline') return { nodes: lines(content.text.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')), assets: [], block: false, warnings };
+      const paragraphs = content.text
+        .replace(/\r\n?/g, '\n')
+        .split(/\n(?:[ \t]*\n)+/)
+        .map((p) => p.replace(/^\n+|\n+$/g, ''))
+        .filter((p) => p.trim());
+      return { nodes: paragraphs.map((p) => el('p', {}, lines(p))), assets: [], block: true, warnings };
     }
     case 'image':
     case 'video': {
@@ -677,6 +694,32 @@ export async function replaceSelection(selection: Selection, content: Selection,
   return { document: placed.document, warnings: [...warnings, ...placed.warnings], replaced: filled.size };
 }
 
+/**
+ * The content alone, as a document of its own (an Object with no Point connected): what it would add, ready to go
+ * into a Replace node, another Object or an Output.
+ */
+export async function contentAlone(
+  content: InsertContent,
+  files: Record<string, StoredFile>,
+  selection?: Selection,
+): Promise<{ document: CmsDocument; warnings: string[] } | { waiting: string }> {
+  const built = content.kind === 'selection' && selection ? await copyContent(selection, content) : buildInsertion(content, files);
+  if ('waiting' in built) return built;
+  if ('error' in built) throw new Error(built.error);
+  const source = selection?.document;
+  const doc: CmsDocument = {
+    kind: 'document',
+    tree: { type: 'root', children: structuredClone(built.nodes) as Root['children'] },
+    meta: { origin: source?.meta.origin ?? 'html', fileName: source?.meta.fileName, styles: [], warnings: [] },
+    assets: {},
+  };
+  addBuiltAssets(doc, built);
+  if (content.kind !== 'selection') {
+    doc.meta.snippetAssets = [...(doc.meta.snippetAssets ?? []), { key: 'cms-insert@1', name: 'Insert', css: INSERT_CSS }];
+  }
+  return { document: doc, warnings: built.warnings };
+}
+
 /** Attribute on preview-only markers; the preview ignores marked elements when it measures text. */
 export const PREVIEW_ONLY = 'dataCmsPreview';
 
@@ -705,6 +748,8 @@ export function describeInsertion(content: InsertContent): string {
   switch (content.kind) {
     case 'code':
       return `${content.render === 'html' ? 'HTML code' : `Code${content.language ? ` (${content.language})` : ''}`}${content.css?.trim() || content.js?.trim() ? ' + CSS/JS' : ''}`;
+    case 'text':
+      return content.as === 'inline' ? 'Text' : 'Text paragraphs';
     case 'image':
       return 'Image';
     case 'video':

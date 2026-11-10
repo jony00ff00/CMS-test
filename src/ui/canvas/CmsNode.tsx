@@ -152,7 +152,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     }
     case 'object': {
       const c = node.config as ObjectNodeConfig;
-      const added = typeof info.inserted === 'number' ? ` · added ${info.inserted}×` : '';
+      const added = info.alone ? ' · on its own' : typeof info.inserted === 'number' ? ` · added ${info.inserted}×` : '';
       return `${describeInsertion(c.content)}${added}`;
     }
     case 'replace': {

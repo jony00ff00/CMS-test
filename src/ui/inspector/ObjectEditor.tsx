@@ -5,9 +5,10 @@ import {
 } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
-import { CheckboxField, CodeField, SelectField, TextField } from './fields';
+import { CheckboxField, CodeField, SelectField, TextAreaField, TextField } from './fields';
 
 const KINDS: { value: InsertKind; label: string }[] = [
+  { value: 'text', label: 'Text' },
   { value: 'code', label: 'Code' },
   { value: 'image', label: 'Image (upload a file)' },
   { value: 'video', label: 'Video (upload a file)' },
@@ -17,6 +18,7 @@ const KINDS: { value: InsertKind; label: string }[] = [
 ];
 
 const EMPTY: Record<InsertKind, InsertContent> = {
+  text: { kind: 'text', text: '' },
   code: { kind: 'code', code: '', language: 'html', render: 'block' },
   image: { kind: 'image', alt: '' },
   video: { kind: 'video' },
@@ -67,9 +69,10 @@ function PointSource({ nodeId }: { nodeId: string }) {
   const store = editorStore.getState();
   if (!from) {
     return (
-      <p className="hint warn-text">
-        Connect a Selector's <strong>Point</strong> output to say where this goes: a point you click in the preview
-        (Select by: “A point I click in the preview”), or next to every match.
+      <p className="hint">
+        No Point connected, so this Object gives its content on its own, as a document (e.g. for a Replace node's
+        Content, or an Output). To add it into a document, connect a Selector's <strong>Point</strong> output: a point
+        you click in the preview (Select by: “A point I click in the preview”), or next to every match.
       </p>
     );
   }
@@ -157,6 +160,29 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
         <>
           <ContentSource nodeId={node.id} />
           <CopyOptionsFields options={content} onChange={onChange} />
+        </>
+      );
+    case 'text':
+      return (
+        <>
+          <TextAreaField
+            label="Text"
+            prose
+            rows={6}
+            value={content.text}
+            placeholder="Write the text to add…"
+            hint="Plain text: characters like < and & show as they are, never as HTML."
+            onChange={(t) => onChange({ text: t })}
+          />
+          <SelectField
+            label="Add it as"
+            value={content.as ?? 'paragraphs'}
+            options={[
+              { value: 'paragraphs', label: 'Paragraphs (a blank line starts a new one)' },
+              { value: 'inline', label: 'Text inside a paragraph (e.g. at the cursor)' },
+            ]}
+            onChange={(as) => onChange({ as: as === 'inline' ? 'inline' : undefined })}
+          />
         </>
       );
     case 'code':

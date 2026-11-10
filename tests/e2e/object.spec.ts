@@ -339,3 +339,33 @@ test('"Two documents": an Extractor’s section of one document goes into anothe
   await expect(preview(page).locator('.cms-from')).toHaveCount(0);
   await expect(preview(page).locator('.tip')).not.toHaveCSS('color', 'rgb(22, 101, 52)');
 });
+
+test('an Object with plain text works on its own, and goes into a paragraph at the cursor', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  const palette = page.getByRole('complementary', { name: 'Node palette' });
+  await palette.getByRole('button', { name: /^Object/ }).click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('text');
+  await inspector(page).getByLabel('Text', { exact: true }).fill('Fresh <news> & more\n\nSecond paragraph');
+  // No Point: the Object gives its text alone.
+  await expect(node(page, 'object-5')).toContainText('Text paragraphs · on its own');
+  await expect(inspector(page)).toContainText('No Point connected');
+  await expect(preview(page).locator('body > p')).toHaveText(['Fresh <news> & more', 'Second paragraph']);
+  await page.screenshot({ path: 'test-results/object-text-alone.png' });
+
+  // With a Point after every h2, inside the heading's text.
+  await palette.getByRole('button', { name: /^Selector/ }).click();
+  await palette.getByRole('button', { name: /^Output/ }).click();
+  await fitView(page);
+  await connect(page, 'documentSource-1', 'document', 'selector-6', 'document');
+  await connect(page, 'selector-6', 'point', 'object-5', 'point');
+  await connect(page, 'object-5', 'document', 'output-7', 'document');
+  await node(page, 'selector-6').click();
+  await inspector(page).getByLabel('Select by').selectOption('regex');
+  await inspector(page).getByLabel('Pattern').fill('Pricing');
+  await node(page, 'object-5').click();
+  await inspector(page).getByLabel('Text', { exact: true }).fill(' (updated)');
+  await inspector(page).getByLabel('Add it as').selectOption('inline');
+  await expect(node(page, 'object-5')).toContainText('Text · added 1×');
+  await node(page, 'output-7').click();
+  await expect(preview(page).locator('h2').nth(1)).toHaveText('Pricing (updated)');
+});
