@@ -1,7 +1,7 @@
 // Project files: the graph, its files and the snippet library as one JSON document.
 // Used for autosave (localStorage) and for "Save project file" / "Open project".
 import {
-  edgeError, nodeRegistry, storeFile, type Graph, type NodeGroup, type NodeRegistry, type Snippet, type SnippetLibrary, type StoredFile,
+  edgeError, ENGINE_VERSION, nodeRegistry, storeFile, type Graph, type NodeGroup, type NodeRegistry, type Snippet, type SnippetLibrary, type StoredFile,
 } from '../engine';
 import { seedLibrary } from '../snippets/seed';
 
@@ -19,6 +19,8 @@ export interface ProjectFile {
   format: typeof PROJECT_FORMAT;
   version: number;
   savedAt: string;
+  /** The engine version that saved it (`ENGINE_VERSION`). */
+  engineVersion?: string;
   graph: Graph;
   files: SavedFile[];
   library: SnippetLibrary;
@@ -37,6 +39,7 @@ export function toProjectFile(project: Project, savedAt = new Date()): ProjectFi
     format: PROJECT_FORMAT,
     version: PROJECT_VERSION,
     savedAt: savedAt.toISOString(),
+    engineVersion: ENGINE_VERSION,
     graph: project.graph,
     files: Object.values(project.files)
       .filter((f) => used.has(f.id))
@@ -78,6 +81,11 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
     throw new Error(`This project was saved by a newer version of the app (format ${String(p.version)})`);
   }
   const warnings: string[] = [];
+  if (typeof p.engineVersion === 'string' && newerThan(p.engineVersion, ENGINE_VERSION)) {
+    warnings.push(
+      `This project was made with a newer version of the app (${p.engineVersion}; this page runs ${ENGINE_VERSION}), so parts of it may not work. Reload the page to get the latest version, then open the project again`,
+    );
+  }
 
   const files: Record<string, StoredFile> = {};
   for (const f of Array.isArray(p.files) ? p.files : []) {
@@ -226,4 +234,15 @@ function readGroups(raw: unknown, nodeIds: Set<string>, warnings: string[]): Nod
     });
   }
   return groups;
+}
+
+/** Whether version a (e.g. "0.6.0") is newer than b. */
+export function newerThan(a: string, b: string): boolean {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
 }

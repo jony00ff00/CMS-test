@@ -76,3 +76,18 @@ describe('the pieces it uses', () => {
     expect(serialize(r.document)).toBe('<div data-step="one"><p>a</p></div><div data-step="two"><p>b</p></div><div data-step=""><p>c</p></div>');
   });
 });
+
+describe('projects from a newer app', () => {
+  it('record the engine version, and an older app warns instead of quietly making a different page', async () => {
+    const { ENGINE_VERSION } = await import('../../src/engine');
+    const { newerThan } = await import('../../src/store/project');
+    const project = buildScrollyFromTextExample();
+    expect(project.engineVersion).toBe(ENGINE_VERSION);
+    expect(parseProject(JSON.stringify(project)).warnings).toEqual([]);
+    const future = { ...project, engineVersion: '9.0.0' };
+    expect(parseProject(JSON.stringify(future)).warnings[0]).toMatch(/newer version of the app \(9\.0\.0; this page runs .*\)[\s\S]*Reload the page/);
+    // Files saved before versions were recorded open as before.
+    expect(parseProject(JSON.stringify({ ...project, engineVersion: undefined })).warnings).toEqual([]);
+    expect([newerThan('0.10.0', '0.9.1'), newerThan('0.6.0', '0.6.0'), newerThan('0.5.9', '0.6')]).toEqual([true, false, false]);
+  });
+});

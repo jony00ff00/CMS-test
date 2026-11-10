@@ -318,8 +318,10 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - Code fields use CodeMirror through `CodeField` (`fields.tsx`): loaded with `import()` (≈570 kB) and preloaded
   when the app is idle; a text area stands in until then. In e2e, wait for `.cm-content[aria-label=…]` before
   typing, and use `keyboard.insertText`.
-- Persistence (`src/store/project.ts`): project file = `{ format: 'node-cms-project', version: 1, graph, files,
-  library }`; binary files as base64; only files a node uses are saved. `parseProject` drops broken parts
+- Persistence (`src/store/project.ts`): project file = `{ format: 'node-cms-project', version: 1, engineVersion, graph,
+  files, library }`; `engineVersion` is `ENGINE_VERSION` (`engine/index.ts`): raise it whenever projects can use
+  something an older app does not know (a node option, a template helper, …); `parseProject` warns (reload the page)
+  when a file's is newer than the app's (a tab opened before a deploy runs the old app); binary files as base64; only files a node uses are saved. `parseProject` drops broken parts
   (unknown node types, bad connections, unreadable files or snippets) with warnings and refuses newer versions.
   The store autosaves to localStorage (`STORAGE_KEY`, 600 ms after changes to graph, files or library) and opens
   it on start; `exportProject` / `importProject` for project files. Tests pass `storage: null`.

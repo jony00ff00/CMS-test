@@ -92,10 +92,13 @@ export function scrollySnippets(code = codePieces()): Snippet[] {
         css: code.css,
         // The script moves the graphic into a shadow root and takes along the <style> inside the element. The CMS
         // writes snippet CSS in the page head (marked data-snippet), so first put a copy of it inside the element.
+        // (Found by its mark, or by the comment the CMS puts before every snippet's CSS.)
         js: [
           '(function(){',
           "  var host = document.getElementById('ge16-scrolly');",
-          '  var css = document.querySelector(\'style[data-snippet="ge16-scrolly@1"]\');',
+          "  var css = Array.from(document.querySelectorAll('head style')).filter(function (s) {",
+          "    return s.getAttribute('data-snippet') === 'ge16-scrolly@1' || s.textContent.indexOf('/* ge16-scrolly@1 */') === 0;",
+          '  })[0];',
           "  if (host && css && !host.querySelector('style')) host.appendChild(css.cloneNode(true));",
           '})();',
           code.js,
