@@ -106,39 +106,36 @@ test('an Extractor can pick by hand: select text in its input, keep only that', 
   await expect(preview(page).locator('h1')).toBeVisible();
 });
 
-test('a Combinator joins two selections, and merges two changed versions of a document', async ({ page }) => {
+test('a Replace node puts content from another node in place of a selection', async ({ page }) => {
   await palette(page).getByRole('button', { name: /^Selector/ }).click();
-  await palette(page).getByRole('button', { name: /^Combinator/ }).click();
+  await palette(page).getByRole('button', { name: /^Replace/ }).click();
   await palette(page).getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
   await connect(page, 'documentSource-1', 'document', 'selector-5', 'document');
-  await connect(page, 'selector-2', 'selection', 'combinator-6', 'a');
-  await connect(page, 'selector-5', 'selection', 'combinator-6', 'b');
-  await connect(page, 'combinator-6', 'document', 'output-7', 'document');
   await node(page, 'selector-5').click();
-  await inspector(page).getByLabel('CSS selector').fill('h1');
-  await node(page, 'combinator-6').click();
-  await expect(inspector(page).getByRole('list')).toContainText('A selector-2 · a selection');
-  await expect(inspector(page).getByRole('list')).toContainText('B selector-5 · a selection');
-  await expect(node(page, 'combinator-6')).toContainText('A + B · selections');
-  // The new document has what both selected, in document order.
-  await expect(preview(page).locator('body > :not(script, style)')).toHaveText(['Field Guide to Node Gardens', 'Getting started', 'Pricing']);
-  await page.screenshot({ path: 'test-results/combinator.png' });
+  await inspector(page).getByLabel('CSS selector').fill('blockquote');
+  await connect(page, 'selector-5', 'selection', 'replace-6', 'selection');
+  await connect(page, 'selector-2', 'selection', 'replace-6', 'content');
+  await connect(page, 'replace-6', 'document', 'output-7', 'document');
+  await expect(node(page, 'replace-6')).toContainText('replaced 1×');
 
-  // Two changed versions of the source: one document with both changes.
-  await node(page, 'combinator-6').click();
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await palette(page).getByRole('button', { name: /^Snippet/ }).click();
-  await palette(page).getByRole('button', { name: /^Combinator/ }).click();
-  await fitView(page);
-  await connect(page, 'selector-5', 'selection', 'snippet-7', 'selection');
-  await connect(page, 'snippet-3', 'document', 'combinator-8', 'a');
-  await connect(page, 'snippet-7', 'document', 'combinator-8', 'b');
-  await connect(page, 'combinator-8', 'document', 'output-7', 'document');
-  await expect(node(page, 'combinator-8')).toContainText('A + B · merged');
   await node(page, 'output-7').click();
-  await expect(preview(page).locator('h1')).toHaveCount(1);
-  await expect(preview(page).locator('aside.callout')).toHaveCount(3);
+  await expect(preview(page).locator('blockquote')).toHaveCount(0);
+  await expect(preview(page).locator('h2')).toHaveText(['Getting started', 'Pricing', 'Getting started', 'Pricing']);
+
+  // The Replace node's views: what it replaces, the content, and the result.
+  await node(page, 'replace-6').click();
+  await expect(inspector(page)).toContainText('Replaces what selector-5 selects (1 match)');
+  const show = page.getByRole('group', { name: 'Show' });
+  await expect(preview(page).locator('blockquote[data-cms-match]')).toBeVisible();
+  await page.screenshot({ path: 'test-results/replace.png' });
+  await show.getByRole('button', { name: 'Content' }).click();
+  await expect(preview(page).locator('h2[data-cms-match]')).toHaveCount(2);
+  await show.getByRole('button', { name: 'Result' }).click();
+  await expect(preview(page).locator('blockquote')).toHaveCount(0);
+
+  await inspector(page).getByLabel('Put it in').selectOption('div');
+  await expect(preview(page).locator('div.inserted > h2')).toHaveCount(2);
 });
 
 test('a custom snippet: a class name, and CSS and JavaScript for this node only', async ({ page }) => {

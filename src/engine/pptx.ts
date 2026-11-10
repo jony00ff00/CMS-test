@@ -51,14 +51,18 @@ const NS = {
 const SKIPPED_PLACEHOLDERS = new Set(['sldNum', 'dt', 'ftr', 'hdr', 'sldImg']);
 
 /** "1-5, 8" → the slide numbers, or a warning. Numbers outside 1..count are ignored with a warning. */
-export function parseSlideRange(input: string | undefined, count: number): { slides?: Set<number>; warnings: string[] } {
+export function parseSlideRange(
+  input: string | undefined,
+  count: number,
+  words: { item: string; whole: string } = { item: 'slide', whole: 'The deck' },
+): { slides?: Set<number>; warnings: string[] } {
   const warnings: string[] = [];
   if (!input?.trim()) return { warnings };
   const slides = new Set<number>();
   for (const part of input.split(/[,;\s]+/).filter(Boolean)) {
     const m = /^(\d+)(?:\s*[-–]\s*(\d+))?$/.exec(part);
     if (!m) {
-      warnings.push(`"${part}" is not a slide number or range (e.g. 2-5)`);
+      warnings.push(`"${part}" is not a${/^[aeiou]/.test(words.item) ? 'n' : ''} ${words.item} number or range (e.g. 2-5)`);
       continue;
     }
     let [from, to] = [Number(m[1]), Number(m[2] ?? m[1])];
@@ -66,9 +70,9 @@ export function parseSlideRange(input: string | undefined, count: number): { sli
     for (let n = from; n <= to; n++) {
       if (n >= 1 && n <= count) slides.add(n);
     }
-    if (from < 1 || to > count) warnings.push(`The deck has ${count} slide${count === 1 ? '' : 's'}: "${part}" goes beyond that`);
+    if (from < 1 || to > count) warnings.push(`${words.whole} has ${count} ${words.item}${count === 1 ? '' : 's'}: "${part}" goes beyond that`);
   }
-  if (slides.size === 0 && warnings.length === 0) warnings.push('No slides chosen');
+  if (slides.size === 0 && warnings.length === 0) warnings.push(`No ${words.item}s chosen`);
   return { slides, warnings };
 }
 

@@ -7,10 +7,10 @@ import { nodeLabel } from '../node-label';
 import { LibraryEditor } from '../library/LibraryEditor';
 import { TextField } from './fields';
 import { ConnectorEditor } from './ConnectorEditor';
-import { CombinatorEditor } from './CombinatorEditor';
 import { ExtractorEditor } from './ExtractorEditor';
 import { ObjectEditor } from './ObjectEditor';
 import { OutputEditor } from './OutputEditor';
+import { ReplaceEditor } from './ReplaceEditor';
 import { ResultPanel } from './ResultPanel';
 import { SelectorEditor } from './SelectorEditor';
 import { SnippetEditor } from './SnippetEditor';
@@ -23,9 +23,9 @@ const EDITORS = {
   snippet: SnippetEditor,
   extractor: ExtractorEditor,
   object: ObjectEditor,
+  replace: ReplaceEditor,
   output: OutputEditor,
   connector: ConnectorEditor,
-  combinator: CombinatorEditor,
 } as const;
 
 export function Inspector({ onMinimise }: { onMinimise: () => void }) {

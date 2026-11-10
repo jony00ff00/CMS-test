@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react';
 import {
   blockName, cssWidth, IMAGE_EXTENSIONS, mediaType, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertionPoint, type InsertKind,
-  type InsertPlace, type ObjectNodeConfig, type Selection, type SelectorNodeConfig, type Width,
+  type InsertPlace, type ObjectNodeConfig, type ReplaceOptions, type Selection, type SelectorNodeConfig, type Width,
 } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
@@ -156,42 +156,7 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
       return (
         <>
           <ContentSource nodeId={node.id} />
-          <SelectField
-            label="Put it in"
-            value={content.wrap ?? 'none'}
-            options={[
-              { value: 'none', label: 'Nothing: add it as it is' },
-              { value: 'div', label: 'A box with a class (<div>)' },
-              { value: 'section', label: 'A section labelled with where it came from' },
-            ]}
-            onChange={(wrap) => onChange({ wrap })}
-          />
-          {(content.wrap === 'div' || content.wrap === 'section') && (
-            <TextField
-              label="Class name"
-              monospace
-              value={content.className ?? ''}
-              placeholder={content.wrap === 'div' ? 'inserted' : 'cms-from'}
-              hint={content.wrap === 'section' ? 'Added next to cms-from, for your own CSS.' : 'For your own CSS (a snippet’s or the page’s).'}
-              onChange={(className) => onChange({ className: className || undefined })}
-            />
-          )}
-          <CheckboxField
-            label="Bring the source’s styles"
-            checked={content.styles !== false}
-            hint="Its own CSS (e.g. <style> in an HTML file, the slide look of a .pptx) is added to this page once. It applies to the whole page, so it can change how the rest looks."
-            onChange={(styles) => onChange({ styles: styles ? undefined : false })}
-          />
-          <SelectField
-            label="Heading levels"
-            value={content.headings ?? 'keep'}
-            options={[
-              { value: 'keep', label: 'Keep them as they are' },
-              { value: 'fit', label: 'Fit them under the heading before the point' },
-            ]}
-            hint={content.headings === 'fit' ? 'E.g. after an <h2>, the highest inserted heading becomes <h3> and the others move with it.' : undefined}
-            onChange={(headings) => onChange({ headings: headings === 'fit' ? 'fit' : undefined })}
-          />
+          <CopyOptionsFields options={content} onChange={onChange} />
         </>
       );
     case 'code':
@@ -306,8 +271,52 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
   }
 }
 
+/** How copied content goes in (the Object's "Content from another node" and the Replace node). */
+export function CopyOptionsFields({ options, onChange, placeWord = 'point' }: { options: ReplaceOptions; onChange: (patch: ReplaceOptions) => void; placeWord?: string }) {
+  return (
+    <>
+      <SelectField
+        label="Put it in"
+        value={options.wrap ?? 'none'}
+        options={[
+          { value: 'none', label: 'Nothing: add it as it is' },
+          { value: 'div', label: 'A box with a class (<div>)' },
+          { value: 'section', label: 'A section labelled with where it came from' },
+        ]}
+        onChange={(wrap) => onChange({ wrap })}
+      />
+      {(options.wrap === 'div' || options.wrap === 'section') && (
+        <TextField
+          label="Class name"
+          monospace
+          value={options.className ?? ''}
+          placeholder={options.wrap === 'div' ? 'inserted' : 'cms-from'}
+          hint={options.wrap === 'section' ? 'Added next to cms-from, for your own CSS.' : 'For your own CSS (a snippet’s or the page’s).'}
+          onChange={(className) => onChange({ className: className || undefined })}
+        />
+      )}
+      <CheckboxField
+        label="Bring the source’s styles"
+        checked={options.styles !== false}
+        hint="Its own CSS (e.g. <style> in an HTML file, the slide look of a .pptx) is added to this page once. It applies to the whole page, so it can change how the rest looks."
+        onChange={(styles) => onChange({ styles: styles ? undefined : false })}
+      />
+      <SelectField
+        label="Heading levels"
+        value={options.headings ?? 'keep'}
+        options={[
+          { value: 'keep', label: 'Keep them as they are' },
+          { value: 'fit', label: `Fit them under the heading before the ${placeWord}` },
+        ]}
+        hint={options.headings === 'fit' ? 'E.g. after an <h2>, the highest inserted heading becomes <h3> and the others move with it.' : undefined}
+        onChange={(headings) => onChange({ headings: headings === 'fit' ? 'fit' : undefined })}
+      />
+    </>
+  );
+}
+
 /** Where "Content from another node" comes from: whatever is connected to the Content input. */
-function ContentSource({ nodeId }: { nodeId: string }) {
+export function ContentSource({ nodeId, owner = 'Object', original = 'The original stays where it is.' }: { nodeId: string; owner?: string; original?: string }) {
   const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'content'));
   const source = useEditor((s) => (edge ? s.graph.nodes.find((n) => n.id === edge.source) : undefined));
   const what = useEditor((s) => {
@@ -323,7 +332,7 @@ function ContentSource({ nodeId }: { nodeId: string }) {
   if (!source) {
     return (
       <p className="hint warn-text">
-        Connect something to this Object's <strong>Content</strong> input: an Extractor (all it keeps), a Selector's
+        Connect something to this {owner}'s <strong>Content</strong> input: an Extractor (all it keeps), a Selector's
         Selection (what it selects), or any document. It is copied in; it can come from this document or another one.
       </p>
     );
@@ -331,7 +340,7 @@ function ContentSource({ nodeId }: { nodeId: string }) {
   return (
     <p className="hint">
       A copy of what comes from <strong>{nodeLabel(source)}</strong>
-      {what ? ` (${what})` : ''}, in document order, with its formatting and snippet styles. The original stays where it is.
+      {what ? ` (${what})` : ''}, in document order, with its formatting and snippet styles. {original}
     </p>
   );
 }

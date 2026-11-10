@@ -63,53 +63,6 @@ describe('Extractor', () => {
   });
 });
 
-describe('Combinator', () => {
-  const base = [node('src', 'documentSource', { fileId: 'html' }), node('h2', 'selector', { mode: 'css', selector: 'h2' }), node('snip', 'snippet')];
-  const baseEdges = [edge('src', 'document', 'h2', 'document'), edge('h2', 'selection', 'snip', 'selection')];
-
-  it('merges two changed versions of one document into one with both changes', async () => {
-    const r = await run({
-      nodes: [...base, node('pt', 'selector', { mode: 'css', selector: 'h1', place: 'after' }), node('obj', 'object', { content: { kind: 'code', code: '<p>Added</p>', render: 'html' } }), node('c', 'combinator')],
-      edges: [...baseEdges, edge('src', 'document', 'pt', 'document'), edge('pt', 'point', 'obj', 'point'), edge('snip', 'document', 'c', 'a'), edge('obj', 'document', 'c', 'b')],
-    });
-    const out = html(r.c.outputs.document);
-    expect(out.match(/<h1>/g)).toHaveLength(1);
-    expect(out).toContain('<h1>Title</h1><p>Added</p>');
-    expect(out.match(/class="callout/g)).toHaveLength(2);
-    expect(r.c.info.combined).toBe(2);
-  });
-
-  it('puts A then B when asked, or when they do not share a document', async () => {
-    const appended = await run({
-      nodes: [...base, node('o', 'documentSource', { fileId: 'other' }), node('c', 'combinator', { combine: 'append' })],
-      edges: [...baseEdges, edge('snip', 'document', 'c', 'a'), edge('o', 'document', 'c', 'b')],
-    });
-    const out = html(appended.c.outputs.document);
-    expect(out.indexOf('Title')).toBeLessThan(out.indexOf('Elsewhere'));
-    expect(appended.c.info.combined).toBe('one after another');
-    expect((appended.c.outputs.html as string).startsWith('<!doctype html>')).toBe(true);
-  });
-
-  it('joins two selections in the same document into one selection', async () => {
-    const r = await run({
-      nodes: [...base, node('h1', 'selector', { mode: 'css', selector: 'h1' }), node('c', 'combinator'), node('wrap', 'snippet')],
-      edges: [...baseEdges, edge('src', 'document', 'h1', 'document'), edge('h1', 'selection', 'c', 'a'), edge('h2', 'selection', 'c', 'b'), edge('c', 'selection', 'wrap', 'selection')],
-    });
-    expect((r.c.outputs.selection as Selection).matches).toHaveLength(3);
-    expect(html(r.c.outputs.document)).toBe('<h1>Title</h1><h2>One</h2><h2>Two</h2>');
-    expect(html(r.wrap.outputs.document).match(/class="callout/g)).toHaveLength(3);
-  });
-
-  it('takes any kinds (HTML and a selection), and waits with nothing connected', async () => {
-    const r = await run({
-      nodes: [...base, node('out', 'output', { fullDocument: false }), node('c', 'combinator'), node('empty', 'combinator')],
-      edges: [...baseEdges, edge('snip', 'document', 'out', 'document'), edge('out', 'html', 'c', 'a'), edge('h2', 'selection', 'c', 'b')],
-    });
-    expect(html(r.c.outputs.document)).toMatch(/callout[\s\S]*<h2>One<\/h2><h2>Two<\/h2>$/);
-    expect(r.empty).toMatchObject({ status: 'waiting', message: 'Connect something to A and B' });
-  });
-});
-
 describe('Snippet: custom and its own CSS / JavaScript', () => {
   it('a custom snippet puts a class on the selected content, or a wrapper with it', () => {
     // Spaces separate class names, as in HTML; other characters that do not belong in one become -.

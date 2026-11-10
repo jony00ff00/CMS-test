@@ -529,9 +529,9 @@ function nodeAt(doc: CmsDocument, m: Extract<Match, { kind: 'nodes' }>): Nodes |
 }
 
 /** Put `nodesFor(i)` at each target. Never changes `doc`. */
-async function place(doc: CmsDocument, targets: Targets, nodesFor: (i: number, level: number) => ElementContent[]) {
+async function place(doc: CmsDocument, targets: Pick<Targets, 'matches' | 'place'>, nodesFor: (i: number, level: number) => ElementContent[], snippet = placeSnippet(targets.place)) {
   const selection: Selection = { kind: 'selection', document: doc, matches: targets.matches.map((match) => ({ match, text: '' })), warnings: [] };
-  const result = await applySnippet(selection, placeSnippet(targets.place));
+  const result = await applySnippet(selection, snippet);
   // The level of the last heading before each place (0: none), in document order.
   let level = 0;
   const replace = (children: ElementContent[]): ElementContent[] =>
@@ -545,6 +545,16 @@ async function place(doc: CmsDocument, targets: Targets, nodesFor: (i: number, l
     });
   result.document.tree.children = replace(result.document.tree.children as ElementContent[]) as typeof result.document.tree.children;
   return { document: result.document, warnings: result.warnings, inserted: result.applied };
+}
+
+/** Adds what built content needs to the document it went into: the source's styles, images, snippet CSS / JS. */
+function addBuiltAssets(out: CmsDocument, built: Built) {
+  for (const css of built.styles ?? []) if (!out.meta.styles.includes(css)) out.meta = { ...out.meta, styles: [...out.meta.styles, css] };
+  for (const a of built.assets) out.assets = { ...out.assets, [a.id]: a };
+  // Copied content keeps its look: the snippet CSS and JS of the document it came from come along.
+  for (const a of built.snippetAssets ?? []) {
+    if (!(out.meta.snippetAssets ?? []).some((x) => x.key === a.key)) out.meta.snippetAssets = [...(out.meta.snippetAssets ?? []), a];
+  }
 }
 
 /** Insert `content` into a copy of `doc`. */
@@ -573,15 +583,98 @@ export async function insertContent(
   });
   if (deep.length) warnings.push(`Some headings would be deeper than level 6, so they stay <h6>: ${[...new Set(deep)].join(', ')}`);
   const out = placed.document;
-  for (const css of built.styles ?? []) if (!out.meta.styles.includes(css)) out.meta = { ...out.meta, styles: [...out.meta.styles, css] };
-  for (const a of built.assets) out.assets = { ...out.assets, [a.id]: a };
-  // Copied content keeps its look: the snippet CSS and JS of the document it came from come along.
-  for (const a of built.snippetAssets ?? []) {
-    if (!(out.meta.snippetAssets ?? []).some((x) => x.key === a.key)) out.meta.snippetAssets = [...(out.meta.snippetAssets ?? []), a];
-  }
+  addBuiltAssets(out, built);
   const assets = out.meta.snippetAssets ?? [];
   if (!assets.some((a) => a.key === 'cms-insert@1')) out.meta.snippetAssets = [...assets, { key: 'cms-insert@1', name: 'Insert', css: INSERT_CSS }];
   return { document: out, warnings: [...warnings, ...placed.warnings], inserted: placed.inserted, needsAttention: false };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Replacing
+
+/** How the Replace node copies its content in: the options of the Object's "Content from another node". */
+export type ReplaceOptions = Omit<Extract<InsertContent, { kind: 'selection' }>, 'kind'>;
+
+export interface ReplaceResult {
+  document: CmsDocument;
+  warnings: string[];
+  /** How many matches were replaced. */
+  replaced: number;
+}
+
+const replaceSnippet: Snippet = {
+  kind: 'snippet',
+  id: 'cms-replace',
+  name: 'Replace',
+  version: 1,
+  mode: 'replace',
+  template: `<${PLACEHOLDER} data-i="{{index}}"></${PLACEHOLDER}>`,
+  params: [],
+};
+
+/**
+ * A copy of the selection's document with every match replaced by a copy of `content` (what another node picked,
+ * from any document). Selected text inside a paragraph takes inline content: one paragraph's content goes in
+ * without its <p>; other block content replaces the whole paragraph (with a warning).
+ */
+export async function replaceSelection(selection: Selection, content: Selection, options: ReplaceOptions = {}): Promise<ReplaceResult> {
+  const doc = selection.document;
+  const warnings = [...selection.warnings];
+  if (selection.matches.length === 0) {
+    if (!warnings.length) warnings.push('The selection is empty, so nothing was replaced');
+    return { document: doc, warnings, replaced: 0 };
+  }
+  const built = await copyContent(content, { kind: 'selection', ...options });
+  warnings.push(...built.warnings.filter((w) => !warnings.includes(w)));
+  if (built.nodes.length === 0) {
+    warnings.push('There is no content to put in, so nothing was replaced');
+    return { document: doc, warnings, replaced: 0 };
+  }
+
+  // Selected text can only take inline content.
+  const elements = built.nodes.filter((n) => n.type === 'element' || (n.type === 'text' && n.value.trim()));
+  const single = elements.length === 1 && elements[0].type === 'element' ? elements[0] : undefined;
+  const inline = single && single.tagName === 'p' ? single.children : !built.block ? built.nodes : undefined;
+  const ix = indexDocument(doc);
+  const textIndexes = new Set<number>();
+  let widened = false;
+  const seen = new Set<string>();
+  const matches: Match[] = [];
+  for (const m of selection.matches) {
+    let match = m.match;
+    if (match.kind === 'text') {
+      if (inline) textIndexes.add(matches.length);
+      else {
+        match = enclosingBlock(ix, match.start) ?? match;
+        widened ||= match.kind === 'nodes';
+      }
+    }
+    const key = JSON.stringify(match);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    matches.push(match);
+  }
+  if (widened) warnings.push('The content is more than a paragraph’s text, so it replaces the whole paragraph around the selected text');
+
+  const fit = options.headings === 'fit';
+  const deep: string[] = [];
+  // A text range across blocks leaves one placeholder per block: only the first one gets the content.
+  const filled = new Set<number>();
+  const placed = await place(
+    doc,
+    { matches, place: 'after' },
+    (i, level) => {
+      if (filled.has(i)) return [];
+      filled.add(i);
+      const nodes = structuredClone(textIndexes.has(i) ? inline! : built.nodes);
+      if (fit && level) fitHeadings(nodes, level, deep);
+      return nodes;
+    },
+    replaceSnippet,
+  );
+  if (deep.length) warnings.push(`Some headings would be deeper than level 6, so they stay <h6>: ${[...new Set(deep)].join(', ')}`);
+  addBuiltAssets(placed.document, built);
+  return { document: placed.document, warnings: [...warnings, ...placed.warnings], replaced: filled.size };
 }
 
 /** Attribute on preview-only markers; the preview ignores marked elements when it measures text. */

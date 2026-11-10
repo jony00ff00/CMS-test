@@ -12,6 +12,7 @@ export const SELECTOR_MODES: { value: SelectorMode; label: string }[] = [
   { value: 'jsonField', label: 'JSON field' },
   { value: 'manual', label: 'Selected by hand' },
   { value: 'all', label: 'Everything (select all)' },
+  { value: 'image', label: 'Images' },
   { value: 'slide', label: 'Slides (from a .pptx)' },
   { value: 'point', label: 'A point I click in the preview' },
 ];
@@ -24,6 +25,7 @@ const DEFAULTS: Record<SelectorMode, SelectorConfig> = {
   manual: { mode: 'manual', anchors: [] },
   all: { mode: 'all', scope: 'document' },
   slide: { mode: 'slide', part: 'slide' },
+  image: { mode: 'image', scope: 'image' },
   point: { mode: 'point' },
 };
 
@@ -101,6 +103,32 @@ export function SelectorFields({
         />
       )}
       {config.mode === 'slide' && <SlideFields config={config} input={input} onChange={patch} />}
+      {config.mode === 'image' && (
+        <>
+          <TextField
+            label="Which images"
+            value={config.images ?? ''}
+            placeholder="All of them"
+            hint="Numbers in the order they appear, e.g. 1, 3-4. Click an image in the preview to select it by hand."
+            onChange={(images) => patch({ images: images || undefined })}
+          />
+          <TextField
+            label="Alternative text or file name contains"
+            value={config.text ?? ''}
+            placeholder="Any"
+            onChange={(text) => patch({ text: text || undefined })}
+          />
+          <SelectField
+            label="Select"
+            value={config.scope ?? 'image'}
+            options={[
+              { value: 'image', label: 'The image alone' },
+              { value: 'frame', label: 'The image with its link, figure and caption' },
+            ]}
+            onChange={(scope) => patch({ scope })}
+          />
+        </>
+      )}
       {config.mode === 'css' && (
         <TextField
           label="CSS selector"
@@ -201,8 +229,8 @@ export function ManualSelections({
             const st = statusOf(a);
             return (
               <li key={a.id}>
-                <span className="anchor-quote" title={a.textQuote?.exact}>
-                  “{shorten(a.textQuote?.exact ?? '')}”
+                <span className="anchor-quote" title={a.image ? a.image.alt || a.image.src : a.textQuote?.exact}>
+                  {anchorName(a)}
                   <span className="muted small"> {a.target === 'nodes' ? `whole ${a.structural?.tagName ?? 'block'}` : 'text'}</span>
                 </span>
                 {st && (
@@ -211,7 +239,7 @@ export function ManualSelections({
                     {st.status === 'fuzzy' && st.confidence ? ` ${Math.round(st.confidence * 100)}%` : ''}
                   </span>
                 )}
-                <button type="button" className="link" aria-label={`Remove “${shorten(a.textQuote?.exact ?? '')}”`} onClick={() => onChange(config.anchors.filter((x) => x.id !== a.id))}>
+                <button type="button" className="link" aria-label={`Remove ${anchorName(a)}`} onClick={() => onChange(config.anchors.filter((x) => x.id !== a.id))}>
                   Remove
                 </button>
               </li>
@@ -273,4 +301,11 @@ function SlideFields({
       <SelectField label="Select" value={config.part ?? 'slide'} options={SLIDE_PARTS} onChange={(part) => onChange({ part })} />
     </>
   );
+}
+
+/** How a saved selection is shown: its text in quotes, or for an image, the image with its text or number. */
+function anchorName(a: Anchor): string {
+  if (!a.image) return `“${shorten(a.textQuote?.exact ?? '')}”`;
+  const caption = a.textQuote?.exact.trim();
+  return a.image.alt ? `Image “${shorten(a.image.alt)}”` : caption ? `Image with “${shorten(caption)}”` : `Image ${a.image.number}`;
 }

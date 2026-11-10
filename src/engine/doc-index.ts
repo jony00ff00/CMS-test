@@ -175,3 +175,45 @@ export function slidesOf(ix: DocIndex): SlideInfo[] {
 export function slideAt(ix: DocIndex, offset: number, slides = slidesOf(ix)): SlideInfo | undefined {
   return slides.find((s) => offset >= s.range.start && offset < Math.max(s.range.end, s.range.start + 1));
 }
+
+export interface ImageInfo {
+  /** Position among the document's images, from 1. */
+  number: number;
+  el: Element;
+  path: number[];
+  src: string;
+  alt: string;
+}
+
+/** Every image (<img>) in the document, in document order. */
+export function imagesOf(ix: DocIndex): ImageInfo[] {
+  const out: ImageInfo[] = [];
+  for (const { el, path } of ix.elements) {
+    if (el.tagName !== 'img') continue;
+    const { src, alt } = el.properties;
+    out.push({ number: out.length + 1, el, path, src: typeof src === 'string' ? src : '', alt: typeof alt === 'string' ? alt : '' });
+  }
+  return out;
+}
+
+/**
+ * An image with what belongs to it: the link around it (holding nothing else), then the <figure> or <picture>
+ * around that (with its caption). The path of the outermost one.
+ */
+export function imageWithFrame(ix: DocIndex, imagePath: number[]): number[] {
+  let path = imagePath;
+  const only = (el: Nodes | undefined, child: number) =>
+    el?.type === 'element' && el.children.every((c, i) => i === child || (c.type === 'text' && !c.value.trim()));
+  const parentOf = (p: number[]) => (p.length > 1 ? (nodeAtPath(ix.doc.tree, p.slice(0, -1)) as Nodes | undefined) : undefined);
+  let parent = parentOf(path);
+  if (parent?.type === 'element' && parent.tagName === 'a' && only(parent, path[path.length - 1])) {
+    path = path.slice(0, -1);
+    parent = parentOf(path);
+  }
+  if (parent?.type === 'element' && parent.tagName === 'picture') {
+    path = path.slice(0, -1);
+    parent = parentOf(path);
+  }
+  if (parent?.type === 'element' && parent.tagName === 'figure') path = path.slice(0, -1);
+  return path;
+}

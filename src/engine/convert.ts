@@ -1,5 +1,5 @@
 // Turning any value that travels along a connection (document, result, selection, point, HTML) into the others.
-// Used by the Connector, the Combinator and the Extractor.
+// Used by the Connector, the Extractor, the Object, the Snippet and the Replace node.
 import type { ElementContent } from 'hast';
 import { parseHtml, serialize } from './document';
 import { copySelection, insertionTargets, type PointValue } from './insert';

@@ -132,6 +132,11 @@ export interface Anchor {
   jsonPath?: { path: string };
   /** Set when the anchor is on a slide (from a .pptx): the slide's number and title when it was made. */
   slide?: { number: number; title?: string };
+  /**
+   * Set when the anchor is an image (alone, or with its link / figure): its address (a hash for long data: URLs),
+   * alternative text and number among the document's images. Images have no text, so these find it again.
+   */
+  image?: { src: string; alt: string; number: number };
 }
 
 export interface SelectionMatch {

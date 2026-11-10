@@ -27,6 +27,14 @@ export type BridgeMessage =
       /** The click, relative to the preview's viewport. */
       rect: { x: number; y: number; width: number; height: number };
     }
+  | {
+      source: typeof BRIDGE_SOURCE;
+      type: 'image';
+      /** Which image was clicked: its number among the page's images (as `imagesOf` counts them), from 1. */
+      number: number;
+      alt: string;
+      rect: { x: number; y: number; width: number; height: number };
+    }
   | { source: typeof BRIDGE_SOURCE; type: 'text'; text: string };
 
 /** Runs inside the iframe. Must not use anything from outside its own body. */
@@ -124,6 +132,14 @@ function bridge(blockTags: string[], source: string) {
       const offset = offsetOf(ix, range.startContainer, range.startOffset, 'start');
       post({ type: 'caret', offset, rect: { x: e.clientX, y: e.clientY, width: 0, height: 0 } });
     }, 0);
+  });
+  // A click on an image: images have no text to select, so say which one it was.
+  document.addEventListener('click', (e) => {
+    const img = (e.target as Element | null)?.closest?.('img');
+    if (!img || img.closest('[data-cms-preview]')) return;
+    const all = [...document.body.querySelectorAll('img')].filter((i) => !i.closest('[data-cms-preview]'));
+    const r = img.getBoundingClientRect();
+    post({ type: 'image', number: all.indexOf(img) + 1, alt: img.getAttribute('alt') ?? '', rect: { x: r.x, y: r.y, width: r.width, height: r.height } });
   });
   document.addEventListener('selectionchange', () => {
     clearTimeout(timer);

@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, useState } from 'react';
-import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
+import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type ReplaceNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -125,6 +125,7 @@ function describeSelector(c: SelectorConfig): string {
     : c.mode === 'all' ? (c.scope === 'blocks' ? 'Every block' : 'Everything')
     : c.mode === 'slide' ? `${SLIDE_PART_LABELS[c.part ?? 'slide']} · ${c.slides?.trim() ? `slides ${c.slides.trim()}` : 'all slides'}${c.title?.trim() ? ` titled “${c.title.trim()}”` : ''}`
     : c.mode === 'point' ? 'A point'
+    : c.mode === 'image' ? `${c.images?.trim() ? `Images ${c.images.trim()}` : 'Images'}${c.text?.trim() ? ` with “${c.text.trim()}”` : ''}${c.scope === 'frame' ? ' + figure' : ''}`
     : `${c.anchors.length} saved selection${c.anchors.length === 1 ? '' : 's'}`;
 }
 
@@ -154,10 +155,12 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       const added = typeof info.inserted === 'number' ? ` · added ${info.inserted}×` : '';
       return `${describeInsertion(c.content)}${added}`;
     }
-    case 'combinator':
-      return info.combined !== undefined
-        ? `A + B · ${info.combined === 2 ? 'merged' : info.combined}`
-        : typeof info.kinds === 'string' ? `One input (${info.kinds})` : 'Connect A and B';
+    case 'replace': {
+      const c = node.config as ReplaceNodeConfig;
+      if (typeof info.replaced !== 'number') return 'Connect a selection and content';
+      const wrap = c.wrap === 'div' ? ' in a box' : c.wrap === 'section' ? ' in a section' : '';
+      return `From ${info.from}${wrap} · replaced ${info.replaced}×`;
+    }
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
       if (info.format === 'slides') return `Slide deck · ${info.slides} slide${info.slides === 1 ? '' : 's'}`;

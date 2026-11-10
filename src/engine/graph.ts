@@ -6,7 +6,7 @@ import type { SourceFile } from './source';
 /** What travels along an edge. Edges only connect ports of the same type. */
 /**
  * `point`: where something goes in a document (a Selector's Point). `result`: an Output's finished document.
- * `any` (inputs only, the Connector's and Combinator's): takes every other type.
+ * `any` (inputs only, the Connector's, Object's, Snippet's and Replace node's): takes every other type.
  */
 export type PortType = 'document' | 'selection' | 'point' | 'html' | 'result' | 'any';
 

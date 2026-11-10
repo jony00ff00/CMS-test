@@ -2,7 +2,7 @@
 import type { Element } from 'hast';
 import { selectAll } from 'hast-util-select';
 import { resolveAnchors, type ResolveOptions } from './anchors';
-import { elementMatch, enclosingBlock, headingLevel, indexDocument, sameMatch, sectionMatch, slidesOf, textOf, type DocIndex } from './doc-index';
+import { elementMatch, enclosingBlock, headingLevel, imagesOf, imageWithFrame, indexDocument, sameMatch, sectionMatch, slidesOf, textOf, type DocIndex } from './doc-index';
 import { parseSlideRange } from './pptx';
 import { queryJsonPaths } from './json';
 import type { InsertionPoint } from './insert';
@@ -48,6 +48,15 @@ export type SelectorConfig =
       /** What of each slide: all of it (default), its title, its content (without title and notes), its notes. */
       part?: SlidePart;
     }
+  | {
+      mode: 'image';
+      /** Image numbers in document order, e.g. "1, 3-4". Empty: every image. */
+      images?: string;
+      /** Only images whose alternative text or file name contains this (case-insensitive). */
+      text?: string;
+      /** "image" (default): the <img> alone. "frame": with the link, <picture> and <figure> (and caption) around it. */
+      scope?: 'image' | 'frame';
+    }
   | ({ mode: 'manual'; anchors: Anchor[] } & ResolveOptions);
 
 export type SelectorMode = SelectorConfig['mode'];
@@ -82,6 +91,9 @@ export function runSelector(doc: CmsDocument, config: SelectorConfig): Selection
       break;
     case 'slide':
       matches = selectSlides(ix, config, warnings);
+      break;
+    case 'image':
+      matches = selectImages(ix, config, warnings);
       break;
     case 'point': {
       const r = config.point ? resolveAnchors(ix, [config.point.anchor])[0] : undefined;
@@ -167,6 +179,29 @@ function selectSlides(ix: DocIndex, config: Extract<SelectorConfig, { mode: 'sli
     warnings.push(`Slide${lacking.length === 1 ? '' : 's'} ${lacking.join(', ')} ${lacking.length === 1 ? 'has' : 'have'} no ${what}`);
   }
   return matches;
+}
+
+/** Images by number, by their alternative text or file name, alone or with their link / figure. */
+function selectImages(ix: DocIndex, config: Extract<SelectorConfig, { mode: 'image' }>, warnings: string[]): SelectionMatch[] {
+  const images = imagesOf(ix);
+  if (images.length === 0) {
+    warnings.push('This document has no images');
+    return [];
+  }
+  const range = parseSlideRange(config.images, images.length, { item: 'image', whole: 'The document' });
+  warnings.push(...range.warnings);
+  const words = config.text?.trim().toLowerCase();
+  const fileName = (src: string) => (src.startsWith('data:') ? '' : decodeURIComponent(src.split(/[?#]/)[0].split('/').pop() ?? ''));
+  const picked = images.filter(
+    (img) => (!range.slides || range.slides.has(img.number)) && (!words || img.alt.toLowerCase().includes(words) || fileName(img.src).toLowerCase().includes(words)),
+  );
+  if (picked.length === 0 && !warnings.length) warnings.push(`No image's alternative text or file name contains "${config.text!.trim()}"`);
+  const out: SelectionMatch[] = [];
+  for (const img of picked) {
+    const match = elementMatch(config.scope === 'frame' ? imageWithFrame(ix, img.path) : img.path);
+    if (!out.some((o) => sameMatch(o.match, match))) out.push(withText(ix, match));
+  }
+  return out;
 }
 
 function selectCss(ix: DocIndex, selector: string, warnings: string[]): SelectionMatch[] {

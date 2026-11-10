@@ -94,7 +94,13 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
   upgradeInsertNodes(rawNodes, rawEdges, warnings);
   const nodes = rawNodes.filter((n) => {
     const ok = n && typeof n.id === 'string' && typeof n.type === 'string' && registry[n.type];
-    if (!ok) warnings.push(`A node of unknown type "${String(n?.type)}" was left out`);
+    if (!ok) {
+      warnings.push(
+        n?.type === 'combinator'
+          ? `The Combinator node "${String(n.name ?? n.id)}" was left out: Combinators are no longer available (an Output combines several documents)`
+          : `A node of unknown type "${String(n?.type)}" was left out`,
+      );
+    }
     return ok;
   });
   // A name must be text; anything else is dropped.

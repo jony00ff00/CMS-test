@@ -7,10 +7,11 @@
 import type { Element } from 'hast';
 import { selectAll } from 'hast-util-select';
 import {
-  childrenAt, contextOf, elementMatch, headingLevel, indexDocument, rangeOf, sameMatch, sectionMatch, slideAt, slidesOf, textOf,
+  childrenAt, contextOf, elementMatch, headingLevel, imagesOf, imageWithFrame, indexDocument, rangeOf, sameMatch, sectionMatch, slideAt, slidesOf, textOf,
   type DocIndex, type SlideInfo,
 } from './doc-index';
 import { allIndexesOf, contextSimilarity, fuzzyFind, similarity } from './text-match';
+import { hashString } from './hash';
 import type { Anchor, CmsDocument, Match, NodeMatch, ResolveStatus, TextMatch } from './types';
 
 export interface CreateAnchorOptions {
@@ -47,6 +48,10 @@ export function createAnchor(source: CmsDocument | DocIndex, match: Match, optio
         const section = sectionMatch(ix, path);
         const scope = match.end - match.start === 1 ? 'block' : section && sameMatch(section, match) ? 'section' : undefined;
         if (scope) anchor.semantic = { headingText: textOf(ix, elementMatch(path)), level, scope };
+      }
+      if (match.end - match.start === 1) {
+        const image = imageAt(ix, path);
+        if (image) anchor.image = { src: imageKey(image.src), alt: image.alt, number: image.number };
       }
       const jsonPath = first.properties.dataJsonPath;
       if (typeof jsonPath === 'string' && match.end - match.start === 1) anchor.jsonPath = { path: jsonPath };
@@ -136,6 +141,7 @@ export function resolveAnchor(source: CmsDocument | DocIndex, anchor: Anchor, op
   /** Same text with fitting context (on the same slide): accept straight away. */
   const accept = (c: Candidate | undefined) => (c && c.textSim === 1 && c.ctxSim >= 0.5 && c.sameSlide ? found(c) : undefined);
 
+  if (anchor.target === 'nodes' && anchor.image) return resolveImage(ix, anchor, minConfidence);
   if (anchor.target === 'nodes') {
     const quick =
       accept(consider(structuralMatch(ix, anchor), 'structural')) ??
@@ -219,6 +225,42 @@ export function resolveAnchor(source: CmsDocument | DocIndex, anchor: Anchor, op
         ? `Closest match "${shorten(textOf(ix, top.match))}" is too different from "${shorten(quote.exact)}"`
         : `"${shorten(quote.exact)}" was not found`,
   };
+}
+
+/** Long addresses (data: URLs) are stored as a hash. */
+const imageKey = (src: string) => (src.length > 300 ? `#${hashString(src)}` : src);
+
+/** The image an element is: an <img>, or a link / figure / picture holding one image and its caption. */
+function imageAt(ix: DocIndex, path: number[]) {
+  const key = path.join('.');
+  return imagesOf(ix).find((img) => img.path.join('.') === key || imageWithFrame(ix, img.path).join('.') === key);
+}
+
+/**
+ * Images have no text to search for: find the one with the same address (the one at the same place, then the
+ * one with the same number, then the closest), else one with the same alternative text.
+ */
+function resolveImage(ix: DocIndex, anchor: Anchor, minConfidence: number): ResolvedAnchor {
+  const want = anchor.image!;
+  const framed = anchor.structural?.tagName !== 'img';
+  const images = imagesOf(ix).map((img) => ({ img, match: elementMatch(framed ? imageWithFrame(ix, img.path) : img.path) }));
+  const s = anchor.structural;
+  const samePlace = (m: NodeMatch) => !!s && sameMatch(m, { kind: 'nodes', parent: s.parent, start: s.start, end: s.end });
+  const closest = (list: typeof images) =>
+    [...list].sort((a, b) => Number(samePlace(b.match)) - Number(samePlace(a.match)) || Math.abs(a.img.number - want.number) - Math.abs(b.img.number - want.number))[0];
+  const same = closest(images.filter(({ img }) => imageKey(img.src) === want.src && (want.src !== '' || img.alt === want.alt)));
+  const result = (hit: (typeof images)[number], status: ResolveStatus, confidence: number, strategy: string): ResolvedAnchor => ({
+    anchorId: anchor.id,
+    status,
+    confidence,
+    match: hit.match,
+    strategy,
+  });
+  if (same) return samePlace(same.match) ? result(same, 'exact', 1, 'image') : result(same, 'moved', 0.9, 'image');
+  const byAlt = want.alt.trim() ? closest(images.filter(({ img }) => img.alt === want.alt)) : undefined;
+  if (byAlt && 0.8 >= minConfidence) return result(byAlt, 'fuzzy', 0.8, 'image');
+  const name = want.alt.trim() || (want.src.startsWith('#') ? `image ${want.number}` : want.src.split('/').pop());
+  return { anchorId: anchor.id, status: 'failed', confidence: 0, reason: `The image "${shorten(name ?? '')}" was not found` };
 }
 
 /** Resolve several anchors against one document (indexed once). */

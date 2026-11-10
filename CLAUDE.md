@@ -1,6 +1,6 @@
 # Node CMS
 
-Node-based CMS: Document Source → Selector → Snippet → Output (plus Extractor, Object, Connector, Combinator).
+Node-based CMS: Document Source → Selector → Snippet → Output (plus Extractor, Object, Replace, Connector).
 Sources (.html, .docx, .pptx, .json) become one internal Document (a hast tree). Selectors pick parts of it,
 Snippet nodes wrap or add to those parts, and Output previews or exports the result.
 
@@ -67,7 +67,10 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `scope: 'document'` one run of all top-level nodes without edge whitespace, or `'blocks'` each top-level element),
   `slide` (`slides` range by deck number, `title` contains, `part`: slide / title / content (one run of the slide's
   children without title and notes) / notes; warns for slides not in the document, slides lacking the part, and
-  documents without slides). `slidesOf(ix)` / `slideAt(ix, offset)` in `doc-index.ts` find `section.slide`s.
+  documents without slides), `image` (`images` range by number in document order (`parseSlideRange` with
+  `{ item: 'image', whole: 'The document' }`), `text` in the alt text or file name, `scope` image (default) | frame:
+  with the link holding only it, `<picture>` and `<figure>` around it (`imageWithFrame`); `imagesOf(ix)` lists them).
+  `slidesOf(ix)` / `slideAt(ix, offset)` in `doc-index.ts` find `section.slide`s.
 - Matches are `NodeMatch` (sibling run: `parent` path, `start`..`end` child indexes) or `TextMatch`
   (text index offsets). `doc-index.ts` holds the shared lookups (`indexDocument`, `rangeOf`, `textOf`, sections).
 - `anchors.ts`: `createAnchor` stores a text quote with context plus structural, CSS, heading and JSON-path
@@ -75,7 +78,10 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Identical text always wins over similar text. Default `minConfidence` 0.75. Index once and pass the
   `DocIndex` when resolving many anchors. On slides, anchors store `slide: { number, title }`: candidates on the
   slide with that title (or that number, untitled) win and are needed for the quick accept; one found only on
-  another slide is `moved` at ×0.85 confidence (`OTHER_SLIDE_FACTOR`).
+  another slide is `moved` at ×0.85 confidence (`OTHER_SLIDE_FACTOR`). An element anchor on an image (or its
+  link / figure) stores `image: { src, alt, number }` (src hashed past 300 characters) and resolves by it
+  (`resolveImage`: same src → exact at the same place, else moved 0.9 (same number, then closest); same alt →
+  fuzzy 0.8; else failed), since images have no text.
 - Snippet node: `custom` ({ className, wrap: none | div | span }) makes the snippet (`customSnippet`: attributes
   `class="…"`, or a wrapper with the classes; `className` holds one or more names separated by spaces, read with
   `cleanClassNames` (each cleaned by `cleanClassName`, each once, "custom" when empty)) instead of `snippet`; `css` / `js` on any Snippet node are added as a
@@ -165,9 +171,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   the tree, so pieces of one element share it), so CSS aimed at them or at a wrapper still applies; off: only the
   picked content, as the Object and Connector copy it; its outputs also carry `selection`, not a port, for the preview and the
   saved selections' status);
-  `combinator` (inputs `a` / `b`, both `any` and optional; `combine` merge (default; `mergePorts` ['a', 'b']: two
-  changed versions of one document become one; two selections / points in the same document become one selection)
-  or append (A then B, `combineDocuments`); outputs like the Connector's);
+  `replace` (inputs `selection` (port type selection) and `content` (`any`, through `convertValue`); config
+  `ReplaceOptions` = the Object's selection-content options (wrap, className, styles, headings); output `document`;
+  `replaceSelection` in `insert.ts`: a `replace` snippet with the placeholder, filled with `copyContent` (one copy
+  per match; a text range across blocks gets it once). Selected text takes inline content: one `<p>`'s children, or
+  inline nodes; block content widens a text match to its block, with a warning. JSON field blocks are kept (replace
+  works inside them); info `replaced`, `from`). The Combinator node was removed: `parseProject` leaves old ones out
+  with a warning (`mergePorts` / `planMerges` stay for the Output);
   `connector` (one input `input` of port type `any`, which `edgeError` lets every output type into; outputs
   `document`, `selection`, `html` and `result`, all filled from whatever came in by `convertValue` in `convert.ts`
   (`valueKind`: a string is HTML, `kind: 'selection'` a selection, `kind: 'point'` a point (its document, and as a
@@ -187,7 +197,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   edge type (`DeletableEdge.tsx`): a delete button at the middle while selected. In e2e, click a connection by
   position between its handles (a straight one has no height).
 - Node colours: CSS `--node-*` / `--port-*`, and `NODE_COLORS` (`src/ui/node-colors.ts`) for the minimap; keep them
-  the same. Connector is grey; the `point` port and its dotted connections are cyan.
+  the same. Connector is grey, Replace pink; the `point` port and its dotted connections are cyan.
 - "Save project file…" opens `SaveDialog` (`src/ui/canvas/SaveDialog.tsx`, a `<dialog>`): a file name
   (`projectFileName`, `.node-cms.json`, remembered in localStorage `node-cms:project-name`), then the browser's own
   save dialog (`showSaveFilePicker`, to pick the folder; cancelling it keeps our dialog open), or a download where
@@ -267,6 +277,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   on `PreviewSource`): "Pick" (its input with the kept parts highlighted; selected text → "Add to <extractor>",
   `addAnchor`) and "Kept" (its output). `chooseMediaFile` adds an image or video file. Project files save every `fileId` found
   anywhere in a node's settings.
+- A Replace node selected: views "What it replaces" (its Selection's document highlighted), "Content" (what comes
+  into Content, highlighted when it is a selection) and "Result". The inspector (`ReplaceEditor`) reuses
+  `ContentSource` and `CopyOptionsFields` from `ObjectEditor.tsx`.
+- An image clicked in the preview (the bridge posts `image` with its number among the page's `<img>`s, outside
+  `data-cms-preview`, and its alt) → "Selected image" (with "With its figure / link" when it has one): "Create
+  selector from image" / "Add to <selector>" (`imageMatch` in `Preview.tsx`). Not while picking a point or showing an
+  Object. Saved image selections show as Image “alt” (`anchorName`).
 - Selected text in the preview → "Create selector from selection" (a new manual Selector connected to the
   shown document, `createManualSelector`) or "Add to <selector>" (`addAnchor`). Selecting a whole block gives
   an element anchor, anything else a text anchor. Highlighting never changes the text, so offsets stay valid.
@@ -318,9 +335,10 @@ All planned milestones are done; since then: resizable / separate-window preview
 (text · tables, pictures, groups · source options and slide preview · Slide selector · slide-deck Output; the
 PowerPoint work stops there: P6, shape positions, embedded media and theme colours / fonts, is not planned),
 Connector that turns any input into any output, Extractor, Point output and Object node (replacing Insert),
-Combinator, simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
+Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
-connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
+image selection (Images mode, click an image in the preview), Replace node. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

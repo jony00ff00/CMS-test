@@ -17,7 +17,7 @@
   --node-connector: #6b7280;
   --node-object: #0d9488;
   --node-extractor: #4f46e5;
-  --node-combinator: #be185d;
+  --node-replace: #be185d;
   --node-output: #dc2626;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
@@ -85,7 +85,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-connector { border-left-color: var(--node-connector); }
 .palette-object { border-left-color: var(--node-object); }
 .palette-extractor { border-left-color: var(--node-extractor); }
-.palette-combinator { border-left-color: var(--node-combinator); }
+.palette-replace { border-left-color: var(--node-replace); }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
 
@@ -139,6 +139,7 @@ details.advanced[open] { display: grid; gap: 0.5rem; }
   max-width: 560px;
 }
 .selection-actions .quote { font-size: 0.8rem; color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selection-actions .inline-check { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; }
 .preview-tip { margin-left: auto; }
 
 .json-mapping { display: grid; gap: 0.5rem; }
@@ -210,7 +211,7 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-connector { border-top-color: var(--node-connector); }
 .cms-node-object { border-top-color: var(--node-object); }
 .cms-node-extractor { border-top-color: var(--node-extractor); }
-.cms-node-combinator { border-top-color: var(--node-combinator); }
+.cms-node-replace { border-top-color: var(--node-replace); }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
 .cms-node header { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem 0.2rem; }
@@ -239,7 +240,6 @@ body.preview-window { margin: 0; height: 100vh; }
 .react-flow__edge.edge-html .react-flow__edge-path { stroke: var(--port-html); }
 .react-flow__edge.edge-result .react-flow__edge-path { stroke: var(--port-result); stroke-dasharray: 6 3; }
 .react-flow__edge.edge-point .react-flow__edge-path { stroke: var(--port-point); stroke-dasharray: 2 4; stroke-linecap: round; }
-.combinator-inputs { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; font-size: 0.85rem; }
 .react-flow__edge .react-flow__edge-path { stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3.5; }
 .minimap .react-flow__minimap-svg { display: block; }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  buildInsertion, caretTarget, createAnchor, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, indexDocument, INSERT_MARKER_CSS,
+  buildInsertion, caretTarget, createAnchor, elementMatch, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, imagesOf, imageWithFrame, indexDocument, INSERT_MARKER_CSS,
   insertionPointAt, markInsertionPoint, rangeOf, serialize, type CmsDocument, type InsertWhere, type Match, type ObjectNodeConfig,
   type PointValue, type Selection, type SelectorConfig, type SelectorNodeConfig,
 } from '../../engine';
@@ -49,6 +49,7 @@ const OBJECT_VIEWS = ['Where it goes', 'Result'];
 /** An Object with content from another node can also show just that content. */
 const OBJECT_CONTENT_VIEWS = ['Where it goes', 'Content', 'Result'];
 const EXTRACTOR_VIEWS = ['Pick', 'Kept'];
+const REPLACE_VIEWS = ['What it replaces', 'Content', 'Result'];
 
 function inputOf(s: EditorState, nodeId: string, port: string) {
   const edge = s.graph.edges.find((e) => e.target === nodeId && e.targetPort === port);
@@ -97,6 +98,27 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
       message: !edge ? "Connect a Selector's Point to this Object." : point ? undefined : (r?.message ?? 'Waiting…'),
     };
   }
+  if (selected?.type === 'replace') {
+    const result = s.results[selected.id];
+    if (view !== 'Result') {
+      const port = view === 'Content' ? 'content' : 'selection';
+      const edge = s.graph.edges.find((e) => e.target === selected.id && e.targetPort === port);
+      const value = edge ? s.results[edge.source]?.outputs[edge.sourcePort] : undefined;
+      const sel = (value as Selection | undefined)?.kind === 'selection' ? (value as Selection) : undefined;
+      const doc = sel ? sel.document : typeof value === 'object' && (value as { kind?: string })?.kind === 'document' ? (value as CmsDocument) : undefined;
+      const count = sel?.matches.length ?? 0;
+      return {
+        label: view === 'Content' ? `Content for ${nodeLabel(selected)}${sel ? ` · ${count} match${count === 1 ? '' : 'es'} highlighted` : ''}` : `What ${nodeLabel(selected)} replaces · ${count} match${count === 1 ? '' : 'es'} highlighted`,
+        doc,
+        html: typeof value === 'string' ? value : undefined,
+        selection: sel,
+        views: REPLACE_VIEWS,
+        message: !edge ? `Connect something to the ${view === 'Content' ? 'Content' : 'Selection'} input.` : value === undefined ? (s.results[edge.source]?.message ?? 'Waiting…') : undefined,
+      };
+    }
+    const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
+    return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, views: REPLACE_VIEWS, message: result?.message ?? 'Waiting…' };
+  }
   if (selected?.type === 'selector' && (selected.config as SelectorConfig).mode === 'point') {
     const input = inputOf(s, selected.id, 'document');
     const config = selected.config as Extract<SelectorConfig, { mode: 'point' }>;
@@ -138,7 +160,7 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
       message: !input ? 'Connect a document to this Selector.' : (result?.message ?? (input.doc ? undefined : 'Waiting…')),
     };
   }
-  if (selected && ['documentSource', 'snippet', 'connector', 'extractor', 'combinator'].includes(selected.type)) {
+  if (selected && ['documentSource', 'snippet', 'connector', 'extractor'].includes(selected.type)) {
     const result = s.results[selected.id];
     const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
     const views = selected.type === 'extractor' && (selected.config as SelectorConfig).mode === 'manual' ? EXTRACTOR_VIEWS : undefined;
@@ -190,6 +212,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
   const iframe = useRef<HTMLIFrameElement>(null);
   const [page, setPage] = useState<string>();
   const [picked, setPicked] = useState<TextSelection>();
+  const [image, setImage] = useState<{ number: number; alt: string; rect: TextSelection['rect']; framed: boolean }>();
   const [popup, setPopup] = useState<PreviewWindow>();
   const host = popup?.win ?? window;
 
@@ -230,6 +253,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
     let cancelled = false;
     setPicked(undefined);
     setCaret(undefined);
+    setImage(undefined);
     (async () => {
       if (source.html) return withBridge(source.html);
       if (!source.doc) return undefined;
@@ -258,6 +282,13 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
         setPicked({ start: msg.start, end: msg.end, text: msg.text, rect: msg.rect });
       }
       if (msg.type === 'selection-cleared') setPicked(undefined);
+      if (msg.type === 'image') {
+        const current = sourceRef.current;
+        // Picking a point (or an Object's views) uses clicks for that; elsewhere a click on an image selects it.
+        if (current.insert || current.insertNodeId || !current.doc || !current.from) return;
+        setPicked(undefined);
+        setImage({ number: msg.number, alt: msg.alt, rect: msg.rect, framed: false });
+      }
       if (msg.type === 'caret') {
         const current = sourceRef.current;
         const target = current.insert?.nodeId && current.doc ? caretTarget(current.doc, msg.offset) : undefined;
@@ -297,6 +328,21 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
     dismiss();
   };
 
+  const saveImage = (target: 'new' | 'existing') => {
+    if (!image || !source.doc || !source.from) return;
+    const match = imageMatch(source.doc, image.number, image.alt, image.framed);
+    setImage(undefined);
+    if (!match) {
+      editorStore.getState().notify('error', 'That image could not be found in the document.');
+      return;
+    }
+    const anchor = createAnchor(source.doc, match);
+    const state = editorStore.getState();
+    if (target === 'existing' && source.manualSelectorId) state.addAnchor(source.manualSelectorId, anchor);
+    else state.createManualSelector(source.from, anchor);
+  };
+  const imageHasFrame = useMemo(() => !!image && !!source.doc && !!imageMatch(source.doc, image.number, image.alt, true, true), [image, source.doc]);
+
   const short = picked && (picked.text.length > 48 ? `${picked.text.slice(0, 47)}…` : picked.text).replace(/\n/g, ' ');
   const label = page ? source.label : (source.message ?? source.label);
 
@@ -332,6 +378,36 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
               Create selector from selection
             </button>
             <button type="button" className="ghost" aria-label="Cancel" onClick={dismiss}>
+              ✕
+            </button>
+          </div>
+        )}
+        {image && source.doc && frameBox && (
+          <div
+            className="selection-actions"
+            role="dialog"
+            aria-label="Selected image"
+            style={{
+              left: clamp(frameBox.left + image.rect.x, frameBox.left + 8, Math.min(frameBox.right, win.innerWidth) - 460),
+              top: clamp(frameBox.top + image.rect.y - 48, frameBox.top + 8, Math.min(frameBox.bottom, win.innerHeight) - 48),
+            }}
+          >
+            <span className="quote">{image.alt ? `Image “${image.alt.length > 32 ? `${image.alt.slice(0, 31)}…` : image.alt}”` : `Image ${image.number}`}</span>
+            {imageHasFrame && (
+              <label className="inline-check">
+                <input type="checkbox" checked={image.framed} onChange={(e) => setImage({ ...image, framed: e.target.checked })} />
+                With its figure / link
+              </label>
+            )}
+            {source.manualSelectorId && (
+              <button type="button" onClick={() => saveImage('existing')}>
+                Add to {nodeLabel(s.graph.nodes.find((n) => n.id === source.manualSelectorId), source.manualSelectorId)}
+              </button>
+            )}
+            <button type="button" onClick={() => saveImage('new')}>
+              Create selector from image
+            </button>
+            <button type="button" className="ghost" aria-label="Cancel" onClick={() => setImage(undefined)}>
               ✕
             </button>
           </div>
@@ -407,7 +483,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
           </div>
           <div className="preview-meta">
             <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
-            {!popup && page && source.doc && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+            {!popup && page && source.doc && source.from && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text, or click an image, to make a selection from it.</span>}
             {!popup && insertToggle}
           </div>
         </>
@@ -418,7 +494,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
               <div className="preview-head">
                 <h2>Preview</h2>
                 <span className="muted small">{label}</span>
-                {page && source.doc && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text to make a selection from it.</span>}
+                {page && source.doc && source.from && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text, or click an image, to make a selection from it.</span>}
                 {insertToggle}
                 <span className="preview-actions">
                   <button type="button" onClick={attach}>
@@ -433,6 +509,21 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
         : !minimised && surface(window)}
     </section>
   );
+}
+
+/**
+ * The match for an image clicked in the preview (by its number; by its alternative text if the page has other
+ * images than the document, e.g. from snippet JavaScript). `framed`: with its link / figure. `onlyFramed`:
+ * undefined unless the image has one.
+ */
+function imageMatch(doc: CmsDocument, number: number, alt: string, framed: boolean, onlyFramed = false): Match | undefined {
+  const ix = indexDocument(doc);
+  const images = imagesOf(ix);
+  const img = images[number - 1]?.alt === alt ? images[number - 1] : images.find((i) => i.alt === alt && alt);
+  if (!img) return undefined;
+  const path = framed ? imageWithFrame(ix, img.path) : img.path;
+  if (onlyFramed && path.length === img.path.length) return undefined;
+  return elementMatch(path);
 }
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(v, Math.max(min, max)));
