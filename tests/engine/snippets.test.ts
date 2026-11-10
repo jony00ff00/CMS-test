@@ -242,7 +242,7 @@ describe('snippet CSS and JS', () => {
     expect(third.document.meta.snippetAssets?.map((a) => a.key)).toEqual(['callout@1', 'mark@1']);
 
     const page = serialize(third.document, { fullDocument: true });
-    expect(page).toContain('<style>/* callout@1 */\naside{border:1px solid}</style><style>/* mark@1 */\nmark{}</style></head>');
+    expect(page).toContain('<style data-snippet="callout@1">/* callout@1 */\naside{border:1px solid}</style><style data-snippet="mark@1">/* mark@1 */\nmark{}</style></head>');
     expect(page).toContain('<script data-snippet="callout@1">console.log("<\\/script>")</script></body>');
   });
 });

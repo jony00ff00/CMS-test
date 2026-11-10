@@ -163,7 +163,7 @@ describe('evaluation', () => {
   it('writes a full page with the snippet CSS', async () => {
     const g = setConfig(pipeline(), 'out', { fullDocument: true });
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(g, ctx);
-    expect(results.out.outputs.html).toMatch(/^<!doctype html><html><head><meta charset="utf-8"><title>Field Guide to Node Gardens<\/title><style>\/\* callout@1 \*\/\n\.callout\{/);
+    expect(results.out.outputs.html).toMatch(/^<!doctype html><html><head><meta charset="utf-8"><title>Field Guide to Node Gardens<\/title><style data-snippet="callout@1">\/\* callout@1 \*\/\n\.callout\{/);
   });
 
   it('re-runs only the changed node and the nodes after it', async () => {

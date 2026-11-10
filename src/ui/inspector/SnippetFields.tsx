@@ -12,7 +12,8 @@ const MODES: { value: SnippetMode; label: string }[] = [
 const TEMPLATE_HINT = (
   <>
     <code>{'{{content}}'}</code> the selection · <code>{'{{text}}'}</code> its text · <code>{'{{number}}'}</code> ·{' '}
-    <code>{'{{params.name}}'}</code> · <code>{'{{#if params.x}}…{{/if}}'}</code>
+    <code>{'{{params.name}}'}</code> · <code>{'{{#if params.x}}…{{/if}}'}</code> ·{' '}
+    <code>{'{{item params.list index}}'}</code> one item of a comma-separated list per match
   </>
 );
 

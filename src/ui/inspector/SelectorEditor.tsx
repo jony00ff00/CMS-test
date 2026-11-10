@@ -47,9 +47,17 @@ export function SelectorEditor({ node }: { node: GraphNode }) {
       <SelectorFields
         config={config}
         input={input}
-        onChange={(next) => set({ ...next, ...(config.place && { place: config.place }) } as SelectorNodeConfig)}
+        onChange={(next) => set({ ...next, ...(config.place && { place: config.place }), ...(config.join && { join: true }) } as SelectorNodeConfig)}
         manual={(c, patch) => <ManualSelections node={node} config={c} onChange={(anchors) => patch({ anchors })} />}
       />
+      {config.mode !== 'point' && (
+        <CheckboxField
+          label="Join neighbouring matches into one"
+          checked={!!config.join}
+          hint="Matches next to each other become one, so a Snippet puts one wrapper around all of them."
+          onChange={(join) => set({ ...config, join: join || undefined })}
+        />
+      )}
       {config.mode === 'point' ? (
         <PointSummary nodeId={node.id} point={config.point} />
       ) : (

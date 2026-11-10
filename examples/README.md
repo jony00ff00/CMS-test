@@ -1,6 +1,7 @@
 # Example projects
 
-Open a project with **Open project…** in the app.
+Open a project with **Open project…** in the app. Both projects below are made by `npm run example:scrolly`; run it
+after changing a file in `scrolly/` (a test fails while a project file is out of date).
 
 ## A scrolly from Word text and HTML code
 
@@ -8,7 +9,6 @@ Open a project with **Open project…** in the app.
 scrollytelling graphic (`scrolly/ge16-scrolly-short.html`: its markup, CSS and JavaScript, made by a developer). Both
 files are inside the project file; they are here on their own too. Writers change the Word document, developers
 change the HTML, and the project puts the two together again: choose the new file in either Document Source.
-Regenerate the project file after changing either file with `npm run example:scrolly`.
 
 | Node | What it does |
 | --- | --- |
@@ -25,3 +25,28 @@ differ, for example a step was added in Word but not in the code, the Replace no
 
 Rules for the writers: keep the Kicker, Title and Dek styles on the first three paragraphs, keep one "Step …" heading
 per card in order, and keep "Footer" as the last heading. Bold, italics and links in the text come through.
+
+## The scrolly made from the Word text alone
+
+`ge16-scrolly-from-text.node-cms.json` has one file, the Word document, and turns that plain text into the finished
+scrolly page. Nothing is combined: the code is in the project's **snippet library** (six snippets, "Scrolly step
+card", "Scrolly graphic and steps", "Scrolly header", "Link", "Scrolly footer and tables" and "GE16 scrolly
+element"), and the nodes put it around the text step by step. The page it makes is the same as
+`scrolly/ge16-scrolly-short.html` (only the kicker differs: it is typed in capitals in the Word document).
+
+The Word document's own paragraph styles become the code's classes in **Scrolly text (Word)** (its Word style rules:
+Kicker → `p.gs-kicker`, Title → `h2.gs-headline`, Dek → `p.gs-dek`, and the writers' Note is left out). Then each
+Selector picks part of the document as the step before left it, and the Snippet after it changes that part:
+
+| Group | Selector → Snippet | What happens |
+| --- | --- | --- |
+| Steps | **Step text** (under each heading containing "Step") → **Step cards** | Each step's text goes into `<article class="gs-step" data-step="…"><div class="gs-card">`. The names (`tie`, `distribution`, …) are the snippet's "Step names, in order" setting: the script looks the steps up by name. |
+| | **Writers' headings** (`h2:not(.gs-headline)`) → **Remove them** | The "Step …" and "Footer" headings are for the writers; they go. |
+| | **All step cards** (`.gs-step`, "Join neighbouring matches into one") → **Graphic and steps** | The ten cards, as one, go into `.gs-steps`, next to the graphic's markup. |
+| Header | **Header text** (joined) → **Header**; **Headline** → **Headline id** | `<header class="gs-intro">` around kicker, headline and dek; the headline gets `id="gs-headline"`. |
+| Footer | **Link text** → **Link**; **Footer text** (`.gs-scroller ~ p`, joined) → **Tables and footer** | "Read the full brief" becomes a link; the tables for screen readers and `<footer class="gs-footer">` come after the graphic. |
+| Element, CSS and JS | **Everything** → **Scrolly element** | `<ge16-scrolly id="ge16-scrolly" …>` around it all, with the graphic's CSS and JavaScript. A few lines before the script put a copy of the CSS inside the element (the script moves it into its shadow root). |
+
+**Scrolly page** (Output) is the finished page. To change the code, edit the snippets in the library (Snippet node
+→ "Edit in library") and save a new version; the nodes then offer the update. To change the text, choose a new Word
+document in **Scrolly text (Word)**. The rules for writers are the same as above.

@@ -1,12 +1,14 @@
 import type { NodeDefinition } from '../graph';
 import type { InsertPlace, PointValue } from '../insert';
-import { runSelector, type SelectorConfig } from '../selectors';
+import { joinMatches, runSelector, type SelectorConfig } from '../selectors';
 import type { CmsDocument } from '../types';
 
 /** A Selector's settings: what to select, and (for its Point output) where things go relative to each match. */
 export type SelectorNodeConfig = SelectorConfig & {
   /** Point output, for modes other than "point": before / after each match, or inside it at the start / end. Default after. */
   place?: InsertPlace;
+  /** Neighbouring matches become one match (e.g. to put one wrapper around several paragraphs). */
+  join?: boolean;
 };
 
 export const selector: NodeDefinition<SelectorNodeConfig> = {
@@ -24,8 +26,9 @@ export const selector: NodeDefinition<SelectorNodeConfig> = {
     if (config.mode === 'point' && !config.point) {
       return { outputs: {}, waiting: 'Click in the preview to pick the point' };
     }
-    const { place, ...selectorConfig } = config;
-    const selection = runSelector(doc, selectorConfig as SelectorConfig);
+    const { place, join, ...selectorConfig } = config;
+    const found = runSelector(doc, selectorConfig as SelectorConfig);
+    const selection = join ? joinMatches(found) : found;
     const point: PointValue = {
       kind: 'point',
       document: doc,

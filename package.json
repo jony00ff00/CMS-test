@@ -13,7 +13,7 @@
     "fixtures": "tsx scripts/make-fixtures.ts",
     "pretest": "npm run fixtures --silent",
     "pree2e": "npm run fixtures --silent",
-    "example:scrolly": "tsx scripts/make-example-scrolly.ts"
+    "example:scrolly": "tsx scripts/make-example-scrolly.ts && tsx scripts/make-example-scrolly-from-text.ts"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",

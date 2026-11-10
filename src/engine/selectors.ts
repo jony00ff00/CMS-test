@@ -2,11 +2,11 @@
 import type { Element } from 'hast';
 import { selectAll } from 'hast-util-select';
 import { resolveAnchors, type ResolveOptions } from './anchors';
-import { elementMatch, enclosingBlock, headingLevel, imagesOf, imageWithFrame, indexDocument, sameMatch, sectionMatch, slidesOf, textOf, type DocIndex } from './doc-index';
+import { childrenAt, elementMatch, enclosingBlock, headingLevel, imagesOf, imageWithFrame, indexDocument, sameMatch, sectionMatch, slidesOf, textOf, type DocIndex } from './doc-index';
 import { parseSlideRange } from './pptx';
 import { queryJsonPaths } from './json';
 import type { InsertionPoint } from './insert';
-import type { Anchor, CmsDocument, Match, Selection, SelectionMatch } from './types';
+import type { Anchor, CmsDocument, Match, NodeMatch, Selection, SelectionMatch } from './types';
 
 export type SelectorConfig =
   | { mode: 'css'; selector: string }
@@ -61,6 +61,29 @@ export type SelectorConfig =
 
 export type SelectorMode = SelectorConfig['mode'];
 export type SlidePart = 'slide' | 'title' | 'content' | 'notes';
+
+/**
+ * Neighbouring matches (sibling runs with nothing but whitespace between them) as one match, so one wrapper goes
+ * around all of them. Other matches stay as they are.
+ */
+export function joinMatches(selection: Selection): Selection {
+  const ix = indexDocument(selection.document);
+  const out: SelectionMatch[] = [];
+  for (const m of selection.matches) {
+    const prev = out[out.length - 1];
+    if (prev && prev.match.kind === 'nodes' && m.match.kind === 'nodes' && prev.match.parent.join() === m.match.parent.join()) {
+      const siblings = childrenAt(ix, m.match.parent) ?? [];
+      const between = siblings.slice(prev.match.end, m.match.start);
+      if (m.match.start >= prev.match.end && between.every((n) => n.type === 'text' && !n.value.trim())) {
+        const match: NodeMatch = { ...prev.match, end: m.match.end };
+        out[out.length - 1] = withText(ix, match);
+        continue;
+      }
+    }
+    out.push(m);
+  }
+  return { ...selection, matches: out };
+}
 
 /** Safety limit so a pattern like "." cannot freeze the app. */
 export const MAX_MATCHES = 5000;

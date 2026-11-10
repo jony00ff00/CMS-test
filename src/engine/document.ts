@@ -212,8 +212,12 @@ export function serialize(doc: CmsDocument, options: SerializeOptions = {}): str
 
   const title = doc.meta.title ? `<title>${escapeHtml(doc.meta.title)}</title>` : '';
   const assets = doc.meta.snippetAssets ?? [];
-  const css = [...doc.meta.styles, ...assets.flatMap((a) => (a.css ? [`/* ${a.key} */\n${a.css}`] : []))];
-  const styles = css.map((c) => `<style>${c.replace(/<\/style/gi, '<\\/style')}</style>`).join('');
+  // Snippet CSS is marked with its snippet (like its script), so a snippet's script can find its own styles.
+  const safe = (c: string) => c.replace(/<\/style/gi, '<\\/style');
+  const styles = [
+    ...doc.meta.styles.map((c) => `<style>${safe(c)}</style>`),
+    ...assets.flatMap((a) => (a.css ? [`<style data-snippet="${escapeHtml(a.key)}">/* ${a.key} */\n${safe(a.css)}</style>`] : [])),
+  ].join('');
   const scripts = assets
     .flatMap((a) => (a.js ? [`<script data-snippet="${escapeHtml(a.key)}">${a.js.replace(/<\/script/gi, '<\\/script')}</script>`] : []))
     .join('');

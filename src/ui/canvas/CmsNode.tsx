@@ -141,7 +141,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       const c = node.config as SelectorNodeConfig;
       if (c.mode === 'point') return c.point ? `A point${info.needsAttention ? ' (needs attention)' : ''}` : 'Click in the preview to pick the point';
       const kept = node.type === 'extractor' && typeof info.matches === 'number' ? ' · the rest removed' : '';
-      return `${describeSelector(c)}${typeof info.matches === 'number' ? ` · ${plural(info.matches, 'match')}` : ''}${kept}`;
+      return `${describeSelector(c)}${c.join ? ' joined' : ''}${typeof info.matches === 'number' ? ` · ${plural(info.matches, 'match')}` : ''}${kept}`;
     }
     case 'snippet': {
       const c = node.config as SnippetNodeConfig;

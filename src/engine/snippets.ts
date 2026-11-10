@@ -50,6 +50,11 @@ export async function applySnippet(selection: Selection, snippet: Snippet, optio
 
   const { default: Handlebars } = await import('handlebars');
   const hb = Handlebars.create();
+  // {{item "a, b, c" index}}: the item at that position of a comma-separated list (e.g. a name per match).
+  hb.registerHelper('item', (list: unknown, index: unknown) => {
+    const items = typeof list === 'string' ? list.split(',').map((s) => s.trim()) : [];
+    return typeof index === 'number' ? (items[index] ?? '') : '';
+  });
   let render: (context: object) => string;
   try {
     const compiled = hb.compile(snippet.template, { strict: false });

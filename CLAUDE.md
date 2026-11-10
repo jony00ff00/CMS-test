@@ -93,8 +93,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   → `{ document, warnings, applied }`. Modes: wrap, prepend, append (`inside` for first/last child), replace,
   attributes (merges class and style; selected text gets a <span>). Template variables: `{{content}}` (the
   original nodes), `{{text}}`, `{{html}}`, `{{index}}`, `{{number}}`, `{{count}}`, `{{part}}`, `{{parts}}`,
-  `{{params.x}}`, `{{jsonPath}}`, `{{match.x}}` (from the `matchData(index)` option). Template output is cleaned like any HTML. CSS/JS go to
-  `meta.snippetAssets` once per `id@version`; `serialize(..., { fullDocument: true })` writes them out.
+  `{{params.x}}`, `{{item "a, b" index}}` (an item of a comma-separated list), `{{jsonPath}}`, `{{match.x}}` (from the `matchData(index)` option). Template output is cleaned like any HTML. CSS/JS go to
+  `meta.snippetAssets` once per `id@version`; `serialize(..., { fullDocument: true })` writes them out (both marked
+  `data-snippet="<key>"`).
 - `ranges.ts`: `Workspace`, a working copy of the tree. Matches become node references before anything
   changes, and splits are recorded, so overlapping matches stay valid in any order. Text ranges split text
   nodes and partly covered inline elements, never block elements or JSON field blocks: a range across
@@ -149,7 +150,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   shared document, and `combine: 'append'`, go one after another (`combineDocuments` in `combine.ts`); JSON export
   refuses only in that case; `format` html | json | slides (always a complete page; info `slides`), `fullDocument`, `inlineAssets`, `jsonAssets`; always makes `html` for the
   preview, plus `json` when exporting JSON). Manual selectors report `info.needsAttention`;
-  `selector` (`SelectorNodeConfig` = a `SelectorConfig` + `place`): outputs `selection` and `point` (port type
+  `selector` (`SelectorNodeConfig` = a `SelectorConfig` + `place` + `join` (`joinMatches` in `selectors.ts`:
+  neighbouring sibling runs with only whitespace between become one match)): outputs `selection` and `point` (port type
   `point`, a `PointValue` { kind: 'point', document, where: `InsertWhere` }): mode `point` (picked in the preview;
   waits until picked) gives `{ mode: 'point', point }`, every other mode `{ mode: 'selector', selector, place }`
   (place default after);
@@ -333,6 +335,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Kicker / Title / Dek) by three Replace nodes (inside, match by match). `npm run example:scrolly`
   (`scripts/make-example-scrolly.ts`) writes it; `tests/engine/example-scrolly.test.ts` checks every node, edited
   text, and that the committed file is up to date; `tests/e2e/example-scrolly.spec.ts` opens it and checks the script runs.
+  `ge16-scrolly-from-text.node-cms.json` (`scripts/make-example-scrolly-from-text.ts`, same npm script): only the
+  .docx; the code is six library snippets made from the HTML file's pieces (`codePieces`), applied by a chain of
+  Selector → Snippet pairs (step cards named with `{{item params.steps index}}`, joined Selectors for one wrapper
+  around several matches); its JS first copies `style[data-snippet="ge16-scrolly@1"]` into the element for the
+  shadow root. Its test checks the page body equals the HTML file's (kicker case and attribute order aside).
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).
@@ -362,7 +369,7 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly example. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment
