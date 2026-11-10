@@ -322,6 +322,14 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`. Examples
   (`loadExample`): `html`, `json`, and `two` ("Two documents": the Watering section of `sampleNotesHtml()`, via an
   Extractor, into the guide before its quote, as a labelled section with fitted headings).
+- `examples/`: example project files (see its README). `npm run example:two-columns` runs
+  `scripts/make-example-two-columns.ts`: it draws PNGs, writes a .docx (docx library) and the project
+  `word-two-columns.node-cms.json` (a Word section in two columns, pictures moved to the right: heading Selector →
+  library snippet `two-columns` (wrap, params `mediaWidth` / `side`) → CSS Selector `.cms-two-col-text p:has(img)` →
+  Snippet replace with an empty template (removes) → CSS Selector `.cms-two-col-media` Point (end) → Object with
+  content from that same Selector → Output). `tests/engine/example-two-columns.test.ts` builds it fresh and checks
+  every node; `tests/e2e/example-two-columns.spec.ts` opens the committed file. Regenerate it after changes that
+  affect it.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).

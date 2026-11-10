@@ -12,7 +12,8 @@
     "e2e": "playwright test",
     "fixtures": "tsx scripts/make-fixtures.ts",
     "pretest": "npm run fixtures --silent",
-    "pree2e": "npm run fixtures --silent"
+    "pree2e": "npm run fixtures --silent",
+    "example:two-columns": "tsx scripts/make-example-two-columns.ts"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
