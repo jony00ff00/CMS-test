@@ -130,3 +130,25 @@ test('groups are kept after a reload', async ({ page }) => {
   await expect(node(page, 'selector-2')).toBeHidden();
   await expect(frame(page)).toHaveCSS('border-top-color', 'rgb(219, 39, 119)');
 });
+
+test('an expanded group lies above other nodes, and the last one raised is on top', async ({ page }) => {
+  const z = async (id: string) => Number(await page.locator(`.react-flow__node[data-id="${id}"]`).evaluate((el) => getComputedStyle(el).zIndex));
+  // Group 1 (selector, snippet) is above the ungrouped nodes, its nodes above its frame.
+  await node(page, 'output-4').click();
+  expect(await z('group:group-1')).toBeGreaterThan(await z('documentSource-1'));
+  expect(await z('snippet-3')).toBeGreaterThan(await z('group:group-1'));
+
+  // A second group: the newest is on top; selecting the first one raises it again.
+  await node(page, 'documentSource-1').click();
+  await node(page, 'output-4').click({ modifiers: ['Shift'] });
+  await page.keyboard.press('Control+g');
+  await expect(frame(page, 'group-2')).toContainText('Group 2');
+  await expect.poll(async () => (await z('group:group-2')) > (await z('group:group-1'))).toBe(true);
+  await page.getByRole('region', { name: 'Groups' }).getByRole('button', { name: /Group 1/ }).click();
+  await expect.poll(async () => (await z('group:group-1')) > (await z('group:group-2'))).toBe(true);
+
+  // Collapsing and expanding again raises it too.
+  await frame(page, 'group-2').getByRole('button', { name: 'Collapse Group 2' }).click();
+  await frame(page, 'group-2').getByRole('button', { name: 'Expand Group 2' }).click();
+  await expect.poll(async () => (await z('group:group-2')) > (await z('group:group-1'))).toBe(true);
+});

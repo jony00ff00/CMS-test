@@ -77,3 +77,22 @@ export function collapsedPorts(graph: Graph, group: NodeGroup): { inputs: GroupP
 
 /** How big a collapsed group's box is. */
 export const collapsedSize = (rows: number) => ({ width: 340, height: 48 + Math.max(1, rows) * 22 });
+
+/**
+ * Groups sit above other nodes: a frame (or a collapsed group's box) at this z-index or higher, an expanded group's
+ * nodes (and the connections between them) one above.
+ */
+export const GROUP_BASE_Z = 10;
+
+/**
+ * The z-index of each group's frame or box. Groups lie above nodes outside any group; among groups, the one most
+ * recently raised (expanded, collapsed, selected, dragged, or one of its nodes selected) is on top. `raised`: oldest first.
+ */
+export function groupLayers(groups: NodeGroup[], raised: string[]): Map<string, number> {
+  const rank = (g: NodeGroup) => raised.indexOf(g.id);
+  const order = [...groups].sort((a, b) => rank(a) - rank(b));
+  return new Map(order.map((g, i) => [g.id, GROUP_BASE_Z + 2 * i]));
+}
+
+/** Move a group to the top of the raised list. */
+export const raise = (raised: string[], groupId: string) => [...raised.filter((id) => id !== groupId), groupId];

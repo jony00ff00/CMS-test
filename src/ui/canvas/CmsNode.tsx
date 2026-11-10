@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, useState } from 'react';
-import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type ReplaceNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
+import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type ReplaceNodeConfig, type PositionNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -155,11 +155,17 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       const added = info.alone ? ' · on its own' : typeof info.inserted === 'number' ? ` · added ${info.inserted}×` : '';
       return `${describeInsertion(c.content)}${added}`;
     }
+    case 'position': {
+      const c = node.config as PositionNodeConfig;
+      if (!c.point) return 'Click in the preview to pick the point';
+      if (info.needsAttention) return 'The point needs attention';
+      return typeof info.inserted === 'number' ? `At a point${info.from ? ` · from ${info.from}` : ''} · added ${info.inserted}×` : 'At a point';
+    }
     case 'replace': {
       const c = node.config as ReplaceNodeConfig;
       if (typeof info.replaced !== 'number') return 'Connect a selection and content';
       const wrap = c.wrap === 'div' ? ' in a box' : c.wrap === 'section' ? ' in a section' : '';
-      return `From ${info.from}${wrap} · replaced ${info.replaced}×`;
+      return `${info.from ? `From ${info.from}` : 'Content'}${wrap} · replaced ${info.replaced}×`;
     }
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;

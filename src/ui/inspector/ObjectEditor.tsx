@@ -96,10 +96,10 @@ function PointSource({ nodeId }: { nodeId: string }) {
 }
 
 /** What a point picked in the preview is next to. */
-export function PointSummary({ nodeId, point }: { nodeId: string; point?: InsertionPoint }) {
+export function PointSummary({ nodeId, point, noun = 'Selector' }: { nodeId: string; point?: InsertionPoint; noun?: string }) {
   const result = useEditor((s) => s.results[nodeId]);
   if (!point) {
-    return <p className="hint">With this Selector selected, click in the preview where the point should be.</p>;
+    return <p className="hint">With this {noun} selected, click in the preview where the point should be.</p>;
   }
   const quote = (point.anchor.textQuote?.exact ?? '').replace(/\n/g, ' ');
   // Text before the cursor: its end matters. A whole block: its start.

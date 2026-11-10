@@ -9,7 +9,7 @@ import { CmsNode, type CmsFlowNode } from './CmsNode';
 import { DeletableEdge } from './DeletableEdge';
 import { MiniMapNode } from './MiniMapNode';
 import { GroupFrame, type GroupFlowNode } from './GroupFrame';
-import { collapsedPorts, collapsedSize, frameBox, frameId, groupIdOfFrame, isFrameId, portHandle, resolveHandle } from './group-layout';
+import { collapsedPorts, collapsedSize, frameBox, frameId, groupIdOfFrame, groupLayers, isFrameId, portHandle, raise, resolveHandle } from './group-layout';
 import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
 import { ProjectToolbar } from './ProjectToolbar';
 import { DRAG_TYPE } from './Palette';
@@ -69,6 +69,36 @@ export function Canvas() {
     void fitView({ nodes: ids.map((id) => ({ id })), padding: 0.25, maxZoom: 1, duration: 250 });
   }, [fitTo, graph.groups, fitView]);
 
+  // Expanded groups lie above other nodes; the one last expanded, selected or dragged (or with a node selected) on top.
+  const [raised, setRaised] = useState<string[]>([]);
+  const selectedGroupId = useEditor((s) => s.selectedGroupId);
+  const mainNode = useEditor((s) => s.selectedId);
+  const wasCollapsed = useRef(new Set<string>());
+  useEffect(() => {
+    const groups = graph.groups ?? [];
+    // Collapsed or expanded since last time.
+    const changed = groups.filter((g) => !!g.collapsed !== wasCollapsed.current.has(g.id)).map((g) => g.id);
+    wasCollapsed.current = new Set(groups.filter((g) => g.collapsed).map((g) => g.id));
+    if (changed.length) setRaised((r) => changed.reduce(raise, r));
+  }, [graph.groups]);
+  useEffect(() => {
+    if (selectedGroupId) setRaised((r) => raise(r, selectedGroupId));
+  }, [selectedGroupId]);
+  const groupOfMain = useEditor((s) => (s.selectedId ? s.graph.groups?.find((g) => g.nodeIds.includes(s.selectedId!))?.id : undefined));
+  useEffect(() => {
+    if (groupOfMain) setRaised((r) => raise(r, groupOfMain));
+  }, [groupOfMain, mainNode]);
+  const layers = useMemo(() => groupLayers(graph.groups ?? [], raised), [graph.groups, raised]);
+  /** The z-index of a node in an expanded group (above its frame), or undefined. */
+  const memberZ = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const g of graph.groups ?? []) {
+      const z = layers.get(g.id);
+      if (z !== undefined && !g.collapsed) for (const id of g.nodeIds) map.set(id, z + 1);
+    }
+    return map;
+  }, [graph.groups, layers]);
+
   // Nodes in a collapsed group are hidden; the group shows as one box instead.
   const collapsedOf = useMemo(() => {
     const map = new Map<string, string>();
@@ -87,21 +117,21 @@ export function Canvas() {
           const ports = collapsedPorts(graph, g);
           const size = collapsedSize(Math.max(ports.inputs.length, ports.outputs.length));
           // `measured` too: React Flow keeps a node's measured handles only when the new node object has it.
-          return [{ id: frameId(g.id), type: 'cmsGroup', position: { x: box.x, y: box.y }, ...size, measured: size, data: { groupId: g.id, ports }, selectable: false, className: 'is-collapsed' }];
+          return [{ id: frameId(g.id), type: 'cmsGroup', position: { x: box.x, y: box.y }, ...size, measured: size, data: { groupId: g.id, ports }, selectable: false, className: 'is-collapsed', zIndex: layers.get(g.id) ?? 0 }];
         }
         return [{
           id: frameId(g.id), type: 'cmsGroup', position: { x: box.x, y: box.y }, width: box.width, height: box.height,
           measured: { width: box.width, height: box.height },
-          data: { groupId: g.id }, selectable: false, dragHandle: '.group-frame-head', zIndex: -1,
+          data: { groupId: g.id }, selectable: false, dragHandle: '.group-frame-head', zIndex: layers.get(g.id) ?? 0,
         }];
       }),
-    [graph, nodes],
+    [graph, nodes, layers],
   );
   const framesRef = useRef(frames);
   framesRef.current = frames;
   const flowNodes = useMemo<FlowNode[]>(
-    () => [...frames, ...nodes.map((n) => (collapsedOf.has(n.id) ? { ...n, hidden: true } : n))],
-    [frames, nodes, collapsedOf],
+    () => [...frames, ...nodes.map((n) => (collapsedOf.has(n.id) ? { ...n, hidden: true } : memberZ.has(n.id) ? { ...n, zIndex: memberZ.get(n.id) } : n))],
+    [frames, nodes, collapsedOf, memberZ],
   );
 
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
@@ -123,9 +153,12 @@ export function Canvas() {
           type: 'deletable',
           className: `edge-${type ?? 'unknown'}`,
           selected: selectedEdges.has(e.id),
+          // Inside an expanded group: above its frame (under its nodes). Others stay below all nodes, so they never
+          // cover a node's handles or block clicks on it.
+          zIndex: memberZ.get(e.source) !== undefined && memberZ.get(e.source) === memberZ.get(e.target) ? memberZ.get(e.source) : undefined,
         }];
       }),
-    [graph, selectedEdges, collapsedOf],
+    [graph, selectedEdges, collapsedOf, memberZ],
   );
 
   // The minimap shows each node in its type's colour, and each group in its own (a light frame when expanded).
@@ -159,6 +192,7 @@ export function Canvas() {
       if (!drag || drag.id !== c.id) {
         const members = new Map(state.graph.nodes.filter((n) => group.nodeIds.includes(n.id)).map((n) => [n.id, n.position ?? { x: 0, y: 0 }]));
         drag = frameDrag.current = { id: c.id, start: frame.position, members };
+        setRaised((r) => raise(r, group.id));
       }
       const dx = c.position.x - drag.start.x;
       const dy = c.position.y - drag.start.y;

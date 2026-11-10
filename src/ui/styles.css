@@ -18,6 +18,7 @@
   --node-object: #0d9488;
   --node-extractor: #4f46e5;
   --node-replace: #be185d;
+  --node-position: #0891b2;
   --node-output: #dc2626;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
@@ -86,6 +87,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-object { border-left-color: var(--node-object); }
 .palette-extractor { border-left-color: var(--node-extractor); }
 .palette-replace { border-left-color: var(--node-replace); }
+.palette-position { border-left-color: var(--node-position); }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
 
@@ -212,6 +214,7 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-object { border-top-color: var(--node-object); }
 .cms-node-extractor { border-top-color: var(--node-extractor); }
 .cms-node-replace { border-top-color: var(--node-replace); }
+.cms-node-position { border-top-color: var(--node-position); }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
 .cms-node header { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem 0.2rem; }

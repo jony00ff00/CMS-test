@@ -5,6 +5,7 @@ import { documentSource } from './document-source';
 import { extractor } from './extractor';
 import { object } from './object';
 import { output } from './output';
+import { position } from './position';
 import { replace } from './replace';
 import { selector } from './selector';
 import { snippet } from './snippet';
@@ -16,15 +17,17 @@ export const nodeRegistry: NodeRegistry = {
   [extractor.type]: extractor,
   [object.type]: object,
   [replace.type]: replace,
+  [position.type]: position,
   [output.type]: output,
   [connector.type]: connector,
 };
 
-export { connector, connectorInputKind, documentSource, extractor, object, output, replace, selector, snippet };
+export { connector, connectorInputKind, documentSource, extractor, object, output, position, replace, selector, snippet };
 export type { ConnectorConfig, ConnectorInputKind } from './connector';
 export type { ObjectNodeConfig } from './object';
 export type { ExtractorConfig } from './extractor';
 export type { ReplaceNodeConfig } from './replace';
+export type { PositionNodeConfig } from './position';
 export type { SelectorNodeConfig } from './selector';
 export { cleanClassName, cleanClassNames, customSnippet, DEFAULT_SNIPPET, type CustomSnippet, type SnippetNodeConfig } from './snippet';
 export type { DocumentSourceConfig } from './document-source';

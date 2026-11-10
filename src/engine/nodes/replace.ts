@@ -1,6 +1,6 @@
 import { convertValue } from '../convert';
 import type { NodeDefinition, NodeOutput } from '../graph';
-import { replaceSelection, sourceName, type ReplaceOptions } from '../insert';
+import { replaceSelection, type ReplaceOptions } from '../insert';
 import type { Selection } from '../types';
 
 export type ReplaceNodeConfig = ReplaceOptions;
@@ -28,7 +28,7 @@ export const replace: NodeDefinition<ReplaceNodeConfig> = {
     return {
       outputs: { document: result.document },
       warnings,
-      info: { replaced: result.replaced, from: sourceName(converted.selection.document) },
+      info: { replaced: result.replaced, ...(converted.selection.document.meta.fileName && { from: converted.selection.document.meta.fileName }) },
     };
   },
 };

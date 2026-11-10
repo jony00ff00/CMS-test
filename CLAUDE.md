@@ -1,6 +1,6 @@
 # Node CMS
 
-Node-based CMS: Document Source → Selector → Snippet → Output (plus Extractor, Object, Replace, Connector).
+Node-based CMS: Document Source → Selector → Snippet → Output (plus Extractor, Object, Replace, Position, Connector).
 Sources (.html, .docx, .pptx, .json) become one internal Document (a hast tree). Selectors pick parts of it,
 Snippet nodes wrap or add to those parts, and Output previews or exports the result.
 
@@ -178,7 +178,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `replaceSelection` in `insert.ts`: a `replace` snippet with the placeholder, filled with `copyContent` (one copy
   per match; a text range across blocks gets it once). Selected text takes inline content: one `<p>`'s children, or
   inline nodes; block content widens a text match to its block, with a warning. JSON field blocks are kept (replace
-  works inside them); info `replaced`, `from`). The Combinator node was removed: `parseProject` leaves old ones out
+  works inside them); info `replaced`, `from` (only when the content has a file name));
+  `position` (a point-mode Selector and an Object in one: inputs `document` and `content` (`any`); config
+  `PositionNodeConfig` = `ReplaceOptions` + `point` (an `InsertionPoint` picked in the preview); `insertContent` with
+  `{ mode: 'point', point }` and selection content; waits until the point is picked; info `inserted`, `from`,
+  `needsAttention`). The Combinator node was removed: `parseProject` leaves old ones out
   with a warning (`mergePorts` / `planMerges` stay for the Output);
   `connector` (one input `input` of port type `any`, which `edgeError` lets every output type into; outputs
   `document`, `selection`, `html` and `result`, all filled from whatever came in by `convertValue` in `convert.ts`
@@ -237,8 +241,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   the first, empty or broken groups left out, each with a warning; bad colours dropped).
   Canvas: each group is a React Flow node `group:<id>` of type `cmsGroup` (`GroupFrame.tsx`), built every render from
   its members (`frameBox` in `group-layout.ts`), first in the node list, `selectable: false`; it needs `measured`
-  set or React Flow forgets its handles. Expanded: a frame behind the nodes (zIndex −1, only its header takes the
-  pointer, `dragHandle`); dragging it moves the members (start positions in `frameDrag`, `moveNodes` on drop);
+  set or React Flow forgets its handles. Groups lie above ungrouped nodes (`groupLayers` in `group-layout.ts`: frame /
+  box z-index from `GROUP_BASE_Z` (10) in steps of 2, the most recently raised on top; `raised` in the canvas, raised
+  when a group is expanded or collapsed, selected, its frame dragged, or one of its nodes selected); an expanded
+  group's nodes, and connections between them, are one above its frame; other connections stay under all nodes
+  (raised ones would cover handles and block clicks). Expanded: a frame (only its header takes the pointer, `dragHandle`); dragging it moves the members (start positions in `frameDrag`, `moveNodes` on drop);
   clicking it selects the group; double-click the name to rename. Collapsed: members `hidden`, one box with handles
   `in|<node>|<port>` / `out|<node>|<port>` (`collapsedPorts`: ports with outside connections or none at all);
   edges into / out of it are drawn to those handles, edges inside are not drawn; `resolveHandle` turns a box
@@ -279,6 +286,10 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   on `PreviewSource`): "Pick" (its input with the kept parts highlighted; selected text → "Add to <extractor>",
   `addAnchor`) and "Kept" (its output). `chooseMediaFile` adds an image or video file. Project files save every `fileId` found
   anywhere in a node's settings.
+- A Position node selected: views "Where it goes" (its input with the marker; clicks pick the point, as for a
+  point-mode Selector: `placeInsertion` sets `point` on a Position, `mode` + `point` on a Selector), "Content" and
+  "Result". Inspector: `PositionEditor` (`PointSummary` with `noun`, Clear the point, `ContentSource`,
+  `CopyOptionsFields`). Colour cyan, like the point port.
 - A Replace node selected: views "What it replaces" (its Selection's document highlighted), "Content" (what comes
   into Content, highlighted when it is a selection) and "Result". The inspector (`ReplaceEditor`) reuses
   `ContentSource` and `CopyOptionsFields` from `ObjectEditor.tsx`.
@@ -340,7 +351,7 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

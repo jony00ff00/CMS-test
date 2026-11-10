@@ -369,3 +369,34 @@ test('an Object with plain text works on its own, and goes into a paragraph at t
   await node(page, 'output-7').click();
   await expect(preview(page).locator('h2').nth(1)).toHaveText('Pricing (updated)');
 });
+
+test('a Position node puts content at a point clicked in its input', async ({ page }) => {
+  await page.getByRole('button', { name: 'HTML example' }).click();
+  const palette = page.getByRole('complementary', { name: 'Node palette' });
+  await palette.getByRole('button', { name: /^Position/ }).click();
+  await palette.getByRole('button', { name: /^Object/ }).click();
+  await palette.getByRole('button', { name: /^Output/ }).click();
+  await fitView(page);
+  await node(page, 'object-6').click();
+  await inspector(page).getByLabel('Object', { exact: true }).selectOption('text');
+  await inspector(page).getByLabel('Text', { exact: true }).fill('A note placed by hand.');
+  await connect(page, 'snippet-3', 'document', 'position-5', 'document');
+  await connect(page, 'object-6', 'document', 'position-5', 'content');
+  await connect(page, 'position-5', 'document', 'output-7', 'document');
+
+  await node(page, 'position-5').click();
+  await expect(node(page, 'position-5')).toContainText('Click in the preview to pick the point');
+  await expect(inspector(page)).toContainText('With this Position node selected, click in the preview');
+  await clickAfter(page, 'Pricing');
+  await page.getByRole('dialog', { name: 'Point here' }).getByRole('button', { name: 'After this heading' }).click();
+  await expect(node(page, 'position-5')).toContainText('added 1×');
+  await expect(inspector(page)).toContainText('After the heading “Pricing”');
+  await expect(preview(page).locator('.cms-insert-marker')).toHaveCount(1);
+  await page.screenshot({ path: 'test-results/position.png' });
+
+  const show = page.getByRole('group', { name: 'Show' });
+  await show.getByRole('button', { name: 'Result' }).click();
+  await expect(preview(page).locator('h2:has-text("Pricing") + p')).toHaveText('A note placed by hand.');
+  await node(page, 'output-7').click();
+  await expect(preview(page).locator('h2:has-text("Pricing") + p')).toHaveText('A note placed by hand.');
+});
