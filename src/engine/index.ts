@@ -7,6 +7,7 @@ export * from './docx-review';
 export * from './review';
 export * from './changes';
 export * from './formatting';
+export * from './ckeditor';
 export * from './pptx';
 export * from './slide-deck';
 export * from './json';

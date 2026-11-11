@@ -1,3 +1,4 @@
+import { toCkeditor, type CkeditorOptions } from '../ckeditor';
 import { combineDocuments } from '../combine';
 import { serialize } from '../document';
 import type { NodeDefinition, NodeOutput } from '../graph';
@@ -14,8 +15,12 @@ export interface OutputConfig {
   /**
    * "html" (default): a web page. "json": the JSON source file with the changed fields written back.
    * "slides": a page that shows one slide at a time (see slide-deck.ts); always a complete page.
+   * "ckeditor": CKEditor 5 collaboration data (see ckeditor.ts): content with suggestion and comment markers, and
+   * the Cloud Services import request body (`json`); the preview shows the page with its changes and comments.
    */
-  format?: 'html' | 'json' | 'slides';
+  format?: 'html' | 'json' | 'slides' | 'ckeditor';
+  /** For "ckeditor": the document id, the editor bundle version and the editor's features. */
+  ckeditor?: Omit<CkeditorOptions, 'now'>;
   /** A complete page with title, styles and snippet scripts (default), or just the body content. */
   fullDocument?: boolean;
   /** Put images into the HTML as data URIs (default true), so the page works on its own. */
@@ -47,6 +52,17 @@ export const output: NodeDefinition<OutputConfig> = {
         outputs: { html, document: doc, result: doc },
         warnings: deck.warnings,
         info: { format: 'slides', slides: deck.slides, bytes: new TextEncoder().encode(html).length },
+      };
+    }
+    if (config.format === 'ckeditor') {
+      const html = serialize(doc, { fullDocument: true, inlineAssets: config.inlineAssets ?? true });
+      // A fixed date for labels without one, so the result is the same each time (the import's date counts).
+      const ck = toCkeditor(doc, { ...config.ckeditor, now: '2026-01-01T00:00:00.000Z' });
+      const json = JSON.stringify(ck.importBody, null, 2);
+      return {
+        outputs: { html, json, ckeditor: ck, document: doc, result: doc },
+        warnings: ck.warnings,
+        info: { format: 'ckeditor', ...ck.info, bytes: new TextEncoder().encode(json).length },
       };
     }
     // The page is always made: the preview shows it, also when exporting JSON.

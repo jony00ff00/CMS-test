@@ -2,7 +2,7 @@ import { nodeRegistry, type CmsDocument, type GraphNode, type NodeResult, type O
 import { editorStore, useEditor } from '../../store/editor-store';
 import { download } from '../download';
 import { nodeLabel } from '../node-label';
-import { CheckboxField, SelectField } from './fields';
+import { CheckboxField, SelectField, TextField } from './fields';
 
 export function OutputEditor({ node }: { node: GraphNode }) {
   const config = node.config as OutputConfig;
@@ -25,6 +25,7 @@ export function OutputEditor({ node }: { node: GraphNode }) {
   const save = () => {
     if (!ok) return;
     if (format === 'json') download(`${baseName}.edited.json`, result.outputs.json as string, 'application/json');
+    else if (format === 'ckeditor') download(`${baseName}.ckeditor-import.json`, result.outputs.json as string, 'application/json');
     else download(`${baseName}${format === 'slides' ? '.slides' : ''}.html`, result.outputs.html as string, 'text/html');
   };
 
@@ -79,12 +80,15 @@ export function OutputEditor({ node }: { node: GraphNode }) {
           { value: 'html', label: 'Web page (HTML)' },
           { value: 'json', label: 'JSON file (changed fields written back)' },
           { value: 'slides', label: 'Slide deck (one slide at a time)' },
+          { value: 'ckeditor', label: 'CKEditor 5 (Cloud Services import)' },
         ]}
         hint={
           appended
             ? 'Documents shown one after another can only be made into a web page.'
             : format === 'json'
             ? 'Only the mapped fields change; everything else in the file stays as it was.'
+            : format === 'ckeditor'
+            ? 'Content with suggestion and comment markers, the suggestions and comment threads, as the body of a Cloud Services import request (POST /documents). Send it with scripts/ckeditor-import.mjs from your server.'
             : format === 'slides'
             ? 'A page that shows one slide at a time: arrow keys, Space, Page Up / Down, Home / End, N for speaker notes. Documents without slides get a new slide at each heading.'
             : input?.meta.json && !jsonPossible
@@ -93,7 +97,9 @@ export function OutputEditor({ node }: { node: GraphNode }) {
         }
         onChange={(f) => update({ format: f })}
       />
-      {format === 'json' ? (
+      {format === 'ckeditor' ? (
+        <CkeditorFields config={config} update={update} />
+      ) : format === 'json' ? (
         <CheckboxField
           label="Include snippet CSS and JavaScript"
           checked={!!config.jsonAssets}
@@ -124,14 +130,46 @@ export function OutputEditor({ node }: { node: GraphNode }) {
         </>
       )}
       <button type="button" className="primary" onClick={save} disabled={!ok}>
-        {format === 'json' ? 'Download JSON' : 'Download HTML'}
+        {format === 'json' ? 'Download JSON' : format === 'ckeditor' ? 'Download CKEditor import (.json)' : 'Download HTML'}
       </button>
-      {ok && format === 'json' && (
+      {ok && (format === 'json' || format === 'ckeditor') && (
         <details className="advanced">
           <summary>Show the JSON</summary>
           <pre className="json-preview" aria-label="Exported JSON">{result.outputs.json as string}</pre>
         </details>
       )}
     </>
+  );
+}
+
+function CkeditorFields({ config, update }: { config: OutputConfig; update: (patch: Partial<OutputConfig>) => void }) {
+  const ck = config.ckeditor ?? {};
+  const set = (patch: Partial<NonNullable<OutputConfig['ckeditor']>>) => update({ ckeditor: { ...ck, ...patch } });
+  const list = (s: string) => s.split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+  return (
+    <fieldset>
+      <legend>CKEditor 5</legend>
+      <p className="hint warn-text">
+        The import format could not be checked against CKEditor's documentation from here. Before the first real import,
+        compare it with an export of a test document from your environment (GET /documents/&lt;id&gt;).
+      </p>
+      <TextField label="Document id" value={ck.documentId ?? ''} placeholder="e.g. ge16-brief" monospace hint="The editor's collaboration channel id. It must not exist yet in Cloud Services." onChange={(documentId) => set({ documentId })} />
+      <TextField label="Editor bundle version" value={ck.bundleVersion ?? ''} placeholder="e.g. 1.0.3" monospace hint="The version of the editor bundle you uploaded to Cloud Services." onChange={(bundleVersion) => set({ bundleVersion })} />
+      <TextField
+        label="Heading elements"
+        value={(ck.headings ?? ['h2', 'h3', 'h4']).join(', ')}
+        monospace
+        hint="The headings your editor offers (by default Heading 1–3 are h2, h3, h4)."
+        onChange={(v) => set({ headings: list(v) })}
+      />
+      <TextField
+        label="Other elements your editor allows"
+        value={(ck.extraElements ?? []).join(', ')}
+        placeholder="e.g. u, s, img, sub, sup"
+        monospace
+        hint="Paragraphs, bold, italic, links, lists, quotes and tables are always allowed."
+        onChange={(v) => set({ extraElements: list(v) })}
+      />
+    </fieldset>
   );
 }
