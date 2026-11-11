@@ -35,6 +35,10 @@ test('the scrolly example: Word text in the code, and the code runs in the previ
   const host = preview(page).locator('ge16-scrolly');
   await expect.poll(() => host.evaluate((el) => !!el.shadowRoot)).toBe(true);
   await expect(host.locator('.gs-root .gs-headline')).toHaveText('A parliament with no winner');
+  // The note above the flow says what the example is for.
+  await expect(page.locator('.react-flow__node[data-id="note:note-1"] .note-text')).toHaveText(
+    'Example for merging text changes with pre-existing scrolly-telly code.\nAllows text to be easily updated by users, without requiring specialised tools.',
+  );
   await expect(host.locator('.gs-dots circle').first()).toBeAttached();
   await expect(host.locator('.gs-step .gs-card')).toHaveCount(10);
   await page.locator('.react-flow__controls-fitview').click();

@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { storeFile, type Graph, type GraphNode, type NodeGroup } from '../src/engine';
+import { storeFile, type CanvasNote, type Graph, type GraphNode, type NodeGroup } from '../src/engine';
 import { seedLibrary } from '../src/snippets/seed';
 import { toProjectFile } from '../src/store/project';
 
@@ -70,7 +70,16 @@ export function scrollyGraph(codeId: string, textId: string): Graph {
     { id: 'group-steps', name: 'Steps', nodeIds: ['step-slots', 'step-text', 'fill-steps'], color: '#7c3aed' },
     { id: 'group-footer', name: 'Footer', nodeIds: ['footer-slots', 'footer-text', 'fill-footer'], color: '#0d9488' },
   ];
-  return { nodes, edges, groups };
+  // A note on the canvas, above the flow, says what the example is for.
+  const notes: CanvasNote[] = [
+    {
+      id: 'note-1',
+      text: 'Example for merging text changes with pre-existing scrolly-telly code.\nAllows text to be easily updated by users, without requiring specialised tools.',
+      position: { x: 40, y: -110 },
+      width: 420,
+    },
+  ];
+  return { nodes, edges, groups, notes };
 }
 
 export function buildScrollyExample() {

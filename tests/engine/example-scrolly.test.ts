@@ -63,6 +63,19 @@ describe('example: a scrolly from Word text and HTML code', () => {
     expect(runSelector(page, { mode: 'css', selector: '.gs-footer a[href="#full-brief"]' }).matches).toHaveLength(1);
   });
 
+  it('has a note on the canvas saying what the example is for', () => {
+    const { project, warnings } = parseProject(JSON.stringify(buildScrollyExample()));
+    expect(warnings).toEqual([]);
+    expect(project.graph.notes).toEqual([
+      {
+        id: 'note-1',
+        text: 'Example for merging text changes with pre-existing scrolly-telly code.\nAllows text to be easily updated by users, without requiring specialised tools.',
+        position: { x: 40, y: -110 },
+        width: 420,
+      },
+    ]);
+  });
+
   it('the committed project file is up to date (run `npm run example:scrolly` after changing the example)', () => {
     const saved = JSON.parse(readFileSync(PROJECT_FILE, 'utf8'));
     expect(saved).toEqual(JSON.parse(JSON.stringify(buildScrollyExample())));
