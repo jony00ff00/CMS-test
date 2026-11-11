@@ -748,6 +748,44 @@ export async function replaceSelection(selection: Selection, content: Selection,
   return { document: out, warnings: [...warnings, ...placeWarnings], replaced: filledEmpty.size + replaced.size };
 }
 
+const removeSnippet: Snippet = { kind: 'snippet', id: 'cms-remove', name: 'Remove', version: 1, mode: 'replace', template: '', params: [] };
+
+/**
+ * A copy of the selection's document without what it matched (a Replace node with nothing connected to Content).
+ * With `target: 'inside'`, a selected element stays (tag and attributes) and only what is inside it goes.
+ * JSON field blocks are never removed: what is inside them is.
+ */
+export async function removeSelection(selection: Selection, options: ReplaceMode = {}): Promise<ReplaceResult> {
+  const doc = selection.document;
+  const warnings = [...selection.warnings];
+  if (selection.matches.length === 0) {
+    if (!warnings.length) warnings.push('The selection is empty, so nothing was removed');
+    return { document: doc, warnings, replaced: 0 };
+  }
+  const seen = new Set<string>();
+  const matches = selection.matches.flatMap((m) => {
+    let match = m.match;
+    if (match.kind === 'nodes' && match.end - match.start === 1) {
+      const el = nodeAt(doc, match);
+      // An element to empty (inside), or a JSON field block (its content goes, the block stays).
+      if (el?.type === 'element' && (options.target === 'inside' || el.properties?.dataJsonPath !== undefined)) {
+        if (!el.children.length) return [];
+        match = { kind: 'nodes', parent: [...match.parent, match.start], start: 0, end: el.children.length };
+      }
+    }
+    const key = JSON.stringify(match);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ ...m, match }];
+  });
+  if (!matches.length) {
+    warnings.push('The selected elements are already empty, so nothing was removed');
+    return { document: doc, warnings, replaced: 0 };
+  }
+  const r = await applySnippet({ ...selection, matches, warnings: [] }, removeSnippet);
+  return { document: r.document, warnings: [...warnings, ...r.warnings], replaced: matches.length };
+}
+
 /**
  * The content alone, as a document of its own (an Object with no Point connected): what it would add, ready to go
  * into a Replace node, another Object or an Output.

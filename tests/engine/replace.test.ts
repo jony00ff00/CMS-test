@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  exportJson, GraphEvaluator, importJson, indexDocument, nodeRegistry, parseHtml, replaceSelection, runSelector, serialize, storeFile,
+  exportJson, GraphEvaluator, importJson, indexDocument, nodeRegistry, parseHtml, removeSelection, replaceSelection, runSelector, serialize, storeFile,
   type CmsDocument, type GraphEdge, type GraphNode,
 } from '../../src/engine';
 import { parseProject } from '../../src/store/project';
@@ -67,6 +67,37 @@ describe('replaceSelection', () => {
   });
 });
 
+describe('removeSelection (Replace with no content)', () => {
+  it('removes matched elements, selected text, and leaves the input unchanged', async () => {
+    const target = parseHtml('<h2>Title</h2><p class="note">Note</p><p>Keep this, not that.</p><p class="note">Two</p>');
+    const r = await removeSelection(runSelector(target, { mode: 'css', selector: '.note' }));
+    expect(serialize(r.document)).toBe('<h2>Title</h2><p>Keep this, not that.</p>');
+    expect(r.replaced).toBe(2);
+    const t = await removeSelection(runSelector(target, { mode: 'regex', pattern: ', not that' }));
+    expect(serialize(t.document)).toContain('<p>Keep this.</p>');
+    expect(serialize(target)).toContain('<p class="note">Note</p>');
+  });
+
+  it('inside: the elements stay, emptied; already empty ones are skipped', async () => {
+    const target = parseHtml('<div class="box"><p>A</p></div><div class="box"></div>');
+    const r = await removeSelection(runSelector(target, { mode: 'css', selector: '.box' }), { target: 'inside' });
+    expect(serialize(r.document)).toBe('<div class="box"></div><div class="box"></div>');
+    expect(r.replaced).toBe(1);
+    const again = await removeSelection(runSelector(r.document, { mode: 'css', selector: '.box' }), { target: 'inside' });
+    expect(again.replaced).toBe(0);
+    expect(again.warnings.join()).toMatch(/already empty/);
+  });
+
+  it('a JSON field block stays (so write-back works); an empty selection warns', async () => {
+    const doc = await importJson(JSON.stringify({ title: 'T', body: '<p>Body</p>' }), { mode: 'fields', fields: [{ path: '$.body', format: 'html' }] });
+    const r = await removeSelection(runSelector(doc, { mode: 'jsonField', path: '$.body' }));
+    expect(JSON.parse((await exportJson(r.document)).json)).toEqual({ title: 'T', body: '' });
+    const none = await removeSelection(runSelector(parseHtml('<p>x</p>'), { mode: 'css', selector: 'h1' }));
+    expect(none.replaced).toBe(0);
+    expect(none.warnings).not.toEqual([]);
+  });
+});
+
 describe('the Replace node', () => {
   const node = (id: string, type: string, config?: unknown): GraphNode => ({ id, type, config: config ?? nodeRegistry[type].defaultConfig() });
   const edge = (source: string, sourcePort: string, target: string, targetPort: string): GraphEdge => ({ id: `${source}.${sourcePort}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
@@ -93,8 +124,13 @@ describe('the Replace node', () => {
     expect(serialize(results.rep.outputs.document as CmsDocument)).toBe('<h1>Guide</h1><h3>Winter</h3><p>Less.</p>');
     expect(results.rep.info).toEqual({ replaced: 1, from: 'notes.html' });
 
-    // Without content it waits.
-    const waiting = await new GraphEvaluator(nodeRegistry).evaluate({ ...graph, edges: graph.edges.slice(0, 3) }, { files });
+    // Without content it removes what is selected.
+    const removed = await new GraphEvaluator(nodeRegistry).evaluate({ ...graph, edges: graph.edges.slice(0, 3) }, { files });
+    expect(removed.results.rep.status).toBe('ok');
+    expect(serialize(removed.results.rep.outputs.document as CmsDocument)).toBe('<h1>Guide</h1>');
+    expect(removed.results.rep.info).toEqual({ replaced: 1, removed: true });
+    // Without a selection it waits.
+    const waiting = await new GraphEvaluator(nodeRegistry).evaluate({ ...graph, edges: [graph.edges[1], graph.edges[3]] }, { files });
     expect(waiting.results.rep.status).not.toBe('ok');
   });
 

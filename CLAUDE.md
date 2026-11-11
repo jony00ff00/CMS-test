@@ -177,7 +177,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   the tree, so pieces of one element share it), so CSS aimed at them or at a wrapper still applies; off: only the
   picked content, as the Object and Connector copy it; its outputs also carry `selection`, not a port, for the preview and the
   saved selections' status);
-  `replace` (inputs `selection` (port type selection) and `content` (`any`, through `convertValue`); config
+  `replace` (inputs `selection` (port type selection) and `content` (`any`, through `convertValue`; optional: with nothing
+  connected it removes the selection, `removeSelection` in `insert.ts` (an empty `replace` snippet; `target: 'inside'` empties
+  the elements instead; JSON field blocks stay, their content goes), info `removed`, the copy options are hidden); config
   `ReplaceOptions` = the Object's selection-content options (wrap, className, styles, headings); output `document`;
   `replaceSelection` in `insert.ts`: a `replace` snippet with the placeholder, filled with `copyContent` (one copy
   per match; a text range across blocks gets it once). Selected text takes inline content: one `<p>`'s children, or

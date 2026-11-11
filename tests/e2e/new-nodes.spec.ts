@@ -138,6 +138,32 @@ test('a Replace node puts content from another node in place of a selection', as
   await expect(preview(page).locator('div.inserted > h2')).toHaveCount(2);
 });
 
+test('a Replace node with nothing connected to Content removes the selection', async ({ page }) => {
+  await palette(page).getByRole('button', { name: /^Selector/ }).click();
+  await palette(page).getByRole('button', { name: /^Replace/ }).click();
+  await palette(page).getByRole('button', { name: /^Output/ }).click();
+  await fitView(page);
+  await connect(page, 'documentSource-1', 'document', 'selector-5', 'document');
+  await node(page, 'selector-5').click();
+  await inspector(page).getByLabel('CSS selector').fill('blockquote');
+  await connect(page, 'selector-5', 'selection', 'replace-6', 'selection');
+  await connect(page, 'replace-6', 'document', 'output-7', 'document');
+  await expect(node(page, 'replace-6')).toContainText('No content: removed 1×');
+
+  await node(page, 'replace-6').click();
+  await expect(inspector(page)).toContainText('Nothing is connected to Content, so the selected parts are removed');
+  await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Result' }).click();
+  await expect(preview(page).locator('blockquote')).toHaveCount(0);
+  await expect(preview(page).locator('h2')).toHaveText(['Getting started', 'Pricing']);
+  await page.screenshot({ path: 'test-results/replace-remove.png' });
+
+  // Inside: the element stays, emptied.
+  await inspector(page).getByLabel('Replace', { exact: true }).selectOption('inside');
+  await expect(node(page, 'replace-6')).toContainText('removed 1× · inside');
+  await expect(preview(page).locator('blockquote')).toHaveCount(1);
+  await expect(preview(page).locator('blockquote')).toHaveText('');
+});
+
 test('a custom snippet: a class name, and CSS and JavaScript for this node only', async ({ page }) => {
   await node(page, 'snippet-3').click();
   await inspector(page).getByLabel('Snippet', { exact: true }).selectOption({ label: 'Custom (only this node)' });

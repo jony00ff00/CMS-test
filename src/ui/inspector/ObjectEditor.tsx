@@ -342,7 +342,18 @@ export function CopyOptionsFields({ options, onChange, placeWord = 'point' }: { 
 }
 
 /** Where "Content from another node" comes from: whatever is connected to the Content input. */
-export function ContentSource({ nodeId, owner = 'Object', original = 'The original stays where it is.' }: { nodeId: string; owner?: string; original?: string }) {
+export function ContentSource({
+  nodeId,
+  owner = 'Object',
+  original = 'The original stays where it is.',
+  none,
+}: {
+  nodeId: string;
+  owner?: string;
+  original?: string;
+  /** Shown instead of the warning when nothing is connected (when the node works without content). */
+  none?: React.ReactNode;
+}) {
   const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'content'));
   const source = useEditor((s) => (edge ? s.graph.nodes.find((n) => n.id === edge.source) : undefined));
   const what = useEditor((s) => {
@@ -356,6 +367,7 @@ export function ContentSource({ nodeId, owner = 'Object', original = 'The origin
     return typeof value === 'string' ? 'HTML' : (value as { kind?: string }).kind === 'point' ? 'the places of a point' : 'all of its document';
   });
   if (!source) {
+    if (none) return <p className="hint">{none}</p>;
     return (
       <p className="hint warn-text">
         Connect something to this {owner}'s <strong>Content</strong> input: an Extractor (all it keeps), a Selector's

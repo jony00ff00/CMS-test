@@ -157,7 +157,11 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
         html: typeof value === 'string' ? value : undefined,
         selection: sel,
         views: REPLACE_VIEWS,
-        message: !edge ? `Connect something to the ${view === 'Content' ? 'Content' : 'Selection'} input.` : value === undefined ? (s.results[edge.source]?.message ?? 'Waiting…') : undefined,
+        message: !edge
+          ? view === 'Content'
+            ? 'Nothing is connected to Content, so the selection is removed.'
+            : 'Connect something to the Selection input.'
+          : value === undefined ? (s.results[edge.source]?.message ?? 'Waiting…') : undefined,
       };
     }
     const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
