@@ -152,3 +152,18 @@ test('an expanded group lies above other nodes, and the last one raised is on to
   await frame(page, 'group-2').getByRole('button', { name: 'Expand Group 2' }).click();
   await expect.poll(async () => (await z('group:group-2')) > (await z('group:group-1'))).toBe(true);
 });
+
+test('a connection inside an expanded group can be deleted with its button', async ({ page }) => {
+  // e2 joins the two grouped nodes, so it is raised with them.
+  const a = (await node(page, 'selector-2').locator('.react-flow__handle.source[data-handleid="selection"]').boundingBox())!;
+  const b = (await node(page, 'snippet-3').locator('.react-flow__handle.target[data-handleid="selection"]').boundingBox())!;
+  await page.mouse.click((a.x + b.x + b.width) / 2, a.y + a.height / 2);
+  const remove = page.getByRole('button', { name: 'Delete this connection' });
+  await expect(remove).toBeVisible();
+  // The button is what a click at its middle reaches (not the connection's wide hit area above it).
+  const r = (await remove.boundingBox())!;
+  const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null, [r.x + r.width / 2, r.y + r.height / 2]);
+  expect(hit).toBe('Delete this connection');
+  await remove.click();
+  await expect(page.locator('.react-flow__edge')).toHaveCount(2);
+});
