@@ -115,7 +115,7 @@ function NodeTitle({ id, name, label }: { id: string; name?: string; label: stri
 
 const SLIDE_PART_LABELS = { slide: 'Slides', title: 'Slide titles', content: 'Slide content', notes: 'Speaker notes' } as const;
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : /(s|x|ch|sh)$/.test(word) ? 'es' : 's'}`;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 'es'}`;
 
 function describeSelector(c: SelectorConfig): string {
   return c.mode === 'css' ? c.selector || '(empty)'
@@ -134,7 +134,6 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
   switch (node.type) {
     case 'documentSource':
       if (!info.file) return 'No file chosen';
-      if (typeof info.changes === 'number') return `${info.file} · ${plural(info.changes as number, 'change')}, ${plural(info.comments as number, 'comment')}`;
       if (typeof info.slideCount !== 'number') return `${info.file}`;
       return `${info.file} · ${info.slides === info.slideCount ? '' : `${info.slides} of `}${info.slideCount} slide${info.slideCount === 1 ? '' : 's'}${info.hiddenSlides ? ` (${info.hiddenSlides} hidden)` : ''}`;
     case 'selector':
@@ -162,15 +161,6 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       if (info.needsAttention) return 'The point needs attention';
       return typeof info.inserted === 'number' ? `At a point${info.from ? ` · from ${info.from}` : ''} · added ${info.inserted}×` : 'At a point';
     }
-    case 'changes': {
-      if (typeof info.kept !== 'number') return 'Connect a Word file read in review mode';
-      const parts = [`${info.kept} kept`, info.accepted ? `${info.accepted} accepted` : '', info.rejected ? `${info.rejected} rejected` : ''].filter(Boolean);
-      return `${parts.join(' · ')} · ${plural(info.threadsKept as number, 'comment thread')}`;
-    }
-    case 'formatting': {
-      if (typeof info.formats !== 'number') return 'Connect a Word file read in review mode';
-      return `${plural(info.formats as number, 'format')} · ${info.changed} changed · ${plural(info.labels as number, 'label')}`;
-    }
     case 'replace': {
       const c = node.config as ReplaceNodeConfig;
       if (typeof info.replaced !== 'number') return 'Connect a selection (and content)';
@@ -180,7 +170,6 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     }
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
-      if (info.format === 'ckeditor') return `CKEditor 5 · ${plural(info.suggestions as number, 'suggestion')}, ${plural(info.threads as number, 'comment thread')}`;
       if (info.format === 'slides') return `Slide deck · ${info.slides} slide${info.slides === 1 ? '' : 's'}`;
       if (typeof info.bytes !== 'number') return 'Nothing to show yet';
       return `${typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : ''}${(info.bytes / 1024).toFixed(1)} kB of HTML`;

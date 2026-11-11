@@ -3,11 +3,6 @@ export * from './types';
 export * from './document';
 export * from './combine';
 export * from './docx';
-export * from './docx-review';
-export * from './review';
-export * from './changes';
-export * from './formatting';
-export * from './ckeditor';
 export * from './pptx';
 export * from './slide-deck';
 export * from './json';
@@ -32,4 +27,4 @@ export * from './nodes';
  * template helper, …). Project files record it, so an older app (e.g. a browser tab opened before an update) warns
  * instead of quietly making a different page.
  */
-export const ENGINE_VERSION = '0.7.0';
+export const ENGINE_VERSION = '0.6.0';

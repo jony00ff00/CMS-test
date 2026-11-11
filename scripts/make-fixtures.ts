@@ -5,8 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CommentRangeEnd, CommentRangeStart, CommentReference, DeletedTextRun, Document, HeadingLevel, ImageRun, InsertedTextRun, LevelFormat,
-  Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType,
+  Document, HeadingLevel, ImageRun, LevelFormat, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 import { PNG_BASE64, SAMPLE_CONTENT as content, SAMPLE_DECK, sampleHtml as html, sampleJson as json } from '../src/samples';
@@ -113,54 +112,11 @@ async function pptx(): Promise<Buffer> {
   return (await pres.write({ outputType: 'nodebuffer' })) as Buffer;
 }
 
-/**
- * A Word file under review (docx-review.ts): an insertion and a deletion by two authors, a comment across two
- * paragraphs with a reply, a resolved comment, a comment on a point, and inconsistent formatting.
- */
-async function reviewDocx(): Promise<Buffer> {
-  const at = (minute: number) => `2026-11-02T09:${String(minute).padStart(2, '0')}:00Z`;
-  const comment = (id: number, author: string, text: string, extra: { parentId?: number; resolved?: boolean } = {}) => ({
-    id, author, initials: author[0], date: new Date(at(30 + id)), children: [new Paragraph({ children: [new TextRun(text)] })], ...extra,
-  });
-  const doc = new Document({
-    comments: {
-      children: [
-        comment(1, 'Ana', 'Is this still true?'),
-        comment(2, 'Ben', 'Yes, checked.', { parentId: 1 }),
-        comment(3, 'Ben', 'Fixed already.', { resolved: true }),
-        comment(4, 'Ana', 'Add a picture here?'),
-      ],
-    },
-    sections: [{
-      children: [
-        new Paragraph({ text: 'Garden notes', heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({
-          children: [
-            new TextRun('Water '),
-            new DeletedTextRun({ text: 'daily', id: 101, author: 'Ana', date: at(1) }),
-            new InsertedTextRun({ text: 'twice a week', id: 102, author: 'Ben', date: at(2) }),
-            new TextRun(' in summer.'),
-          ],
-        }),
-        new Paragraph({ children: [new CommentRangeStart(1), new TextRun('Seeds sprout in spring.')] }),
-        new Paragraph({ children: [new TextRun('Pots drain best.'), new CommentRangeEnd(1), new TextRun({ children: [new CommentReference(1)] })] }),
-        new Paragraph({ children: [new TextRun({ text: 'Pests', bold: true, size: 32, font: 'Calibri' })] }),
-        new Paragraph({
-          children: [new CommentRangeStart(3), new TextRun('Snails come at night.'), new CommentRangeEnd(3), new TextRun({ children: [new CommentReference(3)] }),
-            new TextRun(' Done.'), new TextRun({ children: [new CommentReference(4)] })],
-        }),
-      ],
-    }],
-  });
-  return Packer.toBuffer(doc);
-}
-
 async function main() {
   mkdirSync(outDir, { recursive: true });
   const files: Record<string, string | Buffer> = {
     'sample.html': html(),
     'sample.docx': await docx(),
-    'review.docx': await reviewDocx(),
     'sample.pptx': await pptx(),
     'sample.json': json(),
     // Deliberately broken: trailing comma and an unclosed string.

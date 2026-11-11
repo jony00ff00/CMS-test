@@ -208,7 +208,7 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
       message: !input ? 'Connect a document to this Selector.' : (result?.message ?? (input.doc ? undefined : 'Waiting…')),
     };
   }
-  if (selected && ['documentSource', 'snippet', 'connector', 'extractor', 'changes', 'formatting'].includes(selected.type)) {
+  if (selected && ['documentSource', 'snippet', 'connector', 'extractor'].includes(selected.type)) {
     const result = s.results[selected.id];
     const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
     const views = selected.type === 'extractor' && (selected.config as SelectorConfig).mode === 'manual' ? EXTRACTOR_VIEWS : undefined;

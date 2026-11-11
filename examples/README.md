@@ -1,7 +1,7 @@
 # Example projects
 
 Open a project with **Open project…** in the app; the first one also opens with the **Two documents**
-button, and the Word review one with **Word review**. The two scrolly projects below are made by `npm run example:scrolly`; run it
+button. Both projects below are made by `npm run example:scrolly`; run it
 after changing a file in `scrolly/` (a test fails while a project file is out of date).
 
 ## A scrolly from Word text and HTML code
@@ -55,42 +55,3 @@ Selector picks part of the document as the step before left it, and the Snippet 
 **Scrolly page** (Output) is the finished page. To change the code, edit the snippets in the library (Snippet node
 → "Edit in library") and save a new version; the nodes then offer the update. To change the text, choose a new Word
 document in **Scrolly text (Word)**. The rules for writers are the same as above.
-
-## A Word file under review → CKEditor 5
-
-`word-review.node-cms.json` (made by `npm run example:word-review`, button **Word review**) takes a brief that was
-reviewed in Word (`word-review/hung-by-design-review.docx`: tracked deletions, a list changed from bullets to
-numbers, formatting changes, four comments, and inconsistent formatting) and makes it CKEditor 5 collaboration data
-with one house style, its changes and comments intact. The file is a copy of the real one with the reviewer's name
-replaced by "Reviewer" and their account id removed.
-
-| Node | What it does |
-| --- | --- |
-| **Brief under review (Word)** (Document Source) | "Keep tracked changes and comments (review mode)" is on: deletions, insertions, formatting and paragraph changes, comments (with replies, resolved state and UTC dates) and the direct formatting (fonts, sizes, colours) are kept. |
-| **Changes and comments** (Changes) | What stays a suggestion and what is accepted or rejected now (by kind, by author, or one by one), which comment threads go (here: the "Test" comment and any resolved ones), and who each author is in the editor (Reviewer is `reviewer-1`: put the id your sign-in gives them). |
-| **House style** (Formatting) | Lists the 17 formats found (e.g. "Heading 2 · bold, 17 pt", "Paragraph · Normal · bold · short", "Paragraph · Normal · typed number") and what each becomes: Word's Heading 1 / 2 → the editor's Heading 1 / 2 (h2 / h3), short bold paragraphs → Heading 3 (h4), typed "1." paragraphs → a numbered list (the numbers become tracked deletions), empty paragraphs → removed. Fonts, sizes, colours and underline go, headings are plain, bold first rows become table headers, the two Sources lists become one. Each changed paragraph gets a comment by "House style" saying what changed, so editors can review it. |
-| **CKEditor 5 import** (Output, "CKEditor 5 (Cloud Services import)") | Insertions and deletions become suggestions, comments become threads; Word's formatting changes are shown as they are now with a note by their author (see below). Downloads the body of a Cloud Services import request; `scripts/ckeditor-import.mjs` sends it from your server (`CKEDITOR_ENVIRONMENT_ID`, `CKEDITOR_API_SECRET`; `--dry-run` to check first). Set the editor bundle version first. |
-
-**Not verified yet.** CKEditor's documentation could not be read from where this was built, and there was no licence
-to test with. The suggestion and comment markers, the field names of the import request and the request signature
-follow CKEditor's documentation as far as it could be found, and are kept in one place (`CK_FORMAT` in
-`src/engine/ckeditor.ts`, and `scripts/ckeditor-import.mjs`). Before the first real import, export a small test
-document from your environment (`GET /documents/<id>`: an insertion, a deletion, a comment with a reply) and compare.
-For the same reason, changes of formatting (Word's bold → not bold, bullets → numbers) are not made into CKEditor
-formatting suggestions, whose data depends on the editor version: they are applied, with a comment that says what
-Word recorded.
-
-### Numbered paragraphs
-
-`word-review-numbered.node-cms.json` is the same workflow with a different house style (made by the same npm
-script). Its **CKEditor 5 import file** is committed next to the Word file:
-`word-review/hung-by-design-numbered.ckeditor-import.json`.
-
-- **Every paragraph and list item is numbered, in one running sequence (1 to 67).** This is "Number every paragraph"
-  in the Formatting node. Headings and tables are not numbered. A numbered list after a heading or a table starts
-  where the one before stopped (`<ol start="…">`), so the editor needs its list properties feature (List properties,
-  "start index"). The Output says so if it is not turned on.
-- **All text has the editor's one font and size.** The Formatting node removes every font, size, highlight (the Word
-  file has a yellow one) and colour (the blue link text), and underline.
-- **One comment explains the numbering, at the first item.** Labels are "one comment per format", not one per
-  paragraph, so the 67 numbered items do not each get a comment.

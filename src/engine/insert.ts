@@ -1,6 +1,4 @@
 // Insert new content (code, images, videos) into a document, at a picked point or at every match of a selector.
-import { REVIEW_CSS } from './docx-review';
-import { addReview } from './review';
 import type { Element, ElementContent, Nodes, Root } from 'hast';
 import { createAnchor, resolveAnchor } from './anchors';
 import { enclosingBlock, indexDocument, rangeOf } from './doc-index';
@@ -8,7 +6,7 @@ import { BLOCK_TAGS, parseHtml } from './document';
 import type { StoredFile } from './graph';
 import { runSelector, type SelectorConfig } from './selectors';
 import { applySnippet } from './snippets';
-import type { Anchor, Asset, CmsDocument, Match, ReviewInfo, Selection, Snippet, SnippetAsset } from './types';
+import type { Anchor, Asset, CmsDocument, Match, Selection, Snippet, SnippetAsset } from './types';
 import { hashString } from './hash';
 
 export type InsertContent =
@@ -137,8 +135,6 @@ interface Built {
   snippetAssets?: NonNullable<CmsDocument['meta']['snippetAssets']>;
   /** CSS of the document the content came from (its `<style>`, the slide look), added to the target. */
   styles?: string[];
-  /** Tracked changes and comments of the document the content came from (docx review mode). */
-  review?: ReviewInfo;
 }
 
 /** The CSS and JavaScript of inserted code, as a page asset added once per distinct code. */
@@ -381,7 +377,6 @@ export async function copySelection(selection: Selection, options: { context?: b
     block: nodes.some((n) => n.type === 'element' && BLOCK_TAGS.has(n.tagName)),
     warnings,
     snippetAssets: doc.meta.snippetAssets,
-    ...(doc.meta.review && { review: doc.meta.review }),
   };
 }
 
@@ -576,11 +571,6 @@ function addBuiltAssets(out: CmsDocument, built: Built) {
   // Copied content keeps its look: the snippet CSS and JS of the document it came from come along.
   for (const a of built.snippetAssets ?? []) {
     if (!(out.meta.snippetAssets ?? []).some((x) => x.key === a.key)) out.meta.snippetAssets = [...(out.meta.snippetAssets ?? []), a];
-  }
-  // Tracked changes and comments in the copy keep their authors, dates and texts (and their look in the preview).
-  if (built.review) {
-    addReview(out, built.review);
-    if (!out.meta.styles.includes(REVIEW_CSS)) out.meta = { ...out.meta, styles: [...out.meta.styles, REVIEW_CSS] };
   }
 }
 

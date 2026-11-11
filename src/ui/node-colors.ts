@@ -7,8 +7,6 @@ export const NODE_COLORS: Record<string, string> = {
   object: '#0d9488',
   replace: '#be185d',
   position: '#0891b2',
-  changes: '#16a34a',
-  formatting: '#a16207',
   output: '#dc2626',
   connector: '#6b7280',
 };
