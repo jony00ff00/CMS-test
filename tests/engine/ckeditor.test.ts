@@ -90,6 +90,16 @@ describe('CKEditor 5 output', () => {
     expect(toCkeditor(doc, { headings: ['h1', 'h2'], extraElements: ['u', 'img'], documentId: 'a', bundleVersion: '1', now: NOW }).warnings).toEqual([]);
   });
 
+  it('numbered lists that continue the numbering need the list properties feature', () => {
+    const doc = parseHtml('<ol><li>a</li></ol><h2>H</h2><ol start="2"><li>b</li></ol>');
+    expect(toCkeditor(doc, { documentId: 'a', bundleVersion: '1', now: NOW }).warnings).toEqual([
+      '1 numbered list continues the numbers of the one before (<ol start>): without the editor\'s list properties feature they start at 1 again. Turn on “The editor has list properties” if it has',
+    ]);
+    const ck = toCkeditor(doc, { documentId: 'a', bundleVersion: '1', listProperties: true, now: NOW });
+    expect(ck.warnings).toEqual([]);
+    expect(ck.data).toBe('<ol><li>a</li></ol><h2>H</h2><ol start="2"><li>b</li></ol>');
+  });
+
   it('the import script signs a request with HMAC SHA-256 over method, path, timestamp and body', () => {
     const sig = signature('secret', 'post', 'https://env.cke-cs.com/api/v5/env/documents?x=1', 1700000000000, { id: 'a' });
     expect(sig).toMatch(/^[0-9a-f]{64}$/);

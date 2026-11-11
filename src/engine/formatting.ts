@@ -40,6 +40,12 @@ export interface FormattingConfig {
   /** Neighbouring lists of the same type become one. Default true. */
   mergeLists?: boolean;
   /**
+   * Every paragraph and list item outside tables becomes an item of a numbered list, numbered in one running sequence
+   * through the whole document (headings, tables and quotes are not numbered; a list after one continues with
+   * `<ol start="…">`, which needs the editor's list properties feature).
+   */
+  numberParagraphs?: boolean;
+  /**
    * Label what changed with comments for review: one per changed paragraph (default), one per format whose
    * paragraphs became something else, at its first paragraph ("rule"; inline clean-up is not labelled then), or none.
    */
@@ -150,7 +156,7 @@ export function analyseFormats(doc: CmsDocument): FormatRow[] {
 export interface FormattingResult {
   document: CmsDocument;
   warnings: string[];
-  info: { formats: number; changed: number; removed: number; labels: number; typedNumbers: number; settledChanges: number; tableHeaders: number };
+  info: { formats: number; changed: number; removed: number; labels: number; typedNumbers: number; settledChanges: number; tableHeaders: number; numbered: number };
 }
 
 const TAG_OF: Record<InlineFormat, string[]> = { bold: ['strong', 'b'], italic: ['em', 'i'], underline: ['u'], strike: ['s', 'strike'], sub: ['sub'], sup: ['sup'] };
@@ -169,7 +175,7 @@ export function applyFormatting(doc: CmsDocument, config: FormattingConfig = {})
   const newId = (prefix: string) => `hs${seed.slice(0, 5)}-${prefix}${++counter}`;
   const revisions: Record<string, Revision> = {};
   const comments: Record<string, ReviewComment> = {};
-  const info = { formats: 0, changed: 0, removed: 0, labels: 0, typedNumbers: 0, settledChanges: 0, tableHeaders: 0 };
+  const info = { formats: 0, changed: 0, removed: 0, labels: 0, typedNumbers: 0, settledChanges: 0, tableHeaders: 0, numbered: 0 };
 
   const blocks = blocksOf(tree);
   info.formats = new Set(blocks.map((b) => b.key)).size;
@@ -296,6 +302,14 @@ export function applyFormatting(doc: CmsDocument, config: FormattingConfig = {})
   // 5. Neighbouring lists of the same type become one.
   if (config.mergeLists !== false) mergeLists(tree);
 
+  // 5b. Every paragraph numbered, in one running sequence.
+  let firstNumbered: Element | undefined;
+  if (config.numberParagraphs) {
+    const numbered = numberParagraphs(tree, (el, wasParagraph) => note(el, wasParagraph ? 'paragraph → numbered list item' : 'list item → numbered, in the running sequence'));
+    info.numbered = numbered.count;
+    firstNumbered = numbered.first;
+  }
+
   // 6. Labels for review.
   const label = (el: Element, text: string) => {
     const id = newId('c');
@@ -309,6 +323,7 @@ export function applyFormatting(doc: CmsDocument, config: FormattingConfig = {})
     for (const [el, list] of notes) if (el.children.length) label(el, [...new Set(list)].join('; '));
   } else if (labelMode === 'rule') {
     for (const r of ruleFirst.values()) label(r.el, `${r.label} → ${TARGET_LABELS[r.target].toLowerCase()}${r.count > 1 ? ` (here and in ${r.count - 1} more)` : ''}`);
+    if (firstNumbered) label(firstNumbered, `all ${info.numbered} paragraphs and list items are numbered, in one running sequence (headings, tables and quotes are not)`);
   }
 
   // 7. The Word data is no longer needed.
@@ -426,6 +441,48 @@ function mergeLists(parent: Root | Element) {
     out.push(c);
   }
   (parent as Element).children = out;
+}
+
+/**
+ * Top-level paragraphs and lists become numbered lists, counted through the whole document: each list after a heading,
+ * table or quote starts where the last one stopped. Nested lists keep their own numbering.
+ */
+function numberParagraphs(tree: Root, noted: (el: Element, wasParagraph: boolean) => void): { count: number; first?: Element } {
+  let count = 0;
+  let first: Element | undefined;
+  const out: ElementContent[] = [];
+  let current: Element | undefined;
+  const add = (item: Element) => {
+    if (!current) {
+      current = { type: 'element', tagName: 'ol', properties: count ? { start: count + 1 } : {}, children: [] };
+      out.push(current);
+    }
+    current.children.push(item);
+    count++;
+    first ??= item;
+  };
+  for (const c of tree.children as ElementContent[]) {
+    if (c.type !== 'element') {
+      if (!(c.type === 'text' && !c.value.trim())) out.push(c);
+      continue;
+    }
+    if (c.tagName === 'p' && textOf(c).trim()) {
+      c.tagName = 'li';
+      noted(c, true);
+      add(c);
+    } else if (c.tagName === 'ul' || c.tagName === 'ol') {
+      for (const li of c.children) {
+        if (li.type !== 'element') continue;
+        if (c.tagName === 'ul') noted(li, false);
+        add(li);
+      }
+    } else {
+      current = undefined;
+      out.push(c);
+    }
+  }
+  tree.children = out as Root['children'];
+  return { count, first };
 }
 
 function tableHeaders(tree: Root, noted: (el: Element) => void): number {

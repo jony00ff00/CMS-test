@@ -36,6 +36,8 @@ export interface CkeditorOptions {
   headings?: string[];
   /** Extra elements the editor's features allow beyond the basic set, e.g. "u", "s", "img", "sub", "sup". */
   extraElements?: string[];
+  /** The editor has the list properties feature (a numbered list can start at any number: `<ol start>`). */
+  listProperties?: boolean;
   /** For comments and suggestions without a date (the house style's labels): this date (ISO). Default: now. */
   now?: string;
 }
@@ -241,6 +243,7 @@ export function toCkeditor(doc: CmsDocument, options: CkeditorOptions = {}): Cke
   // 4. Tables in CKEditor's own wrapper; what the editor's features do not allow is reported.
   const allowed = new Set([...BASIC, ...(options.headings ?? ['h2', 'h3', 'h4']), ...(options.extraElements ?? [])]);
   const notAllowed = new Map<string, number>();
+  let startedLists = 0;
   const tidy = (parent: Root | Element) => {
     const out: ElementContent[] = [];
     for (const c of parent.children as ElementContent[]) {
@@ -260,6 +263,7 @@ export function toCkeditor(doc: CmsDocument, options: CkeditorOptions = {}): Cke
         continue;
       }
       if (!allowed.has(c.tagName)) notAllowed.set(c.tagName, (notAllowed.get(c.tagName) ?? 0) + 1);
+      if (c.tagName === 'ol' && c.properties.start !== undefined && !options.listProperties) startedLists++;
       if (c.tagName === 'table' && !(parent.type === 'element' && parent.tagName === 'figure')) {
         out.push({ type: 'element', tagName: 'figure', properties: { className: ['table'] }, children: [c] });
         continue;
@@ -273,6 +277,9 @@ export function toCkeditor(doc: CmsDocument, options: CkeditorOptions = {}): Cke
     warnings.push(`<${tag}> (${n}×) is not one of the editor's features (headings ${[...(options.headings ?? ['h2', 'h3', 'h4'])].join(', ')}): the editor will drop it and keep its text. Change it in the Formatting node, or add the feature`);
   }
 
+  if (startedLists) {
+    warnings.push(`${startedLists} numbered list${startedLists === 1 ? ' continues' : 's continue'} the numbers of the one before (<ol start>): without the editor's list properties feature they start at 1 again. Turn on “The editor has list properties” if it has`);
+  }
   const data = serialize({ ...doc, tree });
   const documentId = options.documentId?.trim() || slug(doc.meta.fileName?.replace(/\.[^.]+$/, '') ?? 'document');
   if (!options.documentId?.trim()) warnings.push(`No document id given: “${documentId}” is used (it must be new in Cloud Services)`);

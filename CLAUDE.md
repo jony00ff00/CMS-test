@@ -53,13 +53,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   empty → remove); `applyFormatting` (`targets`, `inline` (default bold, italic, sub, sup), headings plain, no
   `data-docx-run`, `tableHeaders`, `mergeLists`, typed numbers → `del` by the house style, Word format changes that no
   longer change anything accepted, `labels` paragraph | rule | none: comments by `author` (default "House style",
-  id `house-style`, no date); all `data-docx-*` removed).
+  id `house-style`, no date); `numberParagraphs`: top-level paragraphs and lists become `<ol>` items counted through the
+  whole document, later lists `start` where the last stopped (rule labels add one comment for it); all `data-docx-*`
+  removed).
 - `ckeditor.ts` (Output format `ckeditor`, `config.ckeditor` documentId / bundleVersion / headings / extraElements):
   `toCkeditor` → data with `<suggestion-start|end name>` (insertions, deletions; one suggestion per piece) and
   `<comment-start|end name>` (first / last piece of a thread), `suggestions`, `commentThreads`, `users`, `importBody`
   (Cloud Services POST /documents); format / paragraph / row / mark changes are kept as they are with a note comment
   by their author (changes made together share one note); tables in `figure.table`; elements outside the features
-  warn. NOT verified against CKEditor (docs unreachable, no licence): marker names and import field names live in
+  warn; `<ol start>` warns unless `listProperties`. NOT verified against CKEditor (docs unreachable, no licence): marker names and import field names live in
   `CK_FORMAT`; `scripts/ckeditor-import.mjs` signs (HMAC SHA-256) and sends it. The node uses a fixed `now` for undated
   labels so results stay the same.
 - `pptx.ts`: `importPptx` (JSZip + @xmldom/xmldom, loaded with `import()`; mammoth uses the same two, pinned to
@@ -388,6 +390,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   shadow root. Its test checks the page has the HTML file's markup (text aside: the Word text was rewritten) and the Word text.
   `word-review.node-cms.json` (`npm run example:word-review`, `scripts/make-example-word-review.ts`): the reviewed
   brief (`word-review/*.docx`, reviewer name and account id removed) → Changes → Formatting → Output `ckeditor`;
+  `word-review-numbered.node-cms.json` (same script: `numberParagraphs`, rule labels, `listProperties`) and its
+  output `word-review/hung-by-design-numbered.ckeditor-import.json` (`numberedOutput()`, checked up to date);
   `tests/engine/example-word-review.test.ts`, `tests/e2e/word-review.spec.ts` (`tests/word-review-project.ts` builds
   projects around the file). `tests/fixtures/review.docx` (`npm run fixtures`) has an insertion, a reply, a resolved
   comment and a point comment.

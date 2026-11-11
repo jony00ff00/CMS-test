@@ -78,6 +78,12 @@ export function FormattingEditor({ node }: { node: GraphNode }) {
         onChange={(on) => update({ tableHeaders: on ? undefined : false })}
       />
       <CheckboxField label="Join lists of the same type next to each other" checked={config.mergeLists !== false} onChange={(on) => update({ mergeLists: on ? undefined : false })} />
+      <CheckboxField
+        label="Number every paragraph"
+        checked={!!config.numberParagraphs}
+        hint="Every paragraph and list item becomes a numbered item, in one running sequence through the document; headings, tables and quotes are not numbered."
+        onChange={(on) => update({ numberParagraphs: on || undefined })}
+      />
       <fieldset>
         <legend>Review</legend>
         <SelectField

@@ -79,3 +79,18 @@ document from your environment (`GET /documents/<id>`: an insertion, a deletion,
 For the same reason, changes of formatting (Word's bold → not bold, bullets → numbers) are not made into CKEditor
 formatting suggestions, whose data depends on the editor version: they are applied, with a comment that says what
 Word recorded.
+
+### Numbered paragraphs
+
+`word-review-numbered.node-cms.json` is the same workflow with a different house style (made by the same npm
+script). Its **CKEditor 5 import file** is committed next to the Word file:
+`word-review/hung-by-design-numbered.ckeditor-import.json`.
+
+- **Every paragraph and list item is numbered, in one running sequence (1 to 67).** This is "Number every paragraph"
+  in the Formatting node. Headings and tables are not numbered. A numbered list after a heading or a table starts
+  where the one before stopped (`<ol start="…">`), so the editor needs its list properties feature (List properties,
+  "start index"). The Output says so if it is not turned on.
+- **All text has the editor's one font and size.** The Formatting node removes every font, size, highlight (the Word
+  file has a yellow one) and colour (the blue link text), and underline.
+- **One comment explains the numbering, at the first item.** Labels are "one comment per format", not one per
+  paragraph, so the 67 numbered items do not each get a comment.

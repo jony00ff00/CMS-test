@@ -170,6 +170,12 @@ function CkeditorFields({ config, update }: { config: OutputConfig; update: (pat
         hint="Paragraphs, bold, italic, links, lists, quotes and tables are always allowed."
         onChange={(v) => set({ extraElements: list(v) })}
       />
+      <CheckboxField
+        label="The editor has list properties (lists can start at any number)"
+        checked={!!ck.listProperties}
+        hint="Needed when numbering runs on across headings: each list after a heading starts where the last one stopped."
+        onChange={(listProperties) => set({ listProperties: listProperties || undefined })}
+      />
     </fieldset>
   );
 }

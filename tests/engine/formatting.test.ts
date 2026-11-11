@@ -92,6 +92,24 @@ describe('the Formatting node', () => {
     expect(r.document.meta.review!.users).toBeUndefined();
   });
 
+  it('numbers every paragraph and list item in one running sequence; headings, tables and quotes are not numbered', () => {
+    const doc = word(
+      '<h1 data-docx-style="Heading 1">T</h1><p data-docx-style="Normal">a</p><p data-docx-style="Normal">b</p>' +
+        '<h2 data-docx-style="Heading 2">S</h2><ul><li data-docx-style="Normal">c</li><li data-docx-style="Normal">d</li></ul>' +
+        '<table><tbody><tr><td><p data-docx-style="Normal">cell</p></td></tr></tbody></table><p data-docx-style="Normal">e</p><p data-docx-style="Normal"></p>',
+    );
+    const r = applyFormatting(doc, { numberParagraphs: true, labels: 'rule', tableHeaders: false });
+    expect(plain(r.document)).toBe(
+      '<h2>T</h2><ol><li>a</li><li>b</li></ol><h3>S</h3><ol start="3"><li>c</li><li>d</li></ol>' +
+        '<table><tbody><tr><td><p>cell</p></td></tr></tbody></table><ol start="5"><li>e</li></ol>',
+    );
+    expect(r.info.numbered).toBe(5);
+    // One label explains the numbering, at the first item.
+    expect(Object.values(r.document.meta.review!.comments).map((c) => c.html)).toContain(
+      '<p>House style: all 5 paragraphs and list items are numbered, in one running sequence (headings, tables and quotes are not).</p>',
+    );
+  });
+
   it('after a Changes node: decisions first, then the house style', async () => {
     const decided = applyChanges(await sample(), { defaults: { deletion: 'accept' } }).document;
     const doc = applyFormatting(decided).document;
