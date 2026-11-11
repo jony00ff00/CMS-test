@@ -23,8 +23,63 @@ export interface DocumentMeta {
   json?: JsonSourceInfo;
   /** Only for .pptx sources: the deck's slides (also those left out). */
   pptx?: { slideCount: number; slides: PptxSlideInfo[] };
+  /** Tracked changes and comments (a .docx read in review mode, see docx-review.ts). */
+  review?: ReviewInfo;
   /** CSS and JS of the snippets applied so far, once per snippet version (see snippets.ts). */
   snippetAssets?: SnippetAsset[];
+}
+
+/**
+ * Tracked changes and comments. In the tree they are marked up as:
+ * - `<ins data-rev="ID">` / `<del data-rev="ID">`: inserted / deleted text (also moved text: `move-to` / `move-from`);
+ * - `<span data-rev="ID">`: text whose formatting was changed (`format`; `before` says what it was);
+ * - `data-rev-block="ID"` on a block: its paragraph formatting changed (`paragraph`), or a table row was inserted or
+ *   deleted (`insertion` / `deletion` with `row`); `data-rev-mark="ID"`: its paragraph mark was inserted or deleted
+ *   (paragraphs split or joined);
+ * - `<span data-comments="ID ID">`: text that comments are about (one span per piece; an empty span is a comment on a
+ *   point). The first and last piece of a comment, in document order, are where it starts and ends.
+ * Changes that show nowhere (table properties, the formatting of a paragraph mark) are listed with `hidden: true`.
+ * Ids are unique across documents (they start with the source file's hash), so documents can be combined.
+ */
+export interface ReviewInfo {
+  /** Authors' names, as the file gives them (people.xml, which can hold account ids, is not read). */
+  authors: string[];
+  revisions: Record<string, Revision>;
+  comments: Record<string, ReviewComment>;
+}
+
+export type RevisionType = 'insertion' | 'deletion' | 'move-from' | 'move-to' | 'format' | 'paragraph' | 'table';
+
+export interface Revision {
+  id: string;
+  type: RevisionType;
+  author: string;
+  /** ISO date. `utc` false: a local time without a time zone (the file did not say). */
+  date?: string;
+  utc: boolean;
+  /** format / paragraph: what it was before, for people ("bold, 17 pt"; "Heading 2, bulleted list"). */
+  before?: string;
+  /** format: the old run formatting (b, i, u, strike, sz, …); paragraph: style, list. */
+  beforeProps?: Record<string, string>;
+  /** A whole table row (insertion / deletion). */
+  row?: boolean;
+  /** A paragraph mark (insertion / deletion): the paragraph was split from / joined with the next one. */
+  mark?: boolean;
+  /** Shows nowhere in the content (table properties, a paragraph mark's formatting). */
+  hidden?: boolean;
+}
+
+export interface ReviewComment {
+  id: string;
+  author: string;
+  initials?: string;
+  date?: string;
+  utc: boolean;
+  /** The comment's text as HTML (paragraphs, bold, italic). */
+  html: string;
+  /** A reply to this comment (the thread's first comment). */
+  parentId?: string;
+  resolved: boolean;
 }
 
 export interface PptxSlideInfo {

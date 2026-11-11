@@ -71,6 +71,18 @@ export function SourceEditor({ node }: { node: GraphNode }) {
         />
       )}
       {format === 'docx' && (
+        <CheckboxField
+          label="Keep tracked changes and comments (review mode)"
+          checked={!!config.docx?.review}
+          hint={
+            config.docx?.review
+              ? 'Insertions, deletions, formatting changes and comments are kept, with their authors and dates, and so is the direct formatting (fonts, sizes, colours) a Formatting node can tidy up. Connect a Changes node to decide what stays a suggestion.'
+              : 'Off: the text as it is with every change accepted, without comments (the usual import).'
+          }
+          onChange={(review) => update({ docx: review ? { ...config.docx, review } : { styleMap: config.docx?.styleMap } })}
+        />
+      )}
+      {format === 'docx' && !config.docx?.review && (
         <TextAreaField
           label="Word style rules"
           rows={3}

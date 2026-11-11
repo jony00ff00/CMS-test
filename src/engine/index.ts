@@ -3,6 +3,7 @@ export * from './types';
 export * from './document';
 export * from './combine';
 export * from './docx';
+export * from './docx-review';
 export * from './pptx';
 export * from './slide-deck';
 export * from './json';
