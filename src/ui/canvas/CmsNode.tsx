@@ -167,6 +167,10 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       const parts = [`${info.kept} kept`, info.accepted ? `${info.accepted} accepted` : '', info.rejected ? `${info.rejected} rejected` : ''].filter(Boolean);
       return `${parts.join(' · ')} · ${plural(info.threadsKept as number, 'comment thread')}`;
     }
+    case 'formatting': {
+      if (typeof info.formats !== 'number') return 'Connect a Word file read in review mode';
+      return `${plural(info.formats as number, 'format')} · ${info.changed} changed · ${plural(info.labels as number, 'label')}`;
+    }
     case 'replace': {
       const c = node.config as ReplaceNodeConfig;
       if (typeof info.replaced !== 'number') return 'Connect a selection (and content)';

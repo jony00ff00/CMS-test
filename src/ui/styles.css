@@ -374,3 +374,6 @@ fieldset.where { gap: 0.6rem; }
 .change.decision-accept { border-left-color: var(--ok); }
 .change.decision-reject, .change.decision-drop { border-left-color: var(--danger); opacity: 0.8; }
 .author-row { display: grid; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.format-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.format-row { padding: 6px 8px; border: 1px solid var(--border); border-left: 3px solid var(--node-formatting); border-radius: 6px; font-size: 0.8rem; display: grid; gap: 4px; }
+.format-row.is-chosen { background: color-mix(in srgb, var(--node-formatting) 6%, transparent); }
