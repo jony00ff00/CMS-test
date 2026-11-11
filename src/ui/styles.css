@@ -360,3 +360,25 @@ fieldset.where { gap: 0.6rem; }
 .palette-groups { margin-top: 1rem; }
 .palette-groups .group-list li { margin-bottom: 0; }
 .group-list .group-list-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Notes on the canvas (annotations, not nodes). */
+.palette-section { margin-top: 1rem; }
+.palette-note { border-left-color: #eab308; }
+.note-card {
+  position: relative; box-sizing: border-box; padding: 8px 10px; border-radius: 4px; font-size: 0.85rem; line-height: 1.4;
+  background: var(--note-bg); border: 1px solid var(--note-border); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); color: #1f2937;
+}
+.note-card.is-selected { box-shadow: 0 0 0 2px var(--accent); }
+.note-yellow { --note-bg: #fef9c3; --note-border: #facc15; }
+.note-blue { --note-bg: #dbeafe; --note-border: #60a5fa; }
+.note-green { --note-bg: #dcfce7; --note-border: #4ade80; }
+.note-pink { --note-bg: #fce7f3; --note-border: #f472b6; }
+.note-grey { --note-bg: #f1f5f9; --note-border: #94a3b8; }
+.note-text { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.4em; cursor: grab; }
+.note-text.is-empty { color: #6b7280; font-style: italic; }
+textarea.note-text { display: block; width: 100%; resize: none; border: 0; padding: 0; background: transparent; font: inherit; color: inherit; outline: none; cursor: text; }
+.note-tools { position: absolute; top: -34px; left: 0; display: flex; gap: 4px; align-items: center; padding: 3px 4px; background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
+.note-swatch { width: 18px; height: 18px; padding: 0; border-radius: 4px; background: var(--note-bg); border: 1px solid var(--note-border); }
+.note-swatch[aria-pressed='true'] { outline: 2px solid var(--text, #111); outline-offset: 1px; }
+.note-delete { min-height: 20px; padding: 0 6px; line-height: 1; font-size: 1rem; }
+.note-resize.react-flow__resize-control.line { border-color: transparent; border-right-width: 6px; }

@@ -4,7 +4,7 @@ import { temporal } from 'zundo';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import {
-  connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type EdgeCandidate, type Graph,
+  connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type CanvasNote, type EdgeCandidate, type Graph,
   type GraphNode, type ObjectNodeConfig, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
   cleanClassName, cleanClassNames, customSnippet, latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
 } from '../engine';
@@ -59,7 +59,12 @@ export interface EditorState {
   /** Move a connection earlier (-1) or later (+1) among those into the same input (an Output's documents). */
   moveInput(edgeId: string, delta: -1 | 1): void;
   /** Remove nodes and connections together, as one undo step. */
-  removeElements(nodeIds: string[], edgeIds: string[]): void;
+  /** Nodes, connections and canvas notes, as one undo step. */
+  removeElements(nodeIds: string[], edgeIds: string[], noteIds?: string[]): void;
+  /** A note on the canvas (at `position`, or above the top-left node); returns its id. */
+  addNote(position?: { x: number; y: number }, text?: string): string;
+  /** Change a note's text, width or colour (typing its text is one undo step). */
+  updateNote(id: string, patch: Partial<Omit<CanvasNote, 'id'>>): void;
   moveNode(id: string, position: { x: number; y: number }): void;
   /** Move several nodes as one undo step (dragging a multi-selection). */
   moveNodes(positions: Record<string, { x: number; y: number }>): void;
@@ -242,22 +247,26 @@ export function createEditorStore(options: EditorOptions = {}) {
           nodes,
           edges: graph.edges.filter((e) => !gone.has(e.source) && !gone.has(e.target)),
           ...(graph.groups && { groups: pruneGroups(graph.groups, new Set(nodes.map((n) => n.id))) }),
+          ...(graph.notes && { notes: graph.notes }),
         },
         selectedId: selectedId && gone.has(selectedId) ? undefined : selectedId,
       });
     },
 
-    removeElements(nodeIds, edgeIds) {
-      if (nodeIds.length === 0 && edgeIds.length === 0) return;
+    removeElements(nodeIds, edgeIds, noteIds = []) {
+      if (nodeIds.length === 0 && edgeIds.length === 0 && noteIds.length === 0) return;
       const nodes = new Set(nodeIds);
       const edges = new Set(edgeIds);
+      const notes = new Set(noteIds);
       const { graph, selectedId } = get();
       const kept = graph.nodes.filter((n) => !nodes.has(n.id));
+      const keptNotes = graph.notes?.filter((n) => !notes.has(n.id));
       set({
         graph: {
           nodes: kept,
           edges: graph.edges.filter((e) => !edges.has(e.id) && !nodes.has(e.source) && !nodes.has(e.target)),
           ...(graph.groups && { groups: pruneGroups(graph.groups, new Set(kept.map((n) => n.id))) }),
+          ...(keptNotes?.length && { notes: keptNotes }),
         },
         selectedId: selectedId && nodes.has(selectedId) ? undefined : selectedId,
       });
@@ -301,6 +310,28 @@ export function createEditorStore(options: EditorOptions = {}) {
       const { graph } = get();
       if (!Object.keys(positions).length) return;
       set({ graph: { ...graph, nodes: graph.nodes.map((n) => (positions[n.id] ? { ...n, position: positions[n.id] } : n)) } });
+    },
+
+    addNote(position, text = '') {
+      const { graph } = get();
+      const notes = graph.notes ?? [];
+      let n = notes.length + 1;
+      while (notes.some((x) => x.id === `note-${n}`)) n++;
+      const id = `note-${n}`;
+      // Without a place: above the top-left node (in view after an example loads), a little apart from other notes.
+      const xs = graph.nodes.map((x) => x.position?.x ?? 0);
+      const ys = graph.nodes.map((x) => x.position?.y ?? 0);
+      const at = position ?? { x: (xs.length ? Math.min(...xs) : 40) + notes.length * 30, y: (ys.length ? Math.min(...ys) : 160) - 120 + notes.length * 30 };
+      set({ graph: { ...graph, notes: [...notes, { id, text, position: at }] } });
+      return id;
+    },
+
+    updateNote(id, patch) {
+      const { graph } = get();
+      const note = graph.notes?.find((n) => n.id === id);
+      if (!note) return;
+      if (patch.text !== undefined && Object.keys(patch).length === 1) groupKey = `note-text:${id}`; // typing is one undo step
+      set({ graph: { ...graph, notes: graph.notes!.map((n) => (n.id === id ? { ...n, ...patch } : n)) } });
     },
 
     moveNode(id, position) {
@@ -821,6 +852,7 @@ export function createEditorStore(options: EditorOptions = {}) {
   return store;
 }
 
+/** Only positions, groups or notes changed: nothing the engine looks at. */
 function sameExceptPositions(a: Graph, b: Graph) {
   return (
     a.edges === b.edges &&

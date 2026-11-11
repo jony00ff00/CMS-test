@@ -1,7 +1,7 @@
 // Project files: the graph, its files and the snippet library as one JSON document.
 // Used for autosave (localStorage) and for "Save project file" / "Open project".
 import {
-  edgeError, ENGINE_VERSION, nodeRegistry, storeFile, type Graph, type NodeGroup, type NodeRegistry, type Snippet, type SnippetLibrary, type StoredFile,
+  edgeError, ENGINE_VERSION, NOTE_COLORS, nodeRegistry, type CanvasNote, type NoteColor, storeFile, type Graph, type NodeGroup, type NodeRegistry, type Snippet, type SnippetLibrary, type StoredFile,
 } from '../engine';
 import { seedLibrary } from '../snippets/seed';
 
@@ -128,6 +128,8 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
 
   const groups = readGroups(p.graph?.groups, ids, warnings);
   if (groups.length) graph.groups = groups;
+  const notes = readNotes(p.graph?.notes, warnings);
+  if (notes.length) graph.notes = notes;
 
   let library: SnippetLibrary = seedLibrary();
   if (p.library && typeof p.library === 'object') {
@@ -194,6 +196,31 @@ function upgradeInsertNodes(nodes: any[], edges: any[], warnings: string[]) {
       `${upgraded} Insert node${upgraded === 1 ? ' is' : 's are'} now ${upgraded === 1 ? 'an Object node' : 'Object nodes'}: where ${upgraded === 1 ? 'it goes' : 'they go'} is set by a new Selector (its Point output)`,
     );
   }
+}
+
+/** Canvas notes from a project file: broken ones are left out with a warning; unknown colours are dropped. */
+function readNotes(raw: unknown, warnings: string[]): CanvasNote[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    warnings.push('The notes could not be read and were left out');
+    return [];
+  }
+  const notes: CanvasNote[] = [];
+  for (const n of raw as Partial<CanvasNote>[]) {
+    const p = n?.position;
+    if (!n || typeof n.id !== 'string' || typeof n.text !== 'string' || !p || typeof p.x !== 'number' || typeof p.y !== 'number' || notes.some((x) => x.id === n.id)) {
+      warnings.push('A note could not be read and was left out');
+      continue;
+    }
+    notes.push({
+      id: n.id,
+      text: n.text,
+      position: { x: p.x, y: p.y },
+      ...(typeof n.width === 'number' && n.width > 0 && { width: n.width }),
+      ...(NOTE_COLORS.includes(n.color as NoteColor) && { color: n.color }),
+    });
+  }
+  return notes;
 }
 
 /** Groups from a project file: unknown nodes leave them, a node in two groups stays in the first, empty ones go. */

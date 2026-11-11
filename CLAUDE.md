@@ -264,6 +264,17 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Collapse / Expand, Show on canvas, Duplicate, Ungroup, Delete group and its nodes), `InGroup` on a member's
   editor, "Group" / "Add to …" in `MultiSelection`. Palette: a Groups list (`focusGroup`). Minimap: frames in the
   group's colour (light when expanded).
+- Notes (annotations): `Graph.notes` (`CanvasNote` { id, text, position, width?, color? (`NOTE_COLORS`) } in
+  `engine/graph.ts`; not nodes: no ports, the engine and `sameExceptPositions` ignore them, so they never re-run
+  anything). Store: `addNote(position?, text?)` (`note-N`; without a place above the top-left node), `updateNote`
+  (typing the text is one undo step), `removeElements(nodeIds, edgeIds, noteIds)`. `removeNodes` / `removeElements`
+  keep `notes` (every action that rebuilds `graph` must keep `groups` and `notes`). `parseProject` reads them
+  (`readNotes`: broken ones left out with a warning, bad widths / colours dropped). Canvas: React Flow nodes
+  `note:<id>` of type `cmsNote` (`NoteCard.tsx`), in local state like nodes; dropping one saves its position; a click
+  on one selects no graph node. A new empty note opens for writing (focus retried for a few frames: React Flow hides a
+  node until it is measured); double-click to edit (`nodrag`, keys stop at the textarea, Escape / blur stop); selected:
+  colour swatches and × in `.note-tools`; width by `NodeResizeControl` on the right edge; Backspace deletes it.
+  Palette: "Annotations" → Note (click, or drag with `DRAG_TYPE` = `NOTE_DRAG`). Minimap: the note's colour.
 - `src/ui/canvas`: React Flow canvas. Nodes live in local state (React Flow stores measured sizes on them) and
   are synced from the store; positions go back on drag end. `isValidConnection` uses `edgeError`;
   `onConnectEnd` shows why a drop on a wrong handle was refused. `CmsNode` renders any node type from its
@@ -376,7 +387,7 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+image selection (Images mode, click an image in the preview), notes on the canvas, Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

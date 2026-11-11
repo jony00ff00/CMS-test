@@ -9,13 +9,15 @@ import { CmsNode, type CmsFlowNode } from './CmsNode';
 import { DeletableEdge } from './DeletableEdge';
 import { MiniMapNode } from './MiniMapNode';
 import { GroupFrame, type GroupFlowNode } from './GroupFrame';
+import { isNoteId, NoteCard, noteFlowId, noteIdOf, type NoteFlowNode } from './NoteCard';
 import { collapsedPorts, collapsedSize, frameBox, frameId, groupIdOfFrame, groupLayers, isFrameId, portHandle, raise, resolveHandle } from './group-layout';
 import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
 import { ProjectToolbar } from './ProjectToolbar';
-import { DRAG_TYPE } from './Palette';
+import { DRAG_TYPE, NOTE_DRAG } from './Palette';
 
-const nodeTypes = { cms: CmsNode, cmsGroup: GroupFrame };
-type FlowNode = CmsFlowNode | GroupFlowNode;
+const nodeTypes = { cms: CmsNode, cmsGroup: GroupFrame, cmsNote: NoteCard };
+type FlowNode = CmsFlowNode | GroupFlowNode | NoteFlowNode;
+const NOTE_MINIMAP: Record<string, string> = { yellow: '#fde68a', blue: '#bfdbfe', green: '#bbf7d0', pink: '#fbcfe8', grey: '#e2e8f0' };
 /** Hold one of these and click to add a node to the selection (or take it out). */
 const MULTI_SELECT_KEYS = ['Shift', 'Control', 'Meta'];
 const edgeTypes = { deletable: DeletableEdge };
@@ -49,6 +51,18 @@ export function Canvas() {
       }),
     );
   }, [graph.nodes, selection]);
+
+  // Notes on the canvas: local too (React Flow measures them and keeps their selection).
+  const [noteNodes, setNoteNodes] = useState<NoteFlowNode[]>([]);
+  useEffect(() => {
+    setNoteNodes((prev) =>
+      (graph.notes ?? []).map((n) => {
+        const id = noteFlowId(n.id);
+        const old = prev.find((p) => p.id === id);
+        return { ...old, id, type: 'cmsNote', data: { noteId: n.id }, position: n.position, dragHandle: undefined };
+      }),
+    );
+  }, [graph.notes]);
 
   // Fit the view once nodes are measured after loading an example (not when nodes are added one by one:
   // moving the view then would get in the way of dragging).
@@ -130,8 +144,8 @@ export function Canvas() {
   const framesRef = useRef(frames);
   framesRef.current = frames;
   const flowNodes = useMemo<FlowNode[]>(
-    () => [...frames, ...nodes.map((n) => (collapsedOf.has(n.id) ? { ...n, hidden: true } : memberZ.has(n.id) ? { ...n, zIndex: memberZ.get(n.id) } : n))],
-    [frames, nodes, collapsedOf, memberZ],
+    () => [...frames, ...noteNodes, ...nodes.map((n) => (collapsedOf.has(n.id) ? { ...n, hidden: true } : memberZ.has(n.id) ? { ...n, zIndex: memberZ.get(n.id) } : n))],
+    [frames, noteNodes, nodes, collapsedOf, memberZ],
   );
 
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
@@ -168,9 +182,10 @@ export function Canvas() {
         const color = graph.groups?.find((g) => g.id === n.data.groupId)?.color ?? '#64748b';
         return n.className === 'is-collapsed' ? color : `${color}22`;
       }
+      if (n.type === 'cmsNote') return NOTE_MINIMAP[graph.notes?.find((x) => x.id === n.data.noteId)?.color ?? 'yellow'];
       return NODE_COLORS[graph.nodes.find((g) => g.id === n.id)?.type ?? ''] ?? UNKNOWN_NODE_COLOR;
     },
-    [graph.nodes, graph.groups],
+    [graph.nodes, graph.groups, graph.notes],
   );
   const nodeStroke = useCallback(
     (n: FlowNode) => (n.type === 'cmsGroup' ? (graph.groups?.find((g) => g.id === n.data.groupId)?.color ?? '#64748b') : nodeColor(n)),
@@ -203,7 +218,13 @@ export function Canvas() {
         if (dx || dy) state.moveNodes(moved);
       }
     }
-    const changes = all.filter((c) => !('id' in c) || !isFrameId(c.id)) as NodeChange<CmsFlowNode>[];
+    // Notes: moved (saved when dropped), selected and measured on the canvas; nothing else to tell the store.
+    const noteChanges = all.filter((c) => 'id' in c && isNoteId(c.id)) as NodeChange<NoteFlowNode>[];
+    if (noteChanges.length) {
+      setNoteNodes((ns) => applyNodeChanges(noteChanges, ns));
+      for (const c of noteChanges) if (c.type === 'position' && c.position && !c.dragging) state.updateNote(noteIdOf(c.id), { position: c.position });
+    }
+    const changes = all.filter((c) => !('id' in c) || (!isFrameId(c.id) && !isNoteId(c.id))) as NodeChange<CmsFlowNode>[];
     setNodes((ns) => applyNodeChanges(changes, ns));
     // Dragging several selected nodes moves them all: one undo step when they are dropped.
     const moved: Record<string, { x: number; y: number }> = {};
@@ -264,7 +285,8 @@ export function Canvas() {
       e.preventDefault();
       const p = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       const at = { x: p.x - 110, y: p.y - 30 };
-      editorStore.getState().addNode(type, at);
+      if (type === NOTE_DRAG) editorStore.getState().addNote(at);
+      else editorStore.getState().addNode(type, at);
     },
     [screenToFlowPosition],
   );
@@ -287,10 +309,20 @@ export function Canvas() {
         onNodeClick={(e, n) => {
           // A group's header (or its collapsed box): select the group.
           if (isFrameId(n.id)) editorStore.getState().selectGroup(groupIdOfFrame(n.id));
+          // A note: no node is selected (the inspector and preview stay as they are; the note shows its own tools).
+          else if (isNoteId(n.id)) {
+            if (!e.shiftKey && !e.ctrlKey && !e.metaKey) editorStore.getState().select(undefined);
+          }
           else if (!e.shiftKey && !e.ctrlKey && !e.metaKey) editorStore.getState().select(n.id);
         }}
         multiSelectionKeyCode={MULTI_SELECT_KEYS}
-        onDelete={({ nodes: n, edges: e }) => editorStore.getState().removeElements(n.filter((x) => !isFrameId(x.id)).map((x) => x.id), e.map((x) => x.id))}
+        onDelete={({ nodes: n, edges: e }) =>
+          editorStore.getState().removeElements(
+            n.filter((x) => !isFrameId(x.id) && !isNoteId(x.id)).map((x) => x.id),
+            e.map((x) => x.id),
+            n.filter((x) => isNoteId(x.id)).map((x) => noteIdOf(x.id)),
+          )
+        }
         deleteKeyCode={['Backspace', 'Delete']}
         fitView
         fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
@@ -313,7 +345,7 @@ export function Canvas() {
           <ProjectToolbar />
         </Panel>
       </ReactFlow>
-      {graph.nodes.length === 0 && (
+      {graph.nodes.length === 0 && !graph.notes?.length && (
         <div className="canvas-empty">
           <p>Add nodes from the palette and connect them, or start from an example.</p>
           <p className="muted small">A typical graph: Document Source → Selector → Snippet → Output</p>

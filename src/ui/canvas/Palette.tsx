@@ -3,6 +3,8 @@ import { editorStore, useEditor } from '../../store/editor-store';
 import { MinimiseButton } from '../panels';
 
 export const DRAG_TYPE = 'application/x-cms-node';
+/** Dragged with DRAG_TYPE: a note, not a node. */
+export const NOTE_DRAG = 'note';
 
 export function Palette({ onMinimise }: { onMinimise: () => void }) {
   const addNode = useEditor((s) => s.addNode);
@@ -32,6 +34,25 @@ export function Palette({ onMinimise }: { onMinimise: () => void }) {
             </button>
           </li>
         ))}
+      </ul>
+      <h2 className="palette-section">Annotations</h2>
+      <ul>
+        <li>
+          <button
+            type="button"
+            className="palette-item palette-note"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_TYPE, NOTE_DRAG);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            onClick={() => editorStore.getState().addNote()}
+            title="A note on the canvas, to explain part of the flow. Not a node: it has no connections and changes nothing."
+          >
+            <span className="palette-label">Note</span>
+            <span className="palette-description">Text on the canvas that explains part of the flow</span>
+          </button>
+        </li>
       </ul>
       <GroupList />
     </aside>

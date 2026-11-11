@@ -86,6 +86,8 @@ export interface Graph {
   edges: GraphEdge[];
   /** Named groups of nodes on the canvas. Only for arranging the canvas: evaluation never looks at them. */
   groups?: NodeGroup[];
+  /** Notes on the canvas that annotate the flow (text only). Evaluation never looks at them. */
+  notes?: CanvasNote[];
 }
 
 /** Nodes kept together on the canvas: named, moved as one, and collapsible. A node is in at most one group. */
@@ -98,6 +100,20 @@ export interface NodeGroup {
   /** Shown as one small box with the group's outside connections. */
   collapsed?: boolean;
 }
+
+/** A note on the canvas: text that explains part of the flow. Not a node: no ports, never evaluated. */
+export interface CanvasNote {
+  id: string;
+  text: string;
+  position: { x: number; y: number };
+  /** Width in pixels (the height follows the text). Default 220. */
+  width?: number;
+  /** One of `NOTE_COLORS`. Default yellow. */
+  color?: NoteColor;
+}
+
+export const NOTE_COLORS = ['yellow', 'blue', 'green', 'pink', 'grey'] as const;
+export type NoteColor = (typeof NOTE_COLORS)[number];
 
 // ---------------------------------------------------------------------------------------------
 // Validation
