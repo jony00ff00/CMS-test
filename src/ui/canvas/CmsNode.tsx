@@ -115,7 +115,7 @@ function NodeTitle({ id, name, label }: { id: string; name?: string; label: stri
 
 const SLIDE_PART_LABELS = { slide: 'Slides', title: 'Slide titles', content: 'Slide content', notes: 'Speaker notes' } as const;
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 'es'}`;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : /(s|x|ch|sh)$/.test(word) ? 'es' : 's'}`;
 
 function describeSelector(c: SelectorConfig): string {
   return c.mode === 'css' ? c.selector || '(empty)'
@@ -134,6 +134,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
   switch (node.type) {
     case 'documentSource':
       if (!info.file) return 'No file chosen';
+      if (typeof info.changes === 'number') return `${info.file} · ${plural(info.changes as number, 'change')}, ${plural(info.comments as number, 'comment')}`;
       if (typeof info.slideCount !== 'number') return `${info.file}`;
       return `${info.file} · ${info.slides === info.slideCount ? '' : `${info.slides} of `}${info.slideCount} slide${info.slideCount === 1 ? '' : 's'}${info.hiddenSlides ? ` (${info.hiddenSlides} hidden)` : ''}`;
     case 'selector':
@@ -160,6 +161,11 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       if (!c.point) return 'Click in the preview to pick the point';
       if (info.needsAttention) return 'The point needs attention';
       return typeof info.inserted === 'number' ? `At a point${info.from ? ` · from ${info.from}` : ''} · added ${info.inserted}×` : 'At a point';
+    }
+    case 'changes': {
+      if (typeof info.kept !== 'number') return 'Connect a Word file read in review mode';
+      const parts = [`${info.kept} kept`, info.accepted ? `${info.accepted} accepted` : '', info.rejected ? `${info.rejected} rejected` : ''].filter(Boolean);
+      return `${parts.join(' · ')} · ${plural(info.threadsKept as number, 'comment thread')}`;
     }
     case 'replace': {
       const c = node.config as ReplaceNodeConfig;

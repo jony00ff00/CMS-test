@@ -46,6 +46,8 @@ export interface ReviewInfo {
   authors: string[];
   revisions: Record<string, Revision>;
   comments: Record<string, ReviewComment>;
+  /** Who each author is in the editor the content goes to (set by a Changes node): user id and display name. */
+  users?: Record<string, { id: string; name?: string }>;
 }
 
 export type RevisionType = 'insertion' | 'deletion' | 'move-from' | 'move-to' | 'format' | 'paragraph' | 'table';

@@ -20,6 +20,8 @@
   --node-replace: #be185d;
   --node-position: #0891b2;
   --node-output: #dc2626;
+  --node-changes: #16a34a;
+  --node-formatting: #a16207;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 14px;
   color: var(--text);
@@ -88,6 +90,8 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-extractor { border-left-color: var(--node-extractor); }
 .palette-replace { border-left-color: var(--node-replace); }
 .palette-position { border-left-color: var(--node-position); }
+.palette-changes { border-left-color: var(--node-changes); }
+.palette-formatting { border-left-color: var(--node-formatting); }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
 
@@ -217,6 +221,8 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-extractor { border-top-color: var(--node-extractor); }
 .cms-node-replace { border-top-color: var(--node-replace); }
 .cms-node-position { border-top-color: var(--node-position); }
+.cms-node-changes { border-top-color: var(--node-changes); }
+.cms-node-formatting { border-top-color: var(--node-formatting); }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
 .cms-node header { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem 0.2rem; }
@@ -360,3 +366,11 @@ fieldset.where { gap: 0.6rem; }
 .palette-groups { margin-top: 1rem; }
 .palette-groups .group-list li { margin-bottom: 0; }
 .group-list .group-list-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The Changes node's lists of changes and comment threads. */
+.change-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.change { padding: 6px 8px; border: 1px solid var(--border); border-left: 3px solid var(--node-changes); border-radius: 6px; font-size: 0.8rem; display: grid; gap: 4px; }
+.change-text { overflow-wrap: anywhere; }
+.change.decision-accept { border-left-color: var(--ok); }
+.change.decision-reject, .change.decision-drop { border-left-color: var(--danger); opacity: 0.8; }
+.author-row { display: grid; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border); }

@@ -11,6 +11,7 @@ export function mergeReview(a: ReviewInfo | undefined, b: ReviewInfo | undefined
     authors: [...new Set([...a.authors, ...b.authors])],
     revisions: { ...a.revisions, ...b.revisions },
     comments: { ...a.comments, ...b.comments },
+    ...((a.users || b.users) && { users: { ...b.users, ...a.users } }),
   };
 }
 
@@ -50,5 +51,5 @@ export function presentReview(doc: CmsDocument): ReviewInfo | undefined {
   const revisions = Object.fromEntries(Object.entries(review.revisions).filter(([id, r]) => revs.has(id) || r.hidden));
   const comments = Object.fromEntries(Object.entries(review.comments).filter(([id, c]) => threads.has(c.parentId ?? id)));
   const authors = review.authors.filter((a) => Object.values(revisions).some((r) => r.author === a) || Object.values(comments).some((c) => c.author === a));
-  return { authors, revisions, comments };
+  return { authors, revisions, comments, ...(review.users && { users: review.users }) };
 }

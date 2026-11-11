@@ -1,3 +1,4 @@
+import { ChangesEditor } from './ChangesEditor';
 import type React from 'react';
 import { nodeRegistry } from '../../engine';
 import { editorStore, selectedNodeIds, useEditor } from '../../store/editor-store';
@@ -28,6 +29,7 @@ const EDITORS = {
   position: PositionEditor,
   output: OutputEditor,
   connector: ConnectorEditor,
+  changes: ChangesEditor,
 } as const;
 
 export function Inspector({ onMinimise }: { onMinimise: () => void }) {
