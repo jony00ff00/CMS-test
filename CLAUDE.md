@@ -186,7 +186,9 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   inline nodes; block content widens a text match to its block, with a warning. JSON field blocks are kept (replace
   works inside them); `ReplaceMode`: `target` element (default) | inside (the element and its attributes stay, its
   children are replaced; an empty element is filled first, by an append inside; a paragraph, heading or inline
-  element takes `inlineOf` the content) and `pairs` (match i gets part i: each content match copied on its own; the
+  element takes `inlineOf` the content); block content (or a `<video>` / `<audio>` / `<iframe>`, `MEDIA_BLOCKS`) for the only
+  thing in a `<p>` / heading (e.g. a Word picture in its own paragraph) replaces that paragraph, for part of one it
+  warns; and `pairs` (match i gets part i: each content match copied on its own; the
   node reads a document as its blocks then; a count mismatch warns and leaves the extra matches unchanged); info
   `replaced`, `from` (only when the content has a file name));
   `position` (a point-mode Selector and an Object in one: inputs `document` and `content` (`any`); config
@@ -343,11 +345,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   change several things use `batch()` so they are one step; deletes go through `removeElements` (React Flow's
   `onDelete`) for the same reason. Keyboard: Ctrl/Cmd+Z, Ctrl+Y / Shift+Cmd+Z, ignored inside fields.
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`. Examples
-  (`loadExample`): `html`, `json`. The "Two documents" button opens `examples/ge16-scrolly.node-cms.json`
+  (`loadExample`): `html` (button "HTML example"), `json` (no button any more: `tests/json-example.ts`,
+  `jsonExampleFile()`, makes it a project file for tests). The "Two documents" button opens `examples/ge16-scrolly.node-cms.json`
   (imported with `?raw` only when clicked, `openExampleProject`: like `importProject`, quiet unless something was left
   out, selects the Output). The old "Two documents" graph (the Watering section of `sampleNotesHtml()`, via an
   Extractor, into the guide before its quote, as a labelled section with fitted headings) is now `tests/two-documents.ts`
-  (`twoDocumentsProject` / `twoDocumentsFile`): tests open it as a project file, with the same node ids.
+  (`twoDocumentsProject` / `twoDocumentsFile`): tests open it as a project file, with the same node ids. The "Two
+  outputs" button opens `examples/two-outputs.node-cms.json` the same way.
 - `examples/` (see its README): `ge16-scrolly.node-cms.json`, a scrollytelling graphic's code
   (`scrolly/*.html`, Document Source with `keepCode`) filled with text from Word (`scrolly/*.docx`, style map for
   Kicker / Title / Dek) by three Replace nodes (inside, match by match). `npm run example:scrolly`
@@ -358,6 +362,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Selector → Snippet pairs (step cards named with `{{item params.steps index}}`, joined Selectors for one wrapper
   around several matches); its JS first copies `style[data-snippet="ge16-scrolly@1"]` into the element for the
   shadow root. Its test checks the page has the HTML file's markup (text aside: the Word text was rewritten) and the Word text.
+- `two-outputs.node-cms.json` (`npm run example:two-outputs`, `scripts/make-example-two-outputs.ts`): one Word file
+  (`two-outputs/garden-year.docx`, written by the script with the `docx` package: three pictures, three tables) → two
+  Outputs. Static: Selector `table` → library snippet "Chart (static)"; interactive: "Chart (interactive)" (same
+  `chartScript(interactive)`: an SVG chart per `figure.cms-chart[data-chart]` (bar / line / donut from
+  `{{item params.types index}}`), the table kept but visually hidden; interactive charts animate in when in view
+  (IntersectionObserver; not with reduced motion) and show a tooltip on hover), then per picture Selector (Images,
+  alt text) → Replace ← Object (video file, autoplay / loop / muted, no Point). Pictures and WebM videos are drawn by
+  `scripts/make-example-media.py` (Pillow + ffmpeg, VP9). Groups and a note. `tests/engine/example-two-outputs.test.ts`,
+  `tests/e2e/two-outputs.spec.ts`.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).
@@ -387,7 +400,8 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), notes on the canvas, Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+image selection (Images mode, click an image in the preview), notes on the canvas, Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
+Word file; the JSON example button was removed). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

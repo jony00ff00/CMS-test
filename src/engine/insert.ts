@@ -467,6 +467,8 @@ const placeSnippet = (place: InsertPlace): Snippet => ({
 });
 
 /** Elements that may only hold inline content: block insertions go next to them instead of inside. */
+/** Media that the Object node treats as blocks (they never go inside a paragraph). */
+const MEDIA_BLOCKS = new Set(['video', 'audio', 'iframe']);
 const PHRASING_BLOCKS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'summary', 'caption', 'figcaption']);
 
 interface Targets {
@@ -709,6 +711,18 @@ export async function replaceSelection(selection: Selection, content: Selection,
         seen.add(key);
         (el.children.length ? swap : fill).push({ match: el.children.length ? inner : match, nodes });
         return;
+      }
+    } else if ((piece.block || piece.nodes.some((n) => n.type === 'element' && MEDIA_BLOCKS.has(n.tagName))) && match.parent.length) {
+      // Block content (a video, a figure) for the only thing in a paragraph, e.g. an image from Word in its own
+      // <p>: the paragraph is replaced, so no block ends up inside it.
+      const { start, end } = match;
+      const at = match.parent[match.parent.length - 1];
+      const around: Match = { kind: 'nodes', parent: match.parent.slice(0, -1), start: at, end: at + 1 };
+      const parent = nodeAt(doc, around);
+      if (parent?.type === 'element' && PHRASING_BLOCKS.has(parent.tagName)) {
+        const others = parent.children.filter((c, j) => (j < start || j >= end) && !(c.type === 'text' && !c.value.trim()));
+        if (!others.length) match = around;
+        else warnings.push(`Block content replaces part of a <${parent.tagName}>: it is put inside it, which browsers may show oddly`);
       }
     }
     const key = JSON.stringify(match);

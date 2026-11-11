@@ -356,39 +356,40 @@ export function Canvas() {
 }
 
 function ExampleButtons() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<string | undefined>();
   const confirmReplace = () => !editorStore.getState().graph.nodes.length || window.confirm('Replace the current graph with the example?');
-  const load = (kind: 'html' | 'json') => {
-    if (confirmReplace()) editorStore.getState().loadExample(kind);
-  };
-  // The scrolly is a whole project file (with its Word and HTML files), so it is downloaded only when asked for.
-  const loadScrolly = async () => {
+  // These are whole project files (with their Word, HTML and video files), so they are downloaded only when asked for.
+  const loadProject = async (name: string, importer: () => Promise<{ default: string }>) => {
     if (!confirmReplace()) return;
-    setLoading(true);
+    setLoading(name);
     try {
-      const { default: text } = await import('../../../examples/ge16-scrolly.node-cms.json?raw');
-      editorStore.getState().openExampleProject(text);
+      editorStore.getState().openExampleProject((await importer()).default);
     } catch {
       editorStore.getState().notify('error', 'The example could not be loaded. Check the connection and try again.');
     } finally {
-      setLoading(false);
+      setLoading(undefined);
     }
   };
   return (
     <>
-      <button type="button" onClick={() => load('html')}>
+      <button type="button" onClick={() => confirmReplace() && editorStore.getState().loadExample('html')}>
         HTML example
-      </button>
-      <button type="button" onClick={() => load('json')}>
-        JSON example
       </button>
       <button
         type="button"
-        onClick={() => void loadScrolly()}
-        disabled={loading}
+        onClick={() => void loadProject('scrolly', () => import('../../../examples/ge16-scrolly.node-cms.json?raw'))}
+        disabled={!!loading}
         title="Two documents: text written in Word put into a developer’s HTML code for a scrollytelling graphic"
       >
-        {loading ? 'Loading…' : 'Two documents'}
+        {loading === 'scrolly' ? 'Loading…' : 'Two documents'}
+      </button>
+      <button
+        type="button"
+        onClick={() => void loadProject('two-outputs', () => import('../../../examples/two-outputs.node-cms.json?raw'))}
+        disabled={!!loading}
+        title="One Word document, two pages: static charts and pictures, or charts that animate and respond to the pointer, with short videos"
+      >
+        {loading === 'two-outputs' ? 'Loading…' : 'Two outputs'}
       </button>
     </>
   );

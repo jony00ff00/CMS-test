@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sampleJson } from '../../src/samples';
+import { jsonExampleFile } from '../json-example';
 
 const fixture = (name: string) => join(import.meta.dirname, '..', 'fixtures', name);
 const node = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
@@ -111,7 +112,9 @@ test('undo and redo, with the buttons and the keyboard', async ({ page }) => {
 });
 
 test('export a JSON source as JSON: only the changed fields differ', async ({ page }) => {
-  await page.getByRole('button', { name: 'JSON example' }).click();
+  page.once('dialog', (d) => void d.accept()); // "Open …? It replaces the current project." (when there is one)
+  await page.getByLabel('Project file').setInputFiles(jsonExampleFile());
+  await expect(page.getByText('Project opened.')).toBeVisible();
   await node(page, 'snippet-3').click();
   await inspector(page).getByLabel('Snippet', { exact: true }).selectOption('details');
   await inspector(page).getByLabel('Summary').fill('Answer');

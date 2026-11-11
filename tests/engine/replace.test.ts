@@ -98,6 +98,22 @@ describe('removeSelection (Replace with no content)', () => {
   });
 });
 
+describe('block content for an image alone in its paragraph', () => {
+  it('replaces the paragraph (no block inside a <p>); with other text in the paragraph it warns', async () => {
+    const video = runSelector(parseHtml('<figure><video src="v.webm" controls></video></figure>'), { mode: 'css', selector: 'figure' });
+    const doc = parseHtml('<p>Intro</p><p><img src="a.png" alt="Harbour at dawn"></p><p>After</p>');
+    const r = await replaceSelection(runSelector(doc, { mode: 'image', text: 'harbour' }), video);
+    expect(serialize(r.document)).toBe('<p>Intro</p><figure><video src="v.webm" controls></video></figure><p>After</p>');
+    expect(r.warnings).toEqual([]);
+    const mixed = parseHtml('<p>See <img src="a.png" alt="Harbour"> here</p>');
+    const m = await replaceSelection(runSelector(mixed, { mode: 'image', text: 'harbour' }), video);
+    expect(m.warnings.join()).toMatch(/Block content replaces part of a <p>/);
+    // A video without a figure counts as block content too.
+    const bare = runSelector(parseHtml('<video src="v.webm"></video>'), { mode: 'css', selector: 'video' });
+    expect(serialize((await replaceSelection(runSelector(doc, { mode: 'image', text: 'harbour' }), bare)).document)).toBe('<p>Intro</p><video src="v.webm"></video><p>After</p>');
+  });
+});
+
 describe('the Replace node', () => {
   const node = (id: string, type: string, config?: unknown): GraphNode => ({ id, type, config: config ?? nodeRegistry[type].defaultConfig() });
   const edge = (source: string, sourcePort: string, target: string, targetPort: string): GraphEdge => ({ id: `${source}.${sourcePort}>${target}.${targetPort}`, source, sourcePort, target, targetPort });

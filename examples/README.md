@@ -55,3 +55,17 @@ Selector picks part of the document as the step before left it, and the Snippet 
 **Scrolly page** (Output) is the finished page. To change the code, edit the snippets in the library (Snippet node
 → "Edit in library") and save a new version; the nodes then offer the update. To change the text, choose a new Word
 document in **Scrolly text (Word)**. The rules for writers are the same as above.
+
+## One Word document, two outputs
+
+`two-outputs.node-cms.json` (made by `npm run example:two-outputs`, button **Two outputs**) turns one Word document,
+`two-outputs/garden-year.docx` ("A year at Riverside Community Garden": three pictures, three tables of figures), into
+two pages. Editors change only the Word file; both pages follow.
+
+| Page | How |
+| --- | --- |
+| **Static page** | **Data tables** (Selector `table`) → **Static charts** (Snippet "Chart (static)"): each table is drawn once as a chart (bar, line, donut: the snippet's "Chart type for each table" setting), with no animation or hover. The pictures stay. |
+| **Interactive page** | **Data tables** → **Interactive charts** (Snippet "Chart (interactive)"): the bars grow, the lines draw and the donut fills in when the chart scrolls into view (not for people who prefer reduced motion), and hovering shows the values. Then, for each picture, a Selector finds it by its alternative text, and a Replace node puts a short looping video (an Object with the video file) in its place. |
+
+In both, the table stays in the page (hidden from view) for screen readers. The pictures and videos
+(`two-outputs/*.png`, `*.webm`) are drawn by `scripts/make-example-media.py` (Pillow and ffmpeg).

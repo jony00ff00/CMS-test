@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { join } from 'node:path';
+import { jsonExampleFile } from '../json-example';
 
 const fixture = (name: string) => join(import.meta.dirname, '..', 'fixtures', name);
 const node = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
@@ -102,7 +103,9 @@ test('edit the HTML example in the inspector and see the preview update', async 
 });
 
 test('map JSON fields in the inspector', async ({ page }) => {
-  await page.getByRole('button', { name: 'JSON example' }).click();
+  page.once('dialog', (d) => void d.accept()); // "Open …? It replaces the current project." (when there is one)
+  await page.getByLabel('Project file').setInputFiles(jsonExampleFile());
+  await expect(page.getByText('Project opened.')).toBeVisible();
   await expect(preview(page).locator('[data-json-path="$.faq[0].a"] strong')).toHaveText('string fields');
 
   await node(page, 'documentSource-1').click();
