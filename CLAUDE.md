@@ -28,6 +28,40 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   (visible text, blocks separated by `\n`, each segment mapped to its text node and path), `locate`, `nodeAtPath`.
 - `docx.ts`: `importDocx` via mammoth, loaded on demand to keep the main bundle small. Images become assets
   referenced as `asset:<id>`. Custom `styleMap` rules take precedence over the defaults.
+- `docx-review.ts`: `importDocxReview` (Document Source `docx.review`, "Keep tracked changes and comments (review
+  mode)"; JSZip + xmldom, not mammoth): paragraphs (`data-docx-style`, `data-docx-fmt` = direct run formatting on
+  ≥ 80% of the text, `data-docx-align`, `data-docx-indent`), Word headings / Title → `h1`–`h6`, lists from
+  numbering.xml (`ul` / `ol`, `data-docx-list`, nested by level), runs (`strong` / `em` / `u` / `s` / `sup` / `sub`, the
+  rest as `span[data-docx-run]`), links, images, tables (gridSpan / vMerge, `tr[data-docx-header]`), content controls.
+  Review markup (see `ReviewInfo` in types.ts): `ins` / `del[data-rev]`, `span[data-rev]` (formatting change,
+  `beforeProps`), `data-rev-block` (paragraph change, table row), `data-rev-mark` (paragraph mark), hidden changes
+  (table properties, a mark's formatting) only in meta; comments as `span[data-comments="id id"]` pieces (an empty span
+  for a point), replies (commentsExtended `paraIdParent`), resolved (`done`), UTC dates (commentsIds +
+  commentsExtensible; changes: `w16du:dateUtc`). Ids start with `w<file hash>`; people.xml (account ids) is never
+  read. Built-in style names are capitalised. Never write `document.` in the engine (purity check): the main part is
+  `word/${MAIN}.xml`. `REVIEW_CSS` styles the marks in the preview.
+- `review.ts`: `mergeReview`, `addReview`, `reviewIdsIn(tree)`, `presentReview(doc)` (only what is still marked, plus
+  hidden changes; whole threads). Copies (`copySelection` → `Built.review`, `addBuiltAssets`), `combineDocuments` and
+  `documentFromSelection` carry `meta.review` (and `REVIEW_CSS`).
+- `changes.ts` (Changes node): `ChangesConfig` (`defaults` per `ChangeKind` insertion / deletion / format / paragraph /
+  row / mark, `byAuthor`, `decisions` per id (wins), `dropComments`, `dropResolved` (default on in the node), `users`
+  (author → editor user id), `timezone` for dates without one); `applyChanges` (accept / reject per kind: rejected
+  formatting gets `beforeProps` back, rejected paragraph changes their style / list type, rows, joined paragraphs);
+  `changeGroups` (changes made together = one row), `commentThreads`, `toUtc`.
+- `formatting.ts` (Formatting node): `analyseFormats` (key = kind | style | fmt | flags "short" (bold, ≤ 12 words) /
+  "typed number"; suggestions: Word Heading 1 → h2, 2 → h3, deeper → h4, short bold → h4, typed number → numbered list,
+  empty → remove); `applyFormatting` (`targets`, `inline` (default bold, italic, sub, sup), headings plain, no
+  `data-docx-run`, `tableHeaders`, `mergeLists`, typed numbers → `del` by the house style, Word format changes that no
+  longer change anything accepted, `labels` paragraph | rule | none: comments by `author` (default "House style",
+  id `house-style`, no date); all `data-docx-*` removed).
+- `ckeditor.ts` (Output format `ckeditor`, `config.ckeditor` documentId / bundleVersion / headings / extraElements):
+  `toCkeditor` → data with `<suggestion-start|end name>` (insertions, deletions; one suggestion per piece) and
+  `<comment-start|end name>` (first / last piece of a thread), `suggestions`, `commentThreads`, `users`, `importBody`
+  (Cloud Services POST /documents); format / paragraph / row / mark changes are kept as they are with a note comment
+  by their author (changes made together share one note); tables in `figure.table`; elements outside the features
+  warn. NOT verified against CKEditor (docs unreachable, no licence): marker names and import field names live in
+  `CK_FORMAT`; `scripts/ckeditor-import.mjs` signs (HMAC SHA-256) and sends it. The node uses a fixed `now` for undated
+  labels so results stay the same.
 - `pptx.ts`: `importPptx` (JSZip + @xmldom/xmldom, loaded with `import()`; mammoth uses the same two, pinned to
   its versions). One `<section class="slide" data-slide="N" data-layout="…">` per slide in the deck's slide list
   order (not file names). Placeholders without a type get it from the layout (by `idx`); title / ctrTitle → `<h2>` /
@@ -226,7 +260,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   36 px `PanelRail` (the inspector's shows the selected node); grid widths come from `--palette-width` /
   `--inspector-width` / `--preview-width`. A minimised preview stays mounted (it may be showing in its own window)
   as a 36 px strip (`RailButton`, noting "in its own window"); while it is in its own window the column is 240 px.
-  The canvas is a size container: below 860 px wide the project toolbar moves under the example buttons.
+  The canvas is a size container: below 1000 px wide the project toolbar moves under the example buttons.
 - `src/store/editor-store.ts`: zustand store (`createEditorStore` for tests, `editorStore` / `useEditor` in the
   app). Holds `graph`, `files`, `selectedId`, `results`, `notice`. Changes to the graph or files re-evaluate
   after 150 ms; position-only changes do not. Stale evaluations are dropped. `whenIdle()` for tests.
@@ -331,12 +365,17 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   node's settings within `undoGrouping` (1 s) are one step (`groupKey` set by `updateConfig`); actions that
   change several things use `batch()` so they are one step; deletes go through `removeElements` (React Flow's
   `onDelete`) for the same reason. Keyboard: Ctrl/Cmd+Z, Ctrl+Y / Shift+Cmd+Z, ignored inside fields.
+- Changes and Formatting nodes: inspectors `ChangesEditor` (by kind, authors with user id, time zone when needed, the
+  grouped changes with a decision each, comment threads with keep / drop) and `FormattingEditor` (formats found with a
+  target each, inline formats, table headers, join lists, labels, labels' author); the preview shows their output.
+  Colours: Changes green, Formatting brown. The Output inspector has the CKEditor fields and "Download CKEditor import".
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`. Examples
   (`loadExample`): `html`, `json`. The "Two documents" button opens `examples/ge16-scrolly.node-cms.json`
   (imported with `?raw` only when clicked, `openExampleProject`: like `importProject`, quiet unless something was left
   out, selects the Output). The old "Two documents" graph (the Watering section of `sampleNotesHtml()`, via an
   Extractor, into the guide before its quote, as a labelled section with fitted headings) is now `tests/two-documents.ts`
-  (`twoDocumentsProject` / `twoDocumentsFile`): tests open it as a project file, with the same node ids.
+  (`twoDocumentsProject` / `twoDocumentsFile`): tests open it as a project file, with the same node ids. The "Word
+  review" button opens `examples/word-review.node-cms.json` the same way.
 - `examples/` (see its README): `ge16-scrolly.node-cms.json`, a scrollytelling graphic's code
   (`scrolly/*.html`, Document Source with `keepCode`) filled with text from Word (`scrolly/*.docx`, style map for
   Kicker / Title / Dek) by three Replace nodes (inside, match by match). `npm run example:scrolly`
@@ -347,6 +386,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Selector → Snippet pairs (step cards named with `{{item params.steps index}}`, joined Selectors for one wrapper
   around several matches); its JS first copies `style[data-snippet="ge16-scrolly@1"]` into the element for the
   shadow root. Its test checks the page has the HTML file's markup (text aside: the Word text was rewritten) and the Word text.
+  `word-review.node-cms.json` (`npm run example:word-review`, `scripts/make-example-word-review.ts`): the reviewed
+  brief (`word-review/*.docx`, reviewer name and account id removed) → Changes → Formatting → Output `ckeditor`;
+  `tests/engine/example-word-review.test.ts`, `tests/e2e/word-review.spec.ts` (`tests/word-review-project.ts` builds
+  projects around the file). `tests/fixtures/review.docx` (`npm run fixtures`) has an insertion, a reply, a resolved
+  comment and a point comment.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).
@@ -376,7 +420,8 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+image selection (Images mode, click an image in the preview), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), Word review → CKEditor 5 (review-mode reader, Changes node,
+Formatting node, CKEditor output, "Word review" example). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

@@ -75,3 +75,31 @@ test('the Formatting node: formats found, a target chosen, labels for review', a
   await inspector(page).getByLabel('Label what changed with comments').selectOption('none');
   await expect(node(page, 'format')).toContainText('0 labels');
 });
+
+test('the "Word review" example: Word → Changes → Formatting → CKEditor 5 import', async ({ page }) => {
+  await page.getByRole('button', { name: 'Word review' }).click();
+  await expect(node(page, 'word')).toContainText('9 changes, 4 comments');
+  await expect(node(page, 'changes')).toContainText('9 kept · 3 comment threads');
+  await expect(node(page, 'format')).toContainText('17 formats · 29 changed · 29 labels');
+  await expect(node(page, 'ckeditor')).toContainText('CKEditor 5 · 7 suggestions, 33 comment threads');
+  // The Output is selected: its settings, the warning about the import format, and the import body.
+  await expect(inspector(page).getByLabel('Export as')).toHaveValue('ckeditor');
+  await expect(inspector(page).getByLabel('Document id')).toHaveValue('ge16-hung-by-design');
+  await expect(inspector(page)).toContainText('could not be checked against CKEditor');
+  await inspector(page).getByLabel('Editor bundle version').fill('1.0.0');
+  await expect(inspector(page).getByRole('region', { name: 'Result' })).not.toContainText('No editor bundle version');
+  await inspector(page).getByText('Show the JSON').click();
+  const json = inspector(page).getByLabel('Exported JSON');
+  await expect(json).toContainText('"bundle_version": "1.0.0"');
+  await expect(json).toContainText('<suggestion-start name=\\"deletion:');
+  await expect(json).toContainText('<comment-start name=');
+  // The preview shows the result with its suggestions and comments.
+  await expect(preview(page).locator('h2')).toContainText("Malaysia's Three-Way Tie");
+  await expect(preview(page).locator('del[data-rev]').first()).toHaveText('Hung by Design: ');
+  await page.locator('.react-flow__controls-fitview').click();
+  await page.screenshot({ path: 'test-results/word-review-example.png' });
+  // The download is the import body.
+  const download = page.waitForEvent('download');
+  await inspector(page).getByRole('button', { name: 'Download CKEditor import (.json)' }).click();
+  expect((await download).suggestedFilename()).toBe('hung-by-design-review.ckeditor-import.json');
+});

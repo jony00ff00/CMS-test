@@ -96,8 +96,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-description { font-size: 0.75rem; color: var(--muted); }
 
 .canvas { grid-area: canvas; position: relative; min-width: 0; container-type: inline-size; }
-/* A narrow canvas (the preview is a sidebar now): the project toolbar goes below the example buttons. */
-@container (max-width: 860px) {
+/* A narrow canvas (the preview is a sidebar now): the project toolbar goes below the example buttons (the two need
+   about 1000 px side by side). */
+@container (max-width: 1000px) {
   .canvas .react-flow__panel.top.right { top: 46px; }
 }
 .canvas-toolbar { display: flex; gap: 0.4rem; align-items: center; }
