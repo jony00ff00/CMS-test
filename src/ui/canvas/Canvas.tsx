@@ -324,10 +324,23 @@ export function Canvas() {
 }
 
 function ExampleButtons() {
-  const load = (kind: 'html' | 'json' | 'two') => {
-    const state = editorStore.getState();
-    if (state.graph.nodes.length && !window.confirm('Replace the current graph with the example?')) return;
-    state.loadExample(kind);
+  const [loading, setLoading] = useState(false);
+  const confirmReplace = () => !editorStore.getState().graph.nodes.length || window.confirm('Replace the current graph with the example?');
+  const load = (kind: 'html' | 'json') => {
+    if (confirmReplace()) editorStore.getState().loadExample(kind);
+  };
+  // The scrolly is a whole project file (with its Word and HTML files), so it is downloaded only when asked for.
+  const loadScrolly = async () => {
+    if (!confirmReplace()) return;
+    setLoading(true);
+    try {
+      const { default: text } = await import('../../../examples/ge16-scrolly.node-cms.json?raw');
+      editorStore.getState().openExampleProject(text);
+    } catch {
+      editorStore.getState().notify('error', 'The example could not be loaded. Check the connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <>
@@ -337,8 +350,13 @@ function ExampleButtons() {
       <button type="button" onClick={() => load('json')}>
         JSON example
       </button>
-      <button type="button" onClick={() => load('two')} title="A section of one document copied into another">
-        Two documents
+      <button
+        type="button"
+        onClick={() => void loadScrolly()}
+        disabled={loading}
+        title="Two documents: text written in Word put into a developer’s HTML code for a scrollytelling graphic"
+      >
+        {loading ? 'Loading…' : 'Two documents'}
       </button>
     </>
   );

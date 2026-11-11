@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { twoDocumentsFile } from '../two-documents';
 
 const node = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
 const preview = (page: Page) => page.frameLocator('iframe[title="Output preview"]');
@@ -226,8 +227,9 @@ test('a Snippet takes a whole document: all of it, or each block', async ({ page
 });
 
 test('an Extractor picking text by hand keeps the element around it, so its CSS still applies', async ({ page }) => {
-  page.once('dialog', (d) => void d.accept()); // "Replace the current graph with the example?"
-  await page.getByRole('button', { name: 'Two documents' }).click();
+  page.once('dialog', (d) => void d.accept()); // "Open …? It replaces the current project."
+  await page.getByLabel('Project file').setInputFiles(twoDocumentsFile());
+  await expect(page.getByText('Project opened.')).toBeVisible();
   await node(page, 'extractor-4').click();
   await inspector(page).getByLabel('Select by').selectOption({ label: 'Selected by hand' });
   await selectInPreview(page, 'Water a new node once');

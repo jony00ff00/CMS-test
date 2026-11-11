@@ -34,7 +34,7 @@ test('the scrolly example: Word text in the code, and the code runs in the previ
   // The script ran: it moved the graphic into a shadow root (Playwright's locators look inside it) and drew the seats.
   const host = preview(page).locator('ge16-scrolly');
   await expect.poll(() => host.evaluate((el) => !!el.shadowRoot)).toBe(true);
-  await expect(host.locator('.gs-root .gs-headline')).toHaveText('Hung by design');
+  await expect(host.locator('.gs-root .gs-headline')).toHaveText('A parliament with no winner');
   await expect(host.locator('.gs-dots circle').first()).toBeAttached();
   await expect(host.locator('.gs-step .gs-card')).toHaveCount(10);
   await page.locator('.react-flow__controls-fitview').click();
@@ -76,4 +76,22 @@ test('the scrolly made from the Word text alone: the snippets’ code runs in th
   await host.locator('.gs-step[data-step="deals"]').evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await expect(host.locator('.gs-root')).toHaveAttribute('data-active-step', 'deals');
   await page.screenshot({ path: 'test-results/example-scrolly-from-text-step.png' });
+});
+
+test('the "Two documents" button opens the scrolly project, with its Word text in the running graphic', async ({ page }) => {
+  page.on('pageerror', (err) => {
+    throw err;
+  });
+  await page.goto('/');
+  page.once('dialog', (d) => void d.accept()); // only if something is on the canvas already
+  await page.getByRole('button', { name: 'Two documents' }).click();
+  await expect(node(page, 'fill-steps')).toContainText('replaced 10×');
+  await expect(node(page, 'page')).toContainText('OK');
+  await expect(page.getByRole('complementary', { name: 'Inspector' }).getByLabel('Name')).toHaveValue('Scrolly page');
+  const host = preview(page).locator('ge16-scrolly');
+  await expect.poll(() => host.evaluate((el) => !!el.shadowRoot)).toBe(true);
+  await expect(host.locator('.gs-root .gs-kicker')).toHaveText(/what happens next/i);
+  await expect(host.locator('.gs-step[data-step="tie"] .gs-card')).toContainText('three coalitions separated by just two seats');
+  await expect(host.locator('.gs-dots circle').first()).toBeAttached();
+  await page.screenshot({ path: 'test-results/two-documents-scrolly.png' });
 });

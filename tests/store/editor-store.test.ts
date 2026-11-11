@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/store/editor-store';
 
@@ -86,6 +87,21 @@ describe('editor store', () => {
     store.getState().moveNode('output-4', { x: 900, y: 300 });
     await store.getState().whenIdle();
     expect(store.getState().results).toBe(before);
+  });
+});
+
+describe('example projects', () => {
+  it('openExampleProject opens the scrolly project quietly, selects its Output, and it runs', async () => {
+    const store = createEditorStore({ evaluateDelay: 1, storage: null });
+    store.getState().loadExample('html');
+    store.getState().openExampleProject(readFileSync('examples/ge16-scrolly.node-cms.json', 'utf8'));
+    expect(store.getState().notice).toBeUndefined();
+    expect(store.getState().selectedId).toBe('page');
+    expect(Object.keys(store.getState().files)).toEqual(expect.arrayContaining(['scrolly-code', 'scrolly-text']));
+    await store.getState().whenIdle();
+    expect(store.getState().results['fill-steps'].info.replaced).toBe(10);
+    store.getState().openExampleProject('not a project');
+    expect(store.getState().notice?.kind).toBe('error');
   });
 });
 

@@ -5,6 +5,7 @@ import {
 } from '../../src/engine';
 import { parseProject } from '../../src/store/project';
 import { createEditorStore } from '../../src/store/editor-store';
+import { twoDocumentsProject } from '../two-documents';
 
 const guideHtml = '<h1>Guide</h1><h2>Pricing</h2><p>Free.</p><blockquote><p>Quote</p></blockquote>';
 const notesHtml = '<style>.tip { color: green; }</style><h1>Notes</h1><h2>Watering</h2><p class="tip">Once.</p><h3>Winter</h3><p>Less.</p><h2>Pests</h2><p>Loops.</p>';
@@ -159,9 +160,9 @@ describe('the Content input in projects and the store', () => {
     expect(config.content.kind).toBe('selection');
   });
 
-  it('the "Two documents" example runs', async () => {
+  it('the old "Two documents" graph runs (tests open it as a project file)', async () => {
     const store = createEditorStore({ storage: null });
-    store.getState().loadExample('two');
+    expect(store.getState().importProject(JSON.stringify(twoDocumentsProject()))).toBeUndefined();
     await store.getState().whenIdle();
     const { results } = store.getState();
     expect(results['object-5'].status).toBe('ok');

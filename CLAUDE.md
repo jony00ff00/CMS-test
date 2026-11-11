@@ -332,8 +332,11 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   change several things use `batch()` so they are one step; deletes go through `removeElements` (React Flow's
   `onDelete`) for the same reason. Keyboard: Ctrl/Cmd+Z, Ctrl+Y / Shift+Cmd+Z, ignored inside fields.
 - `src/samples.ts`: sample content for the app's examples and for `scripts/make-fixtures.ts`. Examples
-  (`loadExample`): `html`, `json`, and `two` ("Two documents": the Watering section of `sampleNotesHtml()`, via an
-  Extractor, into the guide before its quote, as a labelled section with fitted headings).
+  (`loadExample`): `html`, `json`. The "Two documents" button opens `examples/ge16-scrolly.node-cms.json`
+  (imported with `?raw` only when clicked, `openExampleProject`: like `importProject`, quiet unless something was left
+  out, selects the Output). The old "Two documents" graph (the Watering section of `sampleNotesHtml()`, via an
+  Extractor, into the guide before its quote, as a labelled section with fitted headings) is now `tests/two-documents.ts`
+  (`twoDocumentsProject` / `twoDocumentsFile`): tests open it as a project file, with the same node ids.
 - `examples/` (see its README): `ge16-scrolly.node-cms.json`, a scrollytelling graphic's code
   (`scrolly/*.html`, Document Source with `keepCode`) filled with text from Word (`scrolly/*.docx`, style map for
   Kicker / Title / Dek) by three Replace nodes (inside, match by match). `npm run example:scrolly`
@@ -343,7 +346,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   .docx; the code is six library snippets made from the HTML file's pieces (`codePieces`), applied by a chain of
   Selector → Snippet pairs (step cards named with `{{item params.steps index}}`, joined Selectors for one wrapper
   around several matches); its JS first copies `style[data-snippet="ge16-scrolly@1"]` into the element for the
-  shadow root. Its test checks the page body equals the HTML file's (kicker case and attribute order aside).
+  shadow root. Its test checks the page has the HTML file's markup (text aside: the Word text was rewritten) and the Word text.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).

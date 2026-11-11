@@ -23,11 +23,20 @@ describe('example: the scrolly made from the Word text alone', () => {
     expect(results['step-cards'].info.applied).toBe(10);
   });
 
-  it('gives the same page as the developer’s HTML file (apart from the kicker, typed in capitals in Word)', async () => {
+  it('gives the developer’s HTML file with the Word text in it: the same markup, the text from Word', async () => {
     const { results } = await run(buildScrollyFromTextExample());
     const made = (results.page.outputs.html as string);
-    const expected = body(readFileSync(CODE_FILE, 'utf8'));
-    expect(body(made).replace('SCENARIO · GE16', 'Scenario · GE16').replace('<h2 class="gs-headline" id="gs-headline">', '<h2 id="gs-headline" class="gs-headline">')).toBe(expected);
+    // The same elements, classes and attributes (text left out: the Word document's has been rewritten since).
+    const markup = (html: string) => body(html).replace(/>[^<]+</g, '><').replace('<h2 class="gs-headline" id="gs-headline">', '<h2 id="gs-headline" class="gs-headline">');
+    expect(markup(made)).toBe(markup(readFileSync(CODE_FILE, 'utf8')));
+    // The text is the Word document's.
+    const page = parseHtml(made);
+    const sel = (css: string) => runSelector(page, { mode: 'css', selector: css }).matches.map((m) => m.text.trim());
+    expect(sel('.gs-kicker, #gs-headline')).toEqual(['SCENARIO · GE16 · WHAT HAPPENS NEXT', 'A parliament with no winner']);
+    expect(sel('.gs-card')[0]).toMatch(/^PH 62, PN 62, BN 60: three coalitions/);
+    expect(sel('.gs-card strong')).toEqual(['Anwar Ibrahim', 'Ahmad Zahid Hamidi', 'Abdul Hadi Awang', 'Muhyiddin Yassin', 'Abang Johari Openg and Hajiji Noor']);
+    expect(sel('.gs-footer em')[0]).toMatch(/^A scenario, not a forecast:/);
+    expect(made).not.toContain('Revised text for the short version'); // the writers' note is left out
     // The CSS and JavaScript: in the page, marked with their snippet, the script unchanged after the few lines that
     // put the CSS inside the element.
     const original = readFileSync(CODE_FILE, 'utf8');

@@ -1,6 +1,7 @@
 # Example projects
 
-Open a project with **Open project…** in the app. Both projects below are made by `npm run example:scrolly`; run it
+Open a project with **Open project…** in the app; the first one also opens with the **Two documents**
+button. Both projects below are made by `npm run example:scrolly`; run it
 after changing a file in `scrolly/` (a test fails while a project file is out of date).
 
 ## A scrolly from Word text and HTML code
@@ -23,6 +24,9 @@ Each **Fill …** node is a Replace node with "Replace: what is inside it" (the 
 data attributes) and "Match by match" (the 1st slot gets the 1st piece of text, the 2nd the 2nd, …). If the counts
 differ, for example a step was added in Word but not in the code, the Replace node says so.
 
+The Word document's text has been rewritten since the HTML file was made (new headline, dek, step text and footer
+note); the project puts the new text into the code, which is the point: the code does not change when the text does.
+
 Rules for the writers: keep the Kicker, Title and Dek styles on the first three paragraphs, keep one "Step …" heading
 per card in order, and keep "Footer" as the last heading. Bold, italics and links in the text come through.
 
@@ -31,8 +35,9 @@ per card in order, and keep "Footer" as the last heading. Bold, italics and link
 `ge16-scrolly-from-text.node-cms.json` has one file, the Word document, and turns that plain text into the finished
 scrolly page. Nothing is combined: the code is in the project's **snippet library** (six snippets, "Scrolly step
 card", "Scrolly graphic and steps", "Scrolly header", "Link", "Scrolly footer and tables" and "GE16 scrolly
-element"), and the nodes put it around the text step by step. The page it makes is the same as
-`scrolly/ge16-scrolly-short.html` (only the kicker differs: it is typed in capitals in the Word document).
+element"), and the nodes put it around the text step by step. The page it makes has the same markup as
+`scrolly/ge16-scrolly-short.html`, with the Word document's text (which has been rewritten since the HTML file was
+made: new headline, dek, step headings and paragraphs).
 
 The Word document's own paragraph styles become the code's classes in **Scrolly text (Word)** (its Word style rules:
 Kicker → `p.gs-kicker`, Title → `h2.gs-headline`, Dek → `p.gs-dek`, and the writers' Note is left out). Then each

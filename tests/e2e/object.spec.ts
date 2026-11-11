@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { PNG_BASE64 } from '../../src/samples';
+import { twoDocumentsFile } from '../two-documents';
 
 const node = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
 const preview = (page: Page) => page.frameLocator('iframe[title="Output preview"]');
@@ -311,7 +312,8 @@ test('"Two documents": an Extractor’s section of one document goes into anothe
     throw err;
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Two documents' }).click();
+  await page.getByLabel('Project file').setInputFiles(twoDocumentsFile());
+  await expect(page.getByText('Project opened.')).toBeVisible();
   await expect(node(page, 'object-5')).toContainText('Content (labelled section) · added 1×');
   // The Output: the notes' Watering section before the guide's quote, its headings one level down.
   await expect(preview(page).locator('section.cms-from h3')).toHaveText('Watering');

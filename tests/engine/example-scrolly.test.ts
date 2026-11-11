@@ -31,7 +31,7 @@ describe('example: a scrolly from Word text and HTML code', () => {
     expect(texts(page, '.gs-card')).toEqual(texts(word, 'h2 + p').slice(0, 10));
     expect(texts(page, '.gs-card strong')).toEqual(['Anwar Ibrahim', 'Ahmad Zahid Hamidi', 'Abdul Hadi Awang', 'Muhyiddin Yassin', 'Abang Johari Openg and Hajiji Noor']);
     // The footer: the note in italics, the link keeps its address.
-    expect(texts(page, '.gs-footer em')[0]).toMatch(/^Scenario analysis\./);
+    expect(texts(page, '.gs-footer em')[0]).toMatch(/^A scenario, not a forecast:/);
     expect(runSelector(page, { mode: 'css', selector: '.gs-footer a[href="#full-brief"]' }).matches).toHaveLength(1);
   });
 
