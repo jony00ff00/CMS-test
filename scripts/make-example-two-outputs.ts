@@ -1,13 +1,14 @@
-// Generates the "Two outputs" example: one Word document (a garden's year in figures, with three pictures and three
-// data tables) makes two pages. The static page draws the tables as charts once and keeps the pictures; the
-// interactive page's charts animate in and show values on hover, and each picture becomes a short looping video.
+// Generates the "Two outputs" example: one Word document (a garden's year in figures: text and three data tables)
+// makes two pages. The static page draws the tables as charts once, and the CMS adds three pictures; the interactive
+// page's charts animate in and show values on hover, and the CMS adds three short looping videos in the same places.
+// The pictures and videos are not in the Word file: Selectors give the places (their Point output), Objects add them.
 // The pictures and videos are drawn by scripts/make-example-media.py (examples/two-outputs/).
 // Run with `npm run example:two-outputs`. Writes examples/two-outputs/garden-year.docx and
 // examples/two-outputs.node-cms.json.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AlignmentType, Document, HeadingLevel, ImageRun, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
+import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
 import { storeFile, type CanvasNote, type Graph, type GraphEdge, type GraphNode, type NodeGroup, type Snippet } from '../src/engine';
 import { seedLibrary } from '../src/snippets/seed';
 import { toProjectFile } from '../src/store/project';
@@ -17,12 +18,24 @@ const media = join(dir, 'two-outputs');
 export const WORD_FILE = join(media, 'garden-year.docx');
 export const PROJECT_FILE = join(dir, 'two-outputs.node-cms.json');
 
-/** The three pictures: file name, alternative text, caption, and the word the Selectors find them by. */
+/**
+ * The three pictures (and videos): file name, alternative text, caption, a short id, and where the CMS puts them
+ * (a Selector's settings and place: after the introduction, before the rainfall section, before the last section).
+ */
 export const PICTURES = [
-  { name: 'garden-dawn', alt: 'The vegetable beds at dawn, with the sun rising behind the hills', caption: 'The beds at dawn in May.', find: 'dawn' },
-  { name: 'bee-hives', alt: 'Three bee hives by the hedge, with bees flying around them', caption: 'Our three hives, kept by volunteers since March.', find: 'hives' },
-  { name: 'rain-ponds', alt: 'Rain falling on the two ponds at the bottom of the garden', caption: 'Autumn rain filling the ponds.', find: 'rain' },
-];
+  {
+    name: 'garden-dawn', alt: 'The vegetable beds at dawn, with the sun rising behind the hills', caption: 'The beds at dawn in May.', find: 'dawn',
+    where: { label: 'After the introduction', selector: { mode: 'css', selector: 'h1 + p' }, place: 'after' },
+  },
+  {
+    name: 'bee-hives', alt: 'Three bee hives by the hedge, with bees flying around them', caption: 'Our three hives, kept by volunteers since March.', find: 'hives',
+    where: { label: 'Before “Rainfall”', selector: { mode: 'heading', text: 'Rainfall' }, place: 'before' },
+  },
+  {
+    name: 'rain-ponds', alt: 'Rain falling on the two ponds at the bottom of the garden', caption: 'Autumn rain filling the ponds.', find: 'rain',
+    where: { label: 'Before “Where the harvest went”', selector: { mode: 'heading', text: 'Where the harvest went' }, place: 'before' },
+  },
+] as const;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const TABLES = [
@@ -36,22 +49,8 @@ export const TABLES = [
   { title: 'Where the harvest went', chart: 'donut', head: ['Destination', 'Share (%)'], rows: [['Volunteers', 38], ['Food bank', 31], ['Market stall', 19], ['Compost', 12]] },
 ] as const;
 
-/** The Word document: what an editor writes. */
+/** The Word document: what an editor writes (text and tables only; the pictures and videos are added by the CMS). */
 export async function wordDocument(): Promise<Buffer> {
-  const picture = (p: (typeof PICTURES)[number]) => [
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new ImageRun({
-          type: 'png',
-          data: readFileSync(join(media, `${p.name}.png`)),
-          transformation: { width: 480, height: 270 },
-          altText: { name: p.name, title: p.alt, description: p.alt },
-        }),
-      ],
-    }),
-    new Paragraph({ children: [new TextRun({ text: p.caption, italics: true })] }),
-  ];
   const cell = (text: string, bold = false) => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text, bold })] })] });
   const table = (t: (typeof TABLES)[number]) =>
     new Table({
@@ -65,15 +64,12 @@ export async function wordDocument(): Promise<Buffer> {
         children: [
           new Paragraph({ text: 'A year at Riverside Community Garden', heading: HeadingLevel.HEADING_1 }),
           p('Our volunteers grew more food than ever this year, kept bees for the first time and dug two ponds. These are the figures.'),
-          ...picture(PICTURES[0]),
           new Paragraph({ text: TABLES[0].title, heading: HeadingLevel.HEADING_2 }),
           p('The harvest peaked in August, when the tomatoes, beans and courgettes all came in at once: 152 kg in one month.'),
           table(TABLES[0]),
-          ...picture(PICTURES[1]),
           new Paragraph({ text: TABLES[1].title, heading: HeadingLevel.HEADING_2 }),
           p('A dry summer pulled the soil moisture down to 30% in August; the ponds and the autumn rain brought it back.'),
           table(TABLES[1]),
-          ...picture(PICTURES[2]),
           new Paragraph({ text: TABLES[2].title, heading: HeadingLevel.HEADING_2 }),
           p('Most of the harvest went home with the volunteers who grew it, and nearly a third to the food bank.'),
           table(TABLES[2]),
@@ -290,64 +286,62 @@ const chartSnippet = (interactive: boolean): Snippet => ({
   js: chartScript(interactive),
 });
 
-export function twoOutputsGraph(wordId: string, videoIds: string[], snippets: Snippet[]): Graph {
-  const at = (col: number, row: number) => ({ x: 40 + col * 260, y: 60 + row * 190 });
+export function twoOutputsGraph(wordId: string, pictureIds: string[], videoIds: string[], snippets: Snippet[]): Graph {
+  const at = (col: number, row: number) => ({ x: 40 + col * 250, y: 60 + row * 190 });
   const lib = (id: string) => {
     const s = snippets.find((x) => x.id === id)!;
     return { snippet: structuredClone(s), ref: { id, version: s.version }, params: Object.fromEntries(s.params.map((p) => [p.name, p.default])) };
   };
-  const nodes: GraphNode[] = [
-    { id: 'word', type: 'documentSource', name: 'Garden report (Word)', position: at(0, 1.5), config: { fileId: wordId } },
-    // The static page: tables → charts.
-    { id: 'tables-static', type: 'selector', name: 'Data tables', position: at(1, 0), config: { mode: 'css', selector: 'table' } },
-    { id: 'charts-static', type: 'snippet', name: 'Static charts', position: at(2, 0), config: lib('chart-static') },
-    { id: 'static', type: 'output', name: 'Static page', position: at(3, 0), config: { format: 'html', fullDocument: true, inlineAssets: true } },
-    // The interactive page: tables → interactive charts, then each picture → its video.
-    { id: 'tables-interactive', type: 'selector', name: 'Data tables', position: at(1, 2), config: { mode: 'css', selector: 'table' } },
-    { id: 'charts-interactive', type: 'snippet', name: 'Interactive charts', position: at(2, 2), config: lib('chart-interactive') },
-  ];
   const edge = (source: string, sourcePort: string, target: string, targetPort: string): GraphEdge => ({ id: `${source}.${sourcePort}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
-  const edges: GraphEdge[] = [
-    edge('word', 'document', 'tables-static', 'document'),
-    edge('tables-static', 'selection', 'charts-static', 'selection'),
-    edge('charts-static', 'document', 'static', 'document'),
-    edge('word', 'document', 'tables-interactive', 'document'),
-    edge('tables-interactive', 'selection', 'charts-interactive', 'selection'),
-  ];
-  let previous = 'charts-interactive';
-  PICTURES.forEach((p, i) => {
-    const col = 3 + i * 2;
+  const nodes: GraphNode[] = [{ id: 'word', type: 'documentSource', name: 'Garden report (Word)', position: at(0, 1.5), config: { fileId: wordId } }];
+  const edges: GraphEdge[] = [];
+  // Each page: tables → charts, then for each picture a Selector (the place) → an Object (the picture or video).
+  const branch = (kind: 'static' | 'interactive', row: number) => {
+    const tables = `tables-${kind}`;
+    const charts = `charts-${kind}`;
     nodes.push(
-      { id: `picture-${p.find}`, type: 'selector', name: `Picture: ${p.find}`, position: at(col, 2), config: { mode: 'image', text: p.find } },
-      {
-        id: `video-${p.find}`,
-        type: 'object',
-        name: `Video: ${p.find}`,
-        position: at(col, 3),
-        config: { content: { kind: 'video', fileId: videoIds[i], autoplay: true, loop: true, muted: true } },
-      },
-      { id: `swap-${p.find}`, type: 'replace', name: `Picture → video (${p.find})`, position: at(col + 1, 2), config: {} },
+      { id: tables, type: 'selector', name: 'Data tables', position: at(1, row), config: { mode: 'css', selector: 'table' } },
+      { id: charts, type: 'snippet', name: kind === 'static' ? 'Static charts' : 'Interactive charts', position: at(2, row), config: lib(kind === 'static' ? 'chart-static' : 'chart-interactive') },
     );
-    edges.push(
-      edge(previous, 'document', `picture-${p.find}`, 'document'),
-      edge(`picture-${p.find}`, 'selection', `swap-${p.find}`, 'selection'),
-      edge(`video-${p.find}`, 'document', `swap-${p.find}`, 'content'),
-    );
-    previous = `swap-${p.find}`;
-  });
-  nodes.push({ id: 'interactive', type: 'output', name: 'Interactive page', position: at(9, 2), config: { format: 'html', fullDocument: true, inlineAssets: true } });
-  edges.push(edge(previous, 'document', 'interactive', 'document'));
+    edges.push(edge('word', 'document', tables, 'document'), edge(tables, 'selection', charts, 'selection'));
+    let previous = charts;
+    PICTURES.forEach((p, i) => {
+      const place = `${kind}-place-${p.find}`;
+      const media = `${kind === 'static' ? 'picture' : 'video'}-${p.find}`;
+      nodes.push(
+        { id: place, type: 'selector', name: p.where.label, position: at(3 + i * 2, row), config: { ...p.where.selector, place: p.where.place } },
+        {
+          id: media,
+          type: 'object',
+          name: `${kind === 'static' ? 'Picture' : 'Video'}: ${p.find}`,
+          position: at(4 + i * 2, row),
+          config: {
+            content: kind === 'static'
+              ? { kind: 'image', fileId: pictureIds[i], alt: p.alt, caption: p.caption }
+              : { kind: 'video', fileId: videoIds[i], caption: p.caption, autoplay: true, loop: true, muted: true },
+          },
+        },
+      );
+      edges.push(edge(previous, 'document', place, 'document'), edge(place, 'point', media, 'point'));
+      previous = media;
+    });
+    nodes.push({ id: kind, type: 'output', name: kind === 'static' ? 'Static page' : 'Interactive page', position: at(9, row), config: { format: 'html', fullDocument: true, inlineAssets: true } });
+    edges.push(edge(previous, 'document', kind, 'document'));
+  };
+  branch('static', 0);
+  branch('interactive', 2.2);
   const groups: NodeGroup[] = [
-    { id: 'group-static', name: 'Static page', nodeIds: ['tables-static', 'charts-static', 'static'], color: '#2563eb' },
-    { id: 'group-charts', name: 'Interactive charts', nodeIds: ['tables-interactive', 'charts-interactive'], color: '#7c3aed' },
-    { id: 'group-videos', name: 'Pictures become videos', nodeIds: PICTURES.flatMap((p) => [`picture-${p.find}`, `video-${p.find}`, `swap-${p.find}`]), color: '#059669' },
+    { id: 'group-static-charts', name: 'Static charts', nodeIds: ['tables-static', 'charts-static'], color: '#2563eb' },
+    { id: 'group-pictures', name: 'Pictures added', nodeIds: PICTURES.flatMap((p) => [`static-place-${p.find}`, `picture-${p.find}`]), color: '#0d9488' },
+    { id: 'group-interactive-charts', name: 'Interactive charts', nodeIds: ['tables-interactive', 'charts-interactive'], color: '#7c3aed' },
+    { id: 'group-videos', name: 'Videos added', nodeIds: PICTURES.flatMap((p) => [`interactive-place-${p.find}`, `video-${p.find}`]), color: '#059669' },
   ];
   const notes: CanvasNote[] = [
     {
       id: 'note-1',
-      text: 'One Word document, two pages.\nTop: static charts and pictures. Bottom: the same figures as charts that animate and show values on hover, and the pictures as short videos.\nEdit the Word file once; both pages follow.',
+      text: 'One Word document (text and tables), two pages.\nTop: static charts, and pictures the CMS adds. Bottom: the same figures as charts that animate and show values on hover, and short videos in the same places.\nEdit the Word file once; both pages follow.',
       position: { x: 40, y: -110 },
-      width: 520,
+      width: 560,
     },
   ];
   return { nodes, edges, groups, notes };
@@ -355,12 +349,13 @@ export function twoOutputsGraph(wordId: string, videoIds: string[], snippets: Sn
 
 export async function buildTwoOutputsExample() {
   const word = storeFile('garden-year.docx', new Uint8Array(readFileSync(WORD_FILE)), 'garden-word');
+  const pictures = PICTURES.map((p) => storeFile(`${p.name}.png`, new Uint8Array(readFileSync(join(media, `${p.name}.png`))), `picture-${p.find}`));
   const videos = PICTURES.map((p) => storeFile(`${p.name}.webm`, new Uint8Array(readFileSync(join(media, `${p.name}.webm`))), `video-${p.find}`));
   const snippets = [chartSnippet(false), chartSnippet(true)];
   const library = seedLibrary();
   for (const s of snippets) library[s.id] = [structuredClone(s)];
-  const files = Object.fromEntries([word, ...videos].map((f) => [f.id, f]));
-  return toProjectFile({ graph: twoOutputsGraph(word.id, videos.map((v) => v.id), snippets), files, library }, new Date('2026-11-11T00:00:00Z'));
+  const files = Object.fromEntries([word, ...pictures, ...videos].map((f) => [f.id, f]));
+  return toProjectFile({ graph: twoOutputsGraph(word.id, pictures.map((x) => x.id), videos.map((v) => v.id), snippets), files, library }, new Date('2026-11-11T00:00:00Z'));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

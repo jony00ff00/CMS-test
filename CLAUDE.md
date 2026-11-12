@@ -363,14 +363,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   around several matches); its JS first copies `style[data-snippet="ge16-scrolly@1"]` into the element for the
   shadow root. Its test checks the page has the HTML file's markup (text aside: the Word text was rewritten) and the Word text.
 - `two-outputs.node-cms.json` (`npm run example:two-outputs`, `scripts/make-example-two-outputs.ts`): one Word file
-  (`two-outputs/garden-year.docx`, written by the script with the `docx` package: three pictures, three tables) → two
-  Outputs. Static: Selector `table` → library snippet "Chart (static)"; interactive: "Chart (interactive)" (same
+  (`two-outputs/garden-year.docx`, written by the script with the `docx` package: text and three tables, no pictures)
+  → two Outputs. Each branch: Selector `table` → library snippet "Chart (static)" / "Chart (interactive)" (same
   `chartScript(interactive)`: an SVG chart per `figure.cms-chart[data-chart]` (bar / line / donut from
   `{{item params.types index}}`), the table kept but visually hidden; interactive charts animate in when in view
-  (IntersectionObserver; not with reduced motion) and show a tooltip on hover), then per picture Selector (Images,
-  alt text) → Replace ← Object (video file, autoplay / loop / muted, no Point). Pictures and WebM videos are drawn by
-  `scripts/make-example-media.py` (Pillow + ffmpeg, VP9). Groups and a note. `tests/engine/example-two-outputs.test.ts`,
-  `tests/e2e/two-outputs.spec.ts`.
+  (IntersectionObserver; not with reduced motion) and show a tooltip on hover), then for each of `PICTURES` a Selector
+  (its `where`: `h1 + p` after, heading "Rainfall" / "Where the harvest went" before; Point output) → Object (static:
+  image file with alt and caption; interactive: video file, autoplay / loop / muted, same caption). Pictures and WebM
+  videos are drawn by `scripts/make-example-media.py` (Pillow + ffmpeg, VP9). Groups and a note.
+  `tests/engine/example-two-outputs.test.ts`, `tests/e2e/two-outputs.spec.ts`.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).

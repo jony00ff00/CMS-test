@@ -59,13 +59,14 @@ document in **Scrolly text (Word)**. The rules for writers are the same as above
 ## One Word document, two outputs
 
 `two-outputs.node-cms.json` (made by `npm run example:two-outputs`, button **Two outputs**) turns one Word document,
-`two-outputs/garden-year.docx` ("A year at Riverside Community Garden": three pictures, three tables of figures), into
-two pages. Editors change only the Word file; both pages follow.
+`two-outputs/garden-year.docx` ("A year at Riverside Community Garden": text and three tables of figures, no
+pictures), into two pages. Editors change only the Word file; both pages follow. The pictures and videos are not in
+the document: the CMS adds them.
 
 | Page | How |
 | --- | --- |
-| **Static page** | **Data tables** (Selector `table`) → **Static charts** (Snippet "Chart (static)"): each table is drawn once as a chart (bar, line, donut: the snippet's "Chart type for each table" setting), with no animation or hover. The pictures stay. |
-| **Interactive page** | **Data tables** → **Interactive charts** (Snippet "Chart (interactive)"): the bars grow, the lines draw and the donut fills in when the chart scrolls into view (not for people who prefer reduced motion), and hovering shows the values. Then, for each picture, a Selector finds it by its alternative text, and a Replace node puts a short looping video (an Object with the video file) in its place. |
+| **Static page** | **Data tables** (Selector `table`) → **Static charts** (Snippet "Chart (static)"): each table is drawn once as a chart (bar, line, donut: the snippet's "Chart type for each table" setting), with no animation or hover. Then, three times, a Selector gives a place (its Point output: after the introduction, before "Rainfall and soil moisture", before "Where the harvest went") and an Object adds a picture there, with its alternative text and caption. |
+| **Interactive page** | **Data tables** → **Interactive charts** (Snippet "Chart (interactive)"): the bars grow, the lines draw and the donut fills in when the chart scrolls into view (not for people who prefer reduced motion), and hovering shows the values. Then the same three places get a short looping video each (an Object with the video file, autoplaying and muted), with the same captions. |
 
 In both, the table stays in the page (hidden from view) for screen readers. The pictures and videos
 (`two-outputs/*.png`, `*.webm`) are drawn by `scripts/make-example-media.py` (Pillow and ffmpeg).

@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
   await expect(node(page, 'interactive')).toContainText('OK');
 });
 
-test('the static page: charts drawn once from the Word tables, and the pictures', async ({ page }) => {
+test('the static page: charts drawn once from the Word tables, and pictures added by the CMS', async ({ page }) => {
   await node(page, 'static').click();
   const p = preview(page);
   await expect(p.locator('figure.cms-chart svg')).toHaveCount(3);
@@ -31,7 +31,9 @@ test('the static page: charts drawn once from the Word tables, and the pictures'
   expect(Number(await p.locator('.cms-chart-bar').nth(7).getAttribute('height'))).toBeGreaterThan(100);
   await expect(p.locator('.cms-chart-line')).toHaveCount(2);
   await expect(p.locator('.cms-chart-arc')).toHaveCount(4);
-  await expect(p.locator('img')).toHaveCount(3);
+  // The pictures are not in the Word file: the CMS adds them, with their captions.
+  await expect(p.locator('figure > img')).toHaveCount(3);
+  await expect(p.locator('figure > figcaption').first()).toHaveText('The beds at dawn in May.');
   await expect(p.locator('video')).toHaveCount(0);
   // Hovering does nothing.
   await p.locator('.cms-chart-bar').nth(7).hover();
@@ -39,12 +41,12 @@ test('the static page: charts drawn once from the Word tables, and the pictures'
   await page.screenshot({ path: 'test-results/two-outputs-static.png' });
 });
 
-test('the interactive page: charts animate in and show values on hover; the pictures are short videos', async ({ page }) => {
+test('the interactive page: charts animate in and show values on hover; short videos added by the CMS', async ({ page }) => {
   await node(page, 'interactive').click();
   const p = preview(page);
   await expect(p.locator('figure.cms-chart svg')).toHaveCount(3);
   await expect(p.locator('img')).toHaveCount(0);
-  await expect(p.locator('video')).toHaveCount(3);
+  await expect(p.locator('figure > video')).toHaveCount(3);
   // The videos play (muted, looping).
   await expect.poll(() => p.locator('video').first().evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 10_000 }).toBeGreaterThan(0);
   // The bar chart grows in once it is scrolled into view.
