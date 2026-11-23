@@ -20,6 +20,7 @@ export * from './library';
 export * from './hash';
 export * from './graph';
 export * from './merge';
+export * from './variants';
 export * from './convert';
 export * from './nodes';
 /**
@@ -27,4 +28,4 @@ export * from './nodes';
  * template helper, …). Project files record it, so an older app (e.g. a browser tab opened before an update) warns
  * instead of quietly making a different page.
  */
-export const ENGINE_VERSION = '0.6.1';
+export const ENGINE_VERSION = '0.8.0';

@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, useState } from 'react';
-import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, type GraphNode, type NodeResult, type ObjectNodeConfig, type ReplaceNodeConfig, type PositionNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
+import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, variantConfig, type GraphNode, type NodeResult, type ObjectNodeConfig, type ReplaceNodeConfig, type PositionNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -11,7 +11,10 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
   const node = useEditor((s) => s.graph.nodes.find((n) => n.id === id));
   const result = useEditor((s) => s.results[id]);
   const library = useEditor((s) => s.library);
+  const variant = useEditor((s) => s.variant);
   if (!node) return null;
+  const shown = variant && node.variants?.[variant] ? { ...node, config: variantConfig(node, variant) } : node;
+  const differs = Object.keys(node.variants ?? {});
   const libraryStatus = node.type === 'snippet' ? refStatus(library, (node.config as SnippetNodeConfig).ref) : undefined;
   const def = nodeRegistry[node.type];
   const status = result?.status ?? 'waiting';
@@ -26,7 +29,12 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
           {STATUS_LABEL[status]}
         </span>
       </header>
-      <div className="cms-node-summary">{summarize(node, result)}</div>
+      <div className="cms-node-summary">{summarize(shown, result)}</div>
+      {differs.length > 0 && (
+        <div className={`variant-pill node-badge${variant && differs.includes(variant) ? ' is-active' : ''}`} title="This node has settings of its own for these pages">
+          Own settings: {differs.join(', ')}
+        </div>
+      )}
       {libraryStatus?.outdated && <div className="update-pill node-badge">Update available: v{libraryStatus.latest!.version}</div>}
       {typeof result?.info.needsAttention === 'number' && (
         <div className="attention-pill node-badge">
@@ -172,7 +180,7 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;
       if (info.format === 'slides') return `Slide deck · ${info.slides} slide${info.slides === 1 ? '' : 's'}`;
       if (typeof info.bytes !== 'number') return 'Nothing to show yet';
-      return `${typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : ''}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
+      return `${typeof info.variant === 'string' ? `Page “${info.variant}” · ` : ''}${typeof info.combined === 'number' ? `${info.combined} combined · ` : typeof info.documents === 'number' ? `${info.documents} documents · ` : ''}${(info.bytes / 1024).toFixed(1)} kB of HTML`;
     case 'connector':
       return typeof info.from === 'string' ? `From ${info.from === 'html' ? 'HTML' : `a ${info.from}`} · any kind out` : 'Connect anything';
     default:

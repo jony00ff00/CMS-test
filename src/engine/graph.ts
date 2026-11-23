@@ -1,6 +1,7 @@
 // The node graph: node definitions, typed ports, validation, ordering and cached evaluation.
 import { hashBytes, hashValue } from './hash';
 import { planMerges } from './merge';
+import { planVariants } from './variants';
 import type { SourceFile } from './source';
 
 /** What travels along an edge. Edges only connect ports of the same type. */
@@ -71,6 +72,11 @@ export interface GraphNode {
   name?: string;
   config: unknown;
   position?: { x: number; y: number };
+  /**
+   * Settings for page variants (see variants.ts): variant name → the config keys that differ for Outputs of that
+   * variant (`null`: the key is not set there).
+   */
+  variants?: Record<string, Record<string, unknown>>;
 }
 
 export interface GraphEdge {
@@ -268,6 +274,8 @@ export interface NodeResult {
 
 export interface GraphResult {
   results: Record<string, NodeResult>;
+  /** Page variant → results of the nodes whose results differ for it (keyed by the user's node ids). */
+  variants: Record<string, Record<string, NodeResult>>;
   /** Nodes that actually ran this time (not cached), in the order they finished. */
   ran: string[];
 }
@@ -302,8 +310,10 @@ export class GraphEvaluator {
    * Independent branches run at the same time.
    */
   async evaluate(userGraph: Graph, ctx: EvalContext): Promise<GraphResult> {
+    // Outputs of a page variant read from copies of the nodes whose settings differ for it (see variants.ts).
+    const variantPlan = planVariants(userGraph);
     // Inputs that are combined run through hidden copies of their nodes (see merge.ts).
-    const plan = planMerges(userGraph, this.registry);
+    const plan = planMerges(variantPlan.graph, this.registry);
     const graph = plan.graph;
     const order = topologicalSort(graph);
     const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -325,11 +335,16 @@ export class GraphEvaluator {
     }
     await Promise.all(pending.values());
     for (const id of plan.hidden) delete results[id];
+    const variants: Record<string, Record<string, NodeResult>> = {};
+    for (const [id, { variant, nodeId }] of variantPlan.copies) {
+      if (results[id]) (variants[variant] ??= {})[nodeId] = results[id];
+      delete results[id];
+    }
     for (const [id, count] of Object.entries(plan.merged)) {
       const r = results[id];
       if (r) results[id] = { ...r, info: { ...r.info, combined: count } };
     }
-    return { results, ran: ran.filter((id) => !plan.hidden.has(id)) };
+    return { results, variants, ran: ran.filter((id) => !plan.hidden.has(id) && !variantPlan.copies.has(id)) };
   }
 
   private async run(node: GraphNode, incoming: GraphEdge[], upstream: NodeResult[], ctx: EvalContext, ran: string[]): Promise<NodeResult> {

@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import {
   buildInsertion, caretTarget, createAnchor, elementMatch, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, imagesOf, imageWithFrame, indexDocument, INSERT_MARKER_CSS,
   insertionPointAt, markInsertionPoint, rangeOf, serialize, type CmsDocument, type InsertWhere, type Match, type ObjectNodeConfig,
-  type InsertionPoint, type PointValue, type PositionNodeConfig, type Selection, type SelectorConfig, type SelectorNodeConfig,
-} from '../../engine';
+  type InsertionPoint, type PointValue, type PositionNodeConfig, type Selection, type SelectorConfig, type SelectorNodeConfig, outputVariant } from '../../engine';
+import { VariantPicker } from '../variants';
 import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
 import { BRIDGE_SOURCE, withBridge, type BridgeMessage } from './bridge';
@@ -215,7 +215,8 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
     return { label: `Output of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, views, message: result?.message ?? 'Waiting…' };
   }
   const outputs = s.graph.nodes.filter((n) => n.type === 'output');
-  const output = outputs.find((n) => n.id === selected?.id) ?? outputs[0];
+  const output =
+    outputs.find((n) => n.id === selected?.id) ?? (s.variant ? outputs.find((n) => outputVariant(n) === s.variant) : undefined) ?? outputs[0];
   if (!output) return { label: '', message: 'Add an Output node to see the result.' };
   const result = s.results[output.id];
   const count = s.graph.edges.filter((e) => e.target === output.id && e.targetPort === 'document').length;
@@ -536,6 +537,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
             <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
             {!popup && page && source.doc && source.from && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text, or click an image, to make a selection from it.</span>}
             {!popup && insertToggle}
+            {!popup && <VariantPicker />}
           </div>
         </>
       )}
@@ -547,6 +549,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
                 <span className="muted small">{label}</span>
                 {page && source.doc && source.from && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text, or click an image, to make a selection from it.</span>}
                 {insertToggle}
+                <VariantPicker />
                 <span className="preview-actions">
                   <button type="button" onClick={attach}>
                     Back into the editor

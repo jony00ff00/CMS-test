@@ -2,7 +2,8 @@ import { nodeRegistry, type CmsDocument, type GraphNode, type NodeResult, type O
 import { editorStore, useEditor } from '../../store/editor-store';
 import { download } from '../download';
 import { nodeLabel } from '../node-label';
-import { CheckboxField, SelectField } from './fields';
+import { CheckboxField, SelectField, TextField } from './fields';
+import { cleanVariantName } from '../../engine';
 
 export function OutputEditor({ node }: { node: GraphNode }) {
   const config = node.config as OutputConfig;
@@ -72,6 +73,13 @@ export function OutputEditor({ node }: { node: GraphNode }) {
           </ol>
         </div>
       )}
+      <TextField
+        label="Page variant"
+        value={config.variant ?? ''}
+        placeholder="None: the nodes' own settings"
+        hint="Give this page a name (e.g. interactive) to give the nodes before it settings of their own for it: pick the name under “Settings for” in a node's inspector."
+        onChange={(v) => update({ variant: cleanVariantName(v) || undefined })}
+      />
       <SelectField
         label="Export as"
         value={format}

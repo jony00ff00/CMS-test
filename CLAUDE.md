@@ -117,6 +117,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   hashes its type, config, dependencies and the keys of its inputs, so a change re-runs only that node and
   the nodes after it. Only `ok` results are cached (LRU, default 200). Files live in a store
   (`storeFile(name, data)` adds a content hash); Document Source nodes refer to them by `fileId`.
+- `variants.ts` (page variants): an Output's `variant` (`OutputConfig.variant`, `cleanVariantName`) names the page it
+  makes; any node can hold settings for a variant in `GraphNode.variants[name]` (only the config keys that differ;
+  `null` = not set there; `variantConfig`, `variantDifference`, `withVariantSettings`). `planVariants` runs before
+  `planMerges`: for each variant it copies the nodes with settings for it and every node between them and an Output of
+  it (`variant~<name>~<id>`, shared by Outputs of the same variant, config merged in, so cache keys differ); the Output
+  reads from the copies, untouched nodes are shared. `GraphResult.variants[name][nodeId]` holds the copies' results;
+  `ran` leaves them out. `variantNames(graph)`, `variantsFor(graph, nodeId)` (variants of the Outputs after it).
 - `library.ts`: `SnippetLibrary` (id → versions, oldest first). `addVersion` numbers versions; saved versions
   never change. `refStatus` (outdated / missing), `carryParams` (keep values that still fit), `validateSnippet`,
   `snippetIdFor`. The seed snippets (callout, details, highlight, tooltip, code-block) are content, so they live
@@ -266,6 +273,16 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Collapse / Expand, Show on canvas, Duplicate, Ungroup, Delete group and its nodes), `InGroup` on a member's
   editor, "Group" / "Add to …" in `MultiSelection`. Palette: a Groups list (`focusGroup`). Minimap: frames in the
   group's colour (light when expanded).
+- Page variants (UI): store `variant` (the page shown: `results` is `viewResults` of the evaluation's own results and
+  `variantResults[variant]`, so every view reads `s.results` as that page sees it), `editVariant` (the inspector's
+  "Settings for": `updateConfig` then stores the differences for that variant, only when the node is before an Output
+  of it), `setVariant`, `setEditVariant` (also shows it), `resetVariantSettings`. Selecting an Output shows its
+  variant; selecting another node edits the shown variant's settings when it has some, else its own; a variant no
+  Output makes is dropped. `src/ui/variants.tsx`: `VariantPicker` (preview, "Page: Default / …"), `VariantSwitch`
+  (inspector, above the editor, which gets `variantConfig(node, editVariant)`; body keyed by node and variant). Nodes
+  with variant settings show "Own settings: …" (purple, filled for the shown page); their summary uses the shown
+  page's settings. Output inspector: "Page variant" field. `duplicateNode` / `duplicateGroup` copy variant settings;
+  project files keep them (`parseProject` drops broken ones with a warning; their `fileId`s are saved).
 - Notes (annotations): `Graph.notes` (`CanvasNote` { id, text, position, width?, color? (`NOTE_COLORS`) } in
   `engine/graph.ts`; not nodes: no ports, the engine and `sameExceptPositions` ignore them, so they never re-run
   anything). Store: `addNote(position?, text?)` (`note-N`; without a place above the top-left node), `updateNote`

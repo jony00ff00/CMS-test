@@ -5,7 +5,7 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import {
   connect as connectEdge, GraphEvaluator, nodeRegistry, storeFile, type Anchor, type CanvasNote, type EdgeCandidate, type Graph,
-  type GraphNode, type ObjectNodeConfig, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
+  type GraphNode, type NodeResult as Result, outputVariant, variantConfig, variantDifference, variantsFor, withVariantSettings, type ObjectNodeConfig, type NodeRegistry, type NodeResult, type SelectorConfig, type StoredFile, addVersion, carryParams,
   cleanClassName, cleanClassNames, customSnippet, latestVersion, moveEdge, removeSnippet, snippetIdFor, type Snippet, type SnippetLibrary, type SnippetNodeConfig,
 } from '../engine';
 import { sampleHtml, sampleJson } from '../samples';
@@ -36,7 +36,20 @@ export interface EditorState {
    * holds `selectedId`: setting `selectedId` to another node alone makes it the only one. Read with `selectedNodeIds`.
    */
   selectedIds?: string[];
+  /**
+   * The latest results, as the page variant `variant` sees them: nodes whose results differ for it show those
+   * (see `variantResults`); the rest are shared.
+   */
   results: Record<string, NodeResult>;
+  /** Results for each page variant, of the nodes whose results differ for it (from the last evaluation). */
+  variantResults: Record<string, Record<string, NodeResult>>;
+  /** The page variant shown on the canvas and in the preview (undefined: the nodes' own settings). */
+  variant?: string;
+  /**
+   * The page variant whose settings the inspector edits: `updateConfig` then stores the differences for it
+   * (`GraphNode.variants`). Undefined: the node's own settings (all pages).
+   */
+  editVariant?: string;
   evaluating: boolean;
   /** Set when evaluating the whole graph failed (individual node problems are in `results`). */
   graphError?: string;
@@ -70,6 +83,12 @@ export interface EditorState {
   moveNodes(positions: Record<string, { x: number; y: number }>): void;
   /** Replace a node's config, or derive the new config from the old one. */
   updateConfig<C>(id: string, update: C | ((config: C) => C)): void;
+  /** Show a page variant (undefined: the nodes' own settings). */
+  setVariant(variant?: string): void;
+  /** Edit the settings for a page variant (and show it), or the node's own settings (undefined). */
+  setEditVariant(variant?: string): void;
+  /** Forget a node's settings for a variant: it uses its own settings there again. */
+  resetVariantSettings(id: string, variant: string): void;
   /** Give a node a name (empty: back to its id). */
   renameNode(id: string, name: string): void;
   /** Add a connection. Returns the reason when it is not allowed (and shows it). */
@@ -218,10 +237,25 @@ export function createEditorStore(options: EditorOptions = {}) {
     }
   };
 
+  /** The latest results with the nodes' own settings (`results` shows them as the current variant sees them). */
+  let baseResults: Record<string, Result> = {};
+  /** Give a new node another node's settings, including its settings for page variants. */
+  const setNodeSettings = (id: string, from: GraphNode) => {
+    const { graph } = store.getState();
+    groupKey = `config:${id}`;
+    store.setState({
+      graph: {
+        ...graph,
+        nodes: graph.nodes.map((n) => (n.id === id ? { ...n, config: structuredClone(from.config), ...(from.variants && { variants: structuredClone(from.variants) }) } : n)),
+      },
+    });
+  };
+
   const store = createStore<EditorState>()(temporal((set, get) => ({
     graph: { nodes: [], edges: [] },
     files: {},
     results: {},
+    variantResults: {},
     evaluating: false,
     fitRequest: 0,
     library: seedLibrary(),
@@ -282,7 +316,7 @@ export function createEditorStore(options: EditorOptions = {}) {
           get().graph.nodes.some((n) => n.position && Math.abs(n.position.x - p.x) < 60 && Math.abs(n.position.y - p.y) < 60);
         while (taken(position)) position = { x: position.x + 30, y: position.y + 60 };
         const copyId = get().addNode(original.type, position);
-        get().updateConfig(copyId, structuredClone(original.config));
+        setNodeSettings(copyId, original);
         if (original.name?.trim()) get().renameNode(copyId, `${original.name.trim()} copy`);
         const group = groupOfNode(get().graph, id);
         if (group) get().addToGroup(group.id, [copyId]);
@@ -340,6 +374,23 @@ export function createEditorStore(options: EditorOptions = {}) {
       set({ graph: { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, position } : n)) } });
     },
 
+    setVariant(variant) {
+      if (get().variant === variant) return;
+      set({ variant, results: viewResults(baseResults, get().variantResults, variant) });
+    },
+
+    setEditVariant(variant) {
+      set({ editVariant: variant });
+      if (variant) get().setVariant(variant);
+    },
+
+    resetVariantSettings(id, variant) {
+      const { graph } = get();
+      const node = graph.nodes.find((n) => n.id === id);
+      if (!node?.variants?.[variant]) return;
+      set({ graph: { ...graph, nodes: graph.nodes.map((n) => (n === node ? withVariantSettings(n, variant, undefined) : n)) } });
+    },
+
     renameNode(id, name) {
       const { graph } = get();
       const node = graph.nodes.find((n) => n.id === id);
@@ -350,8 +401,18 @@ export function createEditorStore(options: EditorOptions = {}) {
     },
 
     updateConfig(id, update) {
-      const { graph } = get();
+      const { graph, editVariant } = get();
       groupKey = `config:${id}`;
+      const node = graph.nodes.find((n) => n.id === id);
+      if (node && editVariant && variantsFor(graph, id).includes(editVariant)) {
+        // Settings for one page variant: store what differs from the node's own settings.
+        groupKey = `config:${id}:${editVariant}`;
+        const current = variantConfig(node, editVariant);
+        const next = typeof update === 'function' ? (update as (c: unknown) => unknown)(current) : update;
+        const updated = withVariantSettings(node, editVariant, variantDifference(node.config, next));
+        set({ graph: { ...graph, nodes: graph.nodes.map((n) => (n === node ? updated : n)) } });
+        return;
+      }
       set({
         graph: {
           ...graph,
@@ -477,7 +538,7 @@ export function createEditorStore(options: EditorOptions = {}) {
         for (const n of members) {
           const p = n.position ?? { x: 40, y: 120 };
           const id = get().addNode(n.type, { x: p.x, y: p.y + dy });
-          get().updateConfig(id, structuredClone(n.config));
+          setNodeSettings(id, n);
           if (n.name?.trim()) get().renameNode(id, `${n.name.trim()} copy`);
           copies.set(n.id, id);
         }
@@ -707,7 +768,8 @@ export function createEditorStore(options: EditorOptions = {}) {
     },
 
     clear() {
-      set({ graph: { nodes: [], edges: [] }, selectedId: undefined, results: {} });
+      baseResults = {};
+      set({ graph: { nodes: [], edges: [] }, selectedId: undefined, results: {}, variantResults: {}, variant: undefined, editVariant: undefined });
     },
 
     notify(kind, text) {
@@ -726,9 +788,11 @@ export function createEditorStore(options: EditorOptions = {}) {
       set({ evaluating: true });
       running = evaluator
         .evaluate(graph, { files })
-        .then(({ results }) => {
+        .then(({ results, variants }) => {
           // A newer evaluation started while this one ran: its results win.
-          if (id === runId) set({ results, evaluating: false, graphError: undefined });
+          if (id !== runId) return;
+          baseResults = results;
+          set({ results: viewResults(results, variants, get().variant), variantResults: variants, evaluating: false, graphError: undefined });
         })
         .catch((err: Error) => {
           if (id === runId) set({ evaluating: false, graphError: err.message });
@@ -838,6 +902,21 @@ export function createEditorStore(options: EditorOptions = {}) {
     }, options.autosaveDelay ?? 600);
   });
 
+  // Page variants follow the selection: an Output shows its variant; another node edits the shown variant's settings
+  // when it has some for it, else its own. A variant no Output makes any more is not shown.
+  store.subscribe((state, prev) => {
+    if (state.selectedId === prev.selectedId && state.graph === prev.graph) return;
+    const node = state.graph.nodes.find((n) => n.id === state.selectedId);
+    let variant = state.variant;
+    if (node?.type === 'output' && state.selectedId !== prev.selectedId) variant = outputVariant(node) || undefined;
+    if (variant && !state.graph.nodes.some((n) => outputVariant(n) === variant)) variant = undefined;
+    let editVariant = state.editVariant;
+    if (state.selectedId !== prev.selectedId) editVariant = node && variant && node.type !== 'output' && node.variants?.[variant] ? variant : undefined;
+    if (editVariant && !(node && variantsFor(state.graph, node.id).includes(editVariant))) editVariant = undefined;
+    if (variant !== state.variant) state.setVariant(variant);
+    if (editVariant !== store.getState().editVariant) store.setState({ editVariant });
+  });
+
   store.subscribe((state, prev) => {
     if (state.graph === prev.graph && state.files === prev.files) return;
     // Only positions changed: nothing to re-run.
@@ -857,8 +936,14 @@ function sameExceptPositions(a: Graph, b: Graph) {
   return (
     a.edges === b.edges &&
     a.nodes.length === b.nodes.length &&
-    a.nodes.every((n, i) => n.id === b.nodes[i].id && n.type === b.nodes[i].type && n.config === b.nodes[i].config)
+    a.nodes.every((n, i) => n.id === b.nodes[i].id && n.type === b.nodes[i].type && n.config === b.nodes[i].config && n.variants === b.nodes[i].variants)
   );
+}
+
+/** Results as a page variant sees them: the variant's own where they differ, the shared ones elsewhere. */
+function viewResults(base: Record<string, NodeResult>, variants: Record<string, Record<string, NodeResult>>, variant: string | undefined) {
+  const own = variant ? variants[variant] : undefined;
+  return own ? { ...base, ...own } : base;
 }
 
 export type EditorStore = ReturnType<typeof createEditorStore>;

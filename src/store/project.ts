@@ -34,7 +34,7 @@ export interface Project {
 
 export function toProjectFile(project: Project, savedAt = new Date()): ProjectFile {
   // Only files that a node still uses.
-  const used = new Set(project.graph.nodes.flatMap((n) => fileIdsIn(n.config)));
+  const used = new Set(project.graph.nodes.flatMap((n) => [...fileIdsIn(n.config), ...fileIdsIn(n.variants)]));
   return {
     format: PROJECT_FORMAT,
     version: PROJECT_VERSION,
@@ -113,6 +113,16 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
   });
   // A name must be text; anything else is dropped.
   for (const n of nodes) if (n.name !== undefined && typeof n.name !== 'string') delete n.name;
+  // Settings for page variants: name → an object of settings; anything else is dropped.
+  for (const n of nodes) {
+    if (n.variants === undefined) continue;
+    const ok = n.variants && typeof n.variants === 'object' && !Array.isArray(n.variants) &&
+      Object.values(n.variants).every((v) => v && typeof v === 'object' && !Array.isArray(v));
+    if (!ok || !Object.keys(n.variants).length) {
+      if (!ok) warnings.push(`The page variant settings of "${String(n.name ?? n.id)}" could not be read and were left out`);
+      delete n.variants;
+    }
+  }
   const ids = new Set<string>();
   const unique = nodes.filter((n) => (ids.has(n.id) ? (warnings.push(`A second node "${n.id}" was left out`), false) : ids.add(n.id)));
   const graph: Graph = { nodes: unique, edges: [] };
