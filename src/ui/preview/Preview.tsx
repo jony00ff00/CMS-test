@@ -23,6 +23,8 @@ interface PreviewSource {
   selection?: Selection;
   /** A finished page (when an Output is shown). */
   html?: string;
+  /** The Output whose page is shown. */
+  outputId?: string;
   /** The selected manual Selector that text can be added to. */
   manualSelectorId?: string;
   /** Show where a point is (marker); with `nodeId` (a Selector in point mode) a click picks the point. */
@@ -225,6 +227,7 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
   return {
     label: count > 1 ? `${nodeLabel(output)} · ${count} inputs combined` : nodeLabel(output),
     html: result?.status === 'ok' ? (result.outputs.html as string) : undefined,
+    outputId: output.id,
     doc: input?.doc,
     from: input?.from,
     message: result?.message ?? 'Waiting…',
@@ -538,6 +541,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
             {!popup && page && source.doc && source.from && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text, or click an image, to make a selection from it.</span>}
             {!popup && insertToggle}
             {!popup && <VariantPicker />}
+            {!popup && source.outputId && <PageProblems outputId={source.outputId} />}
           </div>
         </>
       )}
@@ -599,4 +603,18 @@ function toMatch(doc: CmsDocument, picked: TextSelection): Match | undefined {
   const range = block && rangeOf(ix, block);
   if (block && range && range.start === start && range.end === end) return block;
   return { kind: 'text', start, end };
+}
+
+/** The shown page is made, but nodes before it report problems (a required slot empty, a selection gone, …). */
+function PageProblems({ outputId }: { outputId: string }) {
+  const count = useEditor((s) => s.results[outputId]?.upstreamProblems?.length ?? 0);
+  if (!count) return null;
+  return (
+    <span className="problems-note" role="status">
+      ⚠ {count} problem{count === 1 ? '' : 's'} on this page.
+      <button type="button" className="link" onClick={() => editorStore.getState().select(outputId)}>
+        Show
+      </button>
+    </span>
+  );
 }

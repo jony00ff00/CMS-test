@@ -64,6 +64,8 @@ export interface NodeDefinition<Config = unknown> {
    * the one merged document into the first of these ports. Undefined: no merging.
    */
   mergePorts?(config: Config): string[] | undefined;
+  /** Collects the problems of every node before it into `NodeResult.upstreamProblems` (the Output). */
+  gathersProblems?: boolean;
   /** Must not change its inputs or config. Inputs are keyed by input port name. */
   evaluate(inputs: Record<string, unknown>, config: Config, ctx: EvalContext): Promise<NodeOutput>;
 }
@@ -346,6 +348,32 @@ export class GraphEvaluator {
       );
     }
     await Promise.all(pending.values());
+    // Outputs list the problems of the nodes before them (in the graph that ran: a variant's copies, merged inputs).
+    for (const node of graph.nodes) {
+      if (!this.registry[node.type]?.gathersProblems || !results[node.id]) continue;
+      const seen = new Set<string>();
+      const found: { nodeId: string; problem: string }[] = [];
+      const stack = [node.id];
+      const visited = new Set<string>();
+      while (stack.length) {
+        const id = stack.pop()!;
+        for (const e of graph.edges) {
+          if (e.target !== id || visited.has(e.source)) continue;
+          visited.add(e.source);
+          stack.push(e.source);
+          // Copies (variant~v~id, output~i~id) report as the user's node.
+          const nodeId = e.source.split('~').at(-1)!;
+          for (const problem of results[e.source]?.problems ?? []) {
+            const key = `${nodeId}\u0000${problem}`;
+            if (!seen.has(key)) (seen.add(key), found.push({ nodeId, problem }));
+          }
+        }
+      }
+      const order = new Map(userGraph.nodes.map((n, i) => [n.id, i]));
+      found.sort((a, b) => (order.get(a.nodeId) ?? 0) - (order.get(b.nodeId) ?? 0));
+      results[node.id] = { ...results[node.id], ...(found.length ? { upstreamProblems: found } : { upstreamProblems: undefined }) };
+      if (!found.length) delete results[node.id].upstreamProblems;
+    }
     for (const id of plan.hidden) delete results[id];
     const variants: Record<string, Record<string, NodeResult>> = {};
     for (const [id, { variant, nodeId }] of variantPlan.copies) {
@@ -407,7 +435,7 @@ export class GraphEvaluator {
         status: out.waiting ? 'waiting' : 'ok',
         outputs: out.waiting ? {} : out.outputs,
         warnings: out.warnings ?? [],
-        ...(out.problems?.length && { problems: out.problems }),
+        ...(problemsOf(out).length && { problems: problemsOf(out) }),
         info: out.info ?? {},
         message: out.waiting,
         key,
@@ -427,6 +455,14 @@ export class GraphEvaluator {
     this.cache.set(key, result);
     while (this.cache.size > this.cacheSize) this.cache.delete(this.cache.keys().next().value!);
   }
+}
+
+/** A node's problems: its own, and saved selections or points it could not find again (`info.needsAttention`). */
+function problemsOf(out: NodeOutput): string[] {
+  const own = out.problems ?? [];
+  const n = out.info?.needsAttention;
+  if (typeof n !== 'number' || n <= 0 || own.length) return own;
+  return [n === 1 ? 'A saved selection or point could not be found in this version of the document' : `${n} saved selections could not be found in this version of the document`];
 }
 
 /** Add a file to a project's file store, with its content hash. */

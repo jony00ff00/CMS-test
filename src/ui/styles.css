@@ -414,3 +414,9 @@ textarea.note-text { display: block; width: 100%; resize: none; border: 0; paddi
 .fill-inner { display: grid; gap: 6px; margin-top: 4px; }
 .fill-status.is-problem { color: var(--danger); font-weight: 600; }
 .fill-row input[type='text'], .fill-row input[type='number'], .fill-row select { font-size: 0.8rem; padding: 3px 6px; }
+
+/* Problems: results that ran but are wrong (expectations, required slots, lost selections) */
+.problem-pill { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--danger); color: #fff; }
+.cms-node.has-problems { box-shadow: 0 0 0 2px var(--danger); }
+.problems { margin: 0; padding-left: 1.1rem; color: var(--danger); font-size: 0.8rem; display: grid; gap: 2px; }
+.problems-note { display: flex; gap: 6px; align-items: baseline; font-size: 0.75rem; color: var(--danger); font-weight: 600; }

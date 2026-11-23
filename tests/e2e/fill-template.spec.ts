@@ -74,4 +74,22 @@ test('Fill template: rows by name, a repeat that follows the Word steps', async 
   await repeat.getByLabel('At least').fill('20');
   await expect(repeat.getByRole('status').first()).toContainText('expected at least 20');
   await page.screenshot({ path: 'test-results/fill-template.png' });
+  // The problem shows on the node, on the Output after it and in the preview; the page is still made.
+  await expect(node(page, 'fill')).toContainText('1 problem');
+  await expect(node(page, 'page')).toContainText('1 problem before this page');
+  await node(page, 'page').click();
+  await expect(page.getByRole('region', { name: 'Preview' }).locator('.problems-note')).toContainText('1 problem on this page');
+  await expect(inspector(page).getByRole('list', { name: 'Problems before this page' })).toContainText('expected at least 20');
+  const download = inspector(page).getByRole('button', { name: 'Download HTML' });
+  await expect(download).toBeEnabled();
+  await inspector(page).getByLabel("Don't download while there are problems").check();
+  await expect(download).toBeDisabled();
+  await expect(node(page, 'page')).toContainText('download off');
+  await page.screenshot({ path: 'test-results/problems.png' });
+  // Fixed: the problem goes, the page can be downloaded.
+  await inspector(page).getByRole('list', { name: 'Problems before this page' }).getByRole('button', { name: 'fill' }).click();
+  await rows.getByRole('listitem').nth(3).getByLabel('At least').fill('');
+  await expect(node(page, 'page')).not.toContainText('problem');
+  await node(page, 'page').click();
+  await expect(download).toBeEnabled();
 });

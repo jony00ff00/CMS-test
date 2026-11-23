@@ -124,6 +124,17 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   it (`variant~<name>~<id>`, shared by Outputs of the same variant, config merged in, so cache keys differ); the Output
   reads from the copies, untouched nodes are shared. `GraphResult.variants[name][nodeId]` holds the copies' results;
   `ran` leaves them out. `variantNames(graph)`, `variantsFor(graph, nodeId)` (variants of the Outputs after it).
+- Problems (expectations): `NodeOutput.problems` / `NodeResult.problems` are things that make a result wrong although
+  the node ran (status stays `ok`, outputs flow on): Selector `expect` { min, max } (`expectation` in
+  `fill-template.ts`: "Found 2 matches, expected at least 3"), Fill template required rows and repeat min / max,
+  Replace match by match with a different number of parts (moved out of its warnings), and any `info.needsAttention`
+  (`problemsOf` in `graph.ts`: a saved selection or point that is gone). Nodes with `gathersProblems` (the Output) get
+  `upstreamProblems` ({ nodeId, problem }, the user's node ids, in node order) from every node before them in the
+  graph that ran, so a variant's Output lists its own page's. `OutputConfig.strict`: no download while there are any.
+  UI: red outline (`has-problems`) and "N problems" pill on nodes (not when the attention pill already says it),
+  "N problems before this page" (· download off) on Outputs, "Problems" / "Problems before this page" lists in the
+  result panel (`UpstreamProblems`: click selects the node), Selector inspector "Expected matches", the Output's
+  "Don't download while there are problems", and "⚠ N problems on this page. Show" in the preview (`PageProblems`).
 - `library.ts`: `SnippetLibrary` (id → versions, oldest first). `addVersion` numbers versions; saved versions
   never change. `refStatus` (outdated / missing), `carryParams` (keep values that still fit), `validateSnippet`,
   `snippetIdFor`. The seed snippets (callout, details, highlight, tooltip, code-block) are content, so they live
@@ -431,7 +442,8 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), notes on the canvas, Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
+image selection (Images mode, click an image in the preview), notes on the canvas, page variants, Fill template node,
+problems (expectations), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
 Word file; the JSON example button was removed). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 

@@ -20,7 +20,8 @@ export function OutputEditor({ node }: { node: GraphNode }) {
   const update = (patch: Partial<OutputConfig>) => editorStore.getState().updateConfig<OutputConfig>(node.id, (c) => ({ ...c, ...patch }));
   const format = config.format ?? 'html';
   const jsonPossible = !appended && (several || input?.meta.json?.mapping.mode === 'fields');
-  const ok = result?.status === 'ok';
+  const problems = result?.upstreamProblems?.length ?? 0;
+  const ok = result?.status === 'ok' && !(config.strict && problems);
   const baseName = (input?.meta.fileName ?? 'output').replace(/\.[^.]+$/, '');
 
   const save = () => {
@@ -130,6 +131,17 @@ export function OutputEditor({ node }: { node: GraphNode }) {
             onChange={(inlineAssets) => update({ inlineAssets })}
           />
         </>
+      )}
+      <CheckboxField
+        label="Don't download while there are problems"
+        checked={!!config.strict}
+        hint="Problems are things that make the page wrong although it was made: a required slot left empty, more or fewer matches than expected, a saved selection that is gone. The page is still shown."
+        onChange={(strict) => update({ strict: strict || undefined })}
+      />
+      {problems > 0 && (
+        <p className={config.strict ? 'error-text small' : 'hint warn-text'} role="status">
+          {problems} problem{problems === 1 ? '' : 's'} before this page{config.strict ? ': fix them to download it.' : ' (see below).'}
+        </p>
       )}
       <button type="button" className="primary" onClick={save} disabled={!ok}>
         {format === 'json' ? 'Download JSON' : 'Download HTML'}

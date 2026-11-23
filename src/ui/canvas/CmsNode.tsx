@@ -20,9 +20,14 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
   const status = result?.status ?? 'waiting';
   const warnings = result?.warnings.length ?? 0;
   const rows = Math.max(def.inputs.length, def.outputs.length);
+  const problems = result?.problems ?? [];
+  const upstream = result?.upstreamProblems ?? [];
 
   return (
-    <div className={`cms-node cms-node-${node.type} status-${status}${selected ? ' is-selected' : ''}`} data-testid={`node-${id}`}>
+    <div
+      className={`cms-node cms-node-${node.type} status-${status}${problems.length || upstream.length ? ' has-problems' : ''}${selected ? ' is-selected' : ''}`}
+      data-testid={`node-${id}`}
+    >
       <header>
         <NodeTitle id={id} name={node.name} label={def.label} />
         <span className={`status-pill status-${status}`} title={result?.message}>
@@ -39,6 +44,18 @@ function CmsNodeView({ id, selected }: NodeProps<CmsFlowNode>) {
       {typeof result?.info.needsAttention === 'number' && (
         <div className="attention-pill node-badge">
           {result.info.needsAttention} selection{result.info.needsAttention === 1 ? ' needs' : 's need'} attention
+        </div>
+      )}
+      {/* Saved selections that are gone have their own badge above; other problems get this one. */}
+      {problems.length > 0 && typeof result?.info.needsAttention !== 'number' && (
+        <div className="problem-pill node-badge" title={problems.join('\n')}>
+          {problems.length} problem{problems.length === 1 ? '' : 's'}
+        </div>
+      )}
+      {upstream.length > 0 && (
+        <div className="problem-pill node-badge" title={upstream.map((p) => `${p.nodeId}: ${p.problem}`).join('\n')}>
+          {upstream.length} problem{upstream.length === 1 ? '' : 's'} before this page
+          {(node.config as { strict?: boolean }).strict ? ' · download off' : ''}
         </div>
       )}
       {result?.message && status !== 'ok' && <div className="cms-node-message">{result.message}</div>}

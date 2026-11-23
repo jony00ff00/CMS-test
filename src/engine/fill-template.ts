@@ -178,7 +178,7 @@ async function fillRepeat(doc: CmsDocument, content: CmsDocument, row: FillRepea
 
 /** A message when `count` is outside min..max. */
 export function expectation(count: number, min: number | undefined, max: number | undefined, noun: string): string | undefined {
-  const s = (n: number) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+  const s = (n: number) => `${n} ${noun}${n === 1 ? '' : /(s|sh|ch|x)$/.test(noun) ? 'es' : 's'}`;
   if (min !== undefined && count < min) return `found ${s(count)}, expected at least ${min}`;
   if (max !== undefined && count > max) return `found ${s(count)}, expected at most ${max}`;
   return undefined;
