@@ -1,11 +1,12 @@
 // Generates the "scrolly from Word text + code" example: the text of a scrollytelling graphic is written in Word
 // (examples/scrolly/ge16-scrolly-short-text.docx), its code (markup, CSS, JavaScript) is an HTML file made by a
-// developer (examples/scrolly/ge16-scrolly-short.html). The project puts the Word text into the code's text slots.
+// developer (examples/scrolly/ge16-scrolly-short.html). One Fill template node puts the Word text into the code's
+// text slots, with one step card per "Step" heading in the Word file.
 // Run with `npm run example:scrolly`. Writes examples/ge16-scrolly.node-cms.json.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { storeFile, type CanvasNote, type Graph, type GraphNode, type NodeGroup } from '../src/engine';
+import { storeFile, type CanvasNote, type FillRow, type Graph, type GraphNode } from '../src/engine';
 import { seedLibrary } from '../src/snippets/seed';
 import { toProjectFile } from '../src/store/project';
 
@@ -22,53 +23,37 @@ const STYLE_MAP = [
   "p[style-name='Note'] => p.note:fresh",
 ];
 
+/** How the Word text fills the code: one row per slot, and one copy of the step card per "Step" heading. */
+export const FILL_ROWS: FillRow[] = [
+  // Header: the Word styles Kicker, Title and Dek (classes from the style map) into the code's slots.
+  { id: 'kicker', slot: '.gs-kicker', from: { mode: 'css', selector: '.kicker' }, required: true },
+  { id: 'headline', slot: '.gs-headline', from: { mode: 'css', selector: '.title' }, required: true },
+  { id: 'dek', slot: '.gs-dek', from: { mode: 'css', selector: '.dek' }, required: true },
+  // Steps: a card per "Step" heading section, in order. A writer who adds or removes a step adds or removes a card.
+  {
+    id: 'steps',
+    repeat: '.gs-step',
+    items: { mode: 'heading', text: 'Step', match: 'contains', includeHeading: false },
+    rows: [{ id: 'card', slot: '.gs-card', from: { mode: 'all', scope: 'document' }, required: true }],
+    min: 1,
+  },
+  // Footer: the note and the link's text (the link itself stays).
+  { id: 'footer', slot: '.gs-footer > p:first-child, .gs-footer a', from: { mode: 'css', selector: 'h2:last-of-type ~ p' } },
+];
+
 export function scrollyGraph(codeId: string, textId: string): Graph {
-  const at = (col: number, row: number) => ({ x: 40 + col * 260, y: 40 + row * 200 });
-  const replace = { content: { kind: 'selection', styles: false }, place: 'inside', pairs: true };
+  const at = (col: number, row: number) => ({ x: 40 + col * 300, y: 40 + row * 200 });
   const nodes: GraphNode[] = [
     { id: 'code', type: 'documentSource', name: 'Scrolly code (HTML)', position: at(0, 0), config: { fileId: codeId, html: { keepCode: true } } },
-    { id: 'text', type: 'documentSource', name: 'Scrolly text (Word)', position: at(0, 2), config: { fileId: textId, docx: { styleMap: STYLE_MAP } } },
-
-    // Header: kicker, headline, dek.
-    { id: 'header-slots', type: 'selector', name: 'Header slots', position: at(1, 0), config: { mode: 'css', selector: '.gs-kicker, .gs-headline, .gs-dek' } },
-    { id: 'header-text', type: 'selector', name: 'Header text', position: at(1, 1), config: { mode: 'css', selector: '.kicker, .title, .dek' } },
-    { id: 'fill-header', type: 'object', name: 'Fill the header', position: at(2, 0), config: { ...replace } },
-
-    // Steps: one card per step, in order.
-    { id: 'step-slots', type: 'selector', name: 'Step cards', position: at(3, 0), config: { mode: 'css', selector: '.gs-step .gs-card' } },
-    { id: 'step-text', type: 'selector', name: 'Step text', position: at(3, 1), config: { mode: 'heading', text: 'Step', match: 'contains', includeHeading: false } },
-    { id: 'fill-steps', type: 'object', name: 'Fill the steps', position: at(4, 0), config: { ...replace } },
-
-    // Footer: the note and the link's text (the link itself stays).
-    { id: 'footer-slots', type: 'selector', name: 'Footer slots', position: at(5, 0), config: { mode: 'css', selector: '.gs-footer > p:first-child, .gs-footer a' } },
-    { id: 'footer-text', type: 'selector', name: 'Footer text', position: at(5, 1), config: { mode: 'css', selector: 'h2:last-of-type ~ p' } },
-    { id: 'fill-footer', type: 'object', name: 'Fill the footer', position: at(6, 0), config: { ...replace } },
-
-    { id: 'page', type: 'output', name: 'Scrolly page', position: at(7, 0), config: { format: 'html', fullDocument: true, inlineAssets: true } },
+    { id: 'text', type: 'documentSource', name: 'Scrolly text (Word)', position: at(0, 1), config: { fileId: textId, docx: { styleMap: STYLE_MAP } } },
+    { id: 'fill', type: 'fillTemplate', name: 'Fill the scrolly', position: at(1, 0.5), config: { rows: FILL_ROWS } },
+    { id: 'page', type: 'output', name: 'Scrolly page', position: at(2, 0.5), config: { format: 'html', fullDocument: true, inlineAssets: true, strict: true } },
   ];
   const edge = (source: string, sourcePort: string, target: string, targetPort: string) => ({ id: `${source}.${sourcePort}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
   const edges = [
-    edge('code', 'document', 'header-slots', 'document'),
-    edge('text', 'document', 'header-text', 'document'),
-    edge('header-slots', 'selection', 'fill-header', 'where'),
-    edge('header-text', 'selection', 'fill-header', 'content'),
-
-    edge('fill-header', 'document', 'step-slots', 'document'),
-    edge('text', 'document', 'step-text', 'document'),
-    edge('step-slots', 'selection', 'fill-steps', 'where'),
-    edge('step-text', 'selection', 'fill-steps', 'content'),
-
-    edge('fill-steps', 'document', 'footer-slots', 'document'),
-    edge('text', 'document', 'footer-text', 'document'),
-    edge('footer-slots', 'selection', 'fill-footer', 'where'),
-    edge('footer-text', 'selection', 'fill-footer', 'content'),
-
-    edge('fill-footer', 'document', 'page', 'document'),
-  ];
-  const groups: NodeGroup[] = [
-    { id: 'group-header', name: 'Header', nodeIds: ['header-slots', 'header-text', 'fill-header'], color: '#2563eb' },
-    { id: 'group-steps', name: 'Steps', nodeIds: ['step-slots', 'step-text', 'fill-steps'], color: '#7c3aed' },
-    { id: 'group-footer', name: 'Footer', nodeIds: ['footer-slots', 'footer-text', 'fill-footer'], color: '#0d9488' },
+    edge('code', 'document', 'fill', 'template'),
+    edge('text', 'document', 'fill', 'content'),
+    edge('fill', 'document', 'page', 'document'),
   ];
   // A note on the canvas, above the flow, says what the example is for.
   const notes: CanvasNote[] = [
@@ -79,7 +64,7 @@ export function scrollyGraph(codeId: string, textId: string): Graph {
       width: 420,
     },
   ];
-  return { nodes, edges, groups, notes };
+  return { nodes, edges, notes };
 }
 
 export function buildScrollyExample() {

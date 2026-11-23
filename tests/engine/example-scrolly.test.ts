@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { GraphEvaluator, nodeRegistry, parseHtml, runSelector, textOf, indexDocument, type CmsDocument } from '../../src/engine';
+import { GraphEvaluator, nodeRegistry, parseHtml, runSelector, textOf, indexDocument, type CmsDocument, type FillReport } from '../../src/engine';
 import { parseProject } from '../../src/store/project';
 import { buildScrollyExample, PROJECT_FILE } from '../../scripts/make-example-scrolly';
 
@@ -19,13 +19,16 @@ describe('example: a scrolly from Word text and HTML code', () => {
   it('every node runs without warnings, and every text slot gets the Word text', async () => {
     const { p, warnings, results } = await run(buildScrollyExample());
     expect(warnings).toEqual([]);
-    for (const n of p.graph.nodes) expect([n.id, results[n.id].status, results[n.id].warnings]).toEqual([n.id, 'ok', []]);
-    expect(results['fill-header'].info.replaced).toBe(3);
-    expect(results['fill-steps'].info.replaced).toBe(10);
-    expect(results['fill-footer'].info.replaced).toBe(2);
+    for (const n of p.graph.nodes) expect([n.id, results[n.id].status, results[n.id].warnings, results[n.id].problems]).toEqual([n.id, 'ok', [], undefined]);
+    // Four nodes: code, text, one Fill template node, the page.
+    expect(p.graph.nodes.map((n) => n.type)).toEqual(['documentSource', 'documentSource', 'fillTemplate', 'output']);
+    const report = results.fill.outputs.report as FillReport[];
+    expect(report.map((r) => [r.id, r.slots, r.matches, r.filled])).toEqual([
+      ['kicker', 1, 1, 1], ['headline', 1, 1, 1], ['dek', 1, 1, 1], ['steps', 10, 10, 10], ['footer', 2, 2, 2],
+    ]);
 
     const word = results.text.outputs.document as CmsDocument;
-    const page = results['fill-footer'].outputs.document as CmsDocument;
+    const page = results.fill.outputs.document as CmsDocument;
     // The header and the cards say what the Word document says, in order.
     expect(texts(page, '.gs-kicker, .gs-headline, .gs-dek')).toEqual(texts(word, '.kicker, .title, .dek'));
     expect(texts(page, '.gs-card')).toEqual(texts(word, 'h2 + p').slice(0, 10));
@@ -55,12 +58,36 @@ describe('example: a scrolly from Word text and HTML code', () => {
     const text = project.files.find((f) => f.id === 'scrolly-text')!;
     Object.assign(text, { name: 'edited.html', data: edited, encoding: 'text' });
     const { results } = await run(project);
-    const page = results['fill-footer'].outputs.document as CmsDocument;
+    const page = results.fill.outputs.document as CmsDocument;
     expect(texts(page, '.gs-kicker, .gs-headline, .gs-dek')).toEqual(['Kicker 2', 'A new headline', 'New dek.']);
     expect(texts(page, '.gs-card')[0]).toBe('New text 1.');
     expect(texts(page, '.gs-step[data-step="distribution"] .gs-card p')).toEqual(['New text 2.', 'A second paragraph.']);
     expect(texts(page, '.gs-footer > p')).toEqual(['New note.', 'Read it all']);
     expect(runSelector(page, { mode: 'css', selector: '.gs-footer a[href="#full-brief"]' }).matches).toHaveLength(1);
+  });
+
+  it('the step cards follow the Word steps: more steps, more cards; fewer, fewer', async () => {
+    for (const n of [12, 4]) {
+      const project = buildScrollyExample();
+      const steps = Array.from({ length: n }, (_, i) => `<h2>Step ${i + 1}</h2><p>Card ${i + 1}.</p>`).join('');
+      const text = project.files.find((f) => f.id === 'scrolly-text')!;
+      Object.assign(text, { name: 'edited.html', data: `<p class="kicker">K</p><p class="title">T</p><p class="dek">D</p>${steps}<h2>Footer</h2><p>Note</p><p>Link</p>`, encoding: 'text' });
+      const { results } = await run(project);
+      const page = results.fill.outputs.document as CmsDocument;
+      expect(texts(page, '.gs-card'), `${n} steps`).toEqual(Array.from({ length: n }, (_, i) => `Card ${i + 1}.`));
+      // Existing cards keep their own step (the graphic's state); extra ones copy the last.
+      const ids = runSelector(page, { mode: 'css', selector: '.gs-step' }).matches.length;
+      expect(ids).toBe(n);
+      expect(results.page.upstreamProblems).toBeUndefined();
+    }
+  });
+
+  it('a missing kicker is a problem, and the page cannot be downloaded until it is fixed', async () => {
+    const project = buildScrollyExample();
+    const text = project.files.find((f) => f.id === 'scrolly-text')!;
+    Object.assign(text, { name: 'edited.html', data: '<p class="title">T</p><p class="dek">D</p><h2>Step 1</h2><p>One.</p>', encoding: 'text' });
+    const { results } = await run(project);
+    expect(results.page.upstreamProblems).toEqual([{ nodeId: 'fill', problem: 'Slot “.gs-kicker”: nothing in the content matches, so the slot keeps the template’s text' }]);
   });
 
   it('has a note on the canvas saying what the example is for', () => {

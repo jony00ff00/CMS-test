@@ -99,7 +99,7 @@ describe('example projects', () => {
     expect(store.getState().selectedId).toBe('page');
     expect(Object.keys(store.getState().files)).toEqual(expect.arrayContaining(['scrolly-code', 'scrolly-text']));
     await store.getState().whenIdle();
-    expect(store.getState().results['fill-steps'].info.replaced).toBe(10);
+    expect(store.getState().results.fill.info).toMatchObject({ rows: 5, filled: 5 });
     store.getState().openExampleProject('not a project');
     expect(store.getState().notice?.kind).toBe('error');
   });

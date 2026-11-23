@@ -26,7 +26,7 @@
         "name": "Scrolly text (Word)",
         "position": {
           "x": 40,
-          "y": 440
+          "y": 240
         },
         "config": {
           "fileId": "scrolly-text",
@@ -41,134 +41,73 @@
         }
       },
       {
-        "id": "header-slots",
-        "type": "selector",
-        "name": "Header slots",
+        "id": "fill",
+        "type": "fillTemplate",
+        "name": "Fill the scrolly",
         "position": {
-          "x": 300,
-          "y": 40
+          "x": 340,
+          "y": 140
         },
         "config": {
-          "mode": "css",
-          "selector": ".gs-kicker, .gs-headline, .gs-dek"
-        }
-      },
-      {
-        "id": "header-text",
-        "type": "selector",
-        "name": "Header text",
-        "position": {
-          "x": 300,
-          "y": 240
-        },
-        "config": {
-          "mode": "css",
-          "selector": ".kicker, .title, .dek"
-        }
-      },
-      {
-        "id": "fill-header",
-        "type": "object",
-        "name": "Fill the header",
-        "position": {
-          "x": 560,
-          "y": 40
-        },
-        "config": {
-          "content": {
-            "kind": "selection",
-            "styles": false
-          },
-          "place": "inside",
-          "pairs": true
-        }
-      },
-      {
-        "id": "step-slots",
-        "type": "selector",
-        "name": "Step cards",
-        "position": {
-          "x": 820,
-          "y": 40
-        },
-        "config": {
-          "mode": "css",
-          "selector": ".gs-step .gs-card"
-        }
-      },
-      {
-        "id": "step-text",
-        "type": "selector",
-        "name": "Step text",
-        "position": {
-          "x": 820,
-          "y": 240
-        },
-        "config": {
-          "mode": "heading",
-          "text": "Step",
-          "match": "contains",
-          "includeHeading": false
-        }
-      },
-      {
-        "id": "fill-steps",
-        "type": "object",
-        "name": "Fill the steps",
-        "position": {
-          "x": 1080,
-          "y": 40
-        },
-        "config": {
-          "content": {
-            "kind": "selection",
-            "styles": false
-          },
-          "place": "inside",
-          "pairs": true
-        }
-      },
-      {
-        "id": "footer-slots",
-        "type": "selector",
-        "name": "Footer slots",
-        "position": {
-          "x": 1340,
-          "y": 40
-        },
-        "config": {
-          "mode": "css",
-          "selector": ".gs-footer > p:first-child, .gs-footer a"
-        }
-      },
-      {
-        "id": "footer-text",
-        "type": "selector",
-        "name": "Footer text",
-        "position": {
-          "x": 1340,
-          "y": 240
-        },
-        "config": {
-          "mode": "css",
-          "selector": "h2:last-of-type ~ p"
-        }
-      },
-      {
-        "id": "fill-footer",
-        "type": "object",
-        "name": "Fill the footer",
-        "position": {
-          "x": 1600,
-          "y": 40
-        },
-        "config": {
-          "content": {
-            "kind": "selection",
-            "styles": false
-          },
-          "place": "inside",
-          "pairs": true
+          "rows": [
+            {
+              "id": "kicker",
+              "slot": ".gs-kicker",
+              "from": {
+                "mode": "css",
+                "selector": ".kicker"
+              },
+              "required": true
+            },
+            {
+              "id": "headline",
+              "slot": ".gs-headline",
+              "from": {
+                "mode": "css",
+                "selector": ".title"
+              },
+              "required": true
+            },
+            {
+              "id": "dek",
+              "slot": ".gs-dek",
+              "from": {
+                "mode": "css",
+                "selector": ".dek"
+              },
+              "required": true
+            },
+            {
+              "id": "steps",
+              "repeat": ".gs-step",
+              "items": {
+                "mode": "heading",
+                "text": "Step",
+                "match": "contains",
+                "includeHeading": false
+              },
+              "rows": [
+                {
+                  "id": "card",
+                  "slot": ".gs-card",
+                  "from": {
+                    "mode": "all",
+                    "scope": "document"
+                  },
+                  "required": true
+                }
+              ],
+              "min": 1
+            },
+            {
+              "id": "footer",
+              "slot": ".gs-footer > p:first-child, .gs-footer a",
+              "from": {
+                "mode": "css",
+                "selector": "h2:last-of-type ~ p"
+              }
+            }
+          ]
         }
       },
       {
@@ -176,139 +115,38 @@
         "type": "output",
         "name": "Scrolly page",
         "position": {
-          "x": 1860,
-          "y": 40
+          "x": 640,
+          "y": 140
         },
         "config": {
           "format": "html",
           "fullDocument": true,
-          "inlineAssets": true
+          "inlineAssets": true,
+          "strict": true
         }
       }
     ],
     "edges": [
       {
-        "id": "code.document>header-slots.document",
+        "id": "code.document>fill.template",
         "source": "code",
         "sourcePort": "document",
-        "target": "header-slots",
-        "targetPort": "document"
+        "target": "fill",
+        "targetPort": "template"
       },
       {
-        "id": "text.document>header-text.document",
+        "id": "text.document>fill.content",
         "source": "text",
         "sourcePort": "document",
-        "target": "header-text",
-        "targetPort": "document"
-      },
-      {
-        "id": "header-slots.selection>fill-header.where",
-        "source": "header-slots",
-        "sourcePort": "selection",
-        "target": "fill-header",
-        "targetPort": "where"
-      },
-      {
-        "id": "header-text.selection>fill-header.content",
-        "source": "header-text",
-        "sourcePort": "selection",
-        "target": "fill-header",
+        "target": "fill",
         "targetPort": "content"
       },
       {
-        "id": "fill-header.document>step-slots.document",
-        "source": "fill-header",
-        "sourcePort": "document",
-        "target": "step-slots",
-        "targetPort": "document"
-      },
-      {
-        "id": "text.document>step-text.document",
-        "source": "text",
-        "sourcePort": "document",
-        "target": "step-text",
-        "targetPort": "document"
-      },
-      {
-        "id": "step-slots.selection>fill-steps.where",
-        "source": "step-slots",
-        "sourcePort": "selection",
-        "target": "fill-steps",
-        "targetPort": "where"
-      },
-      {
-        "id": "step-text.selection>fill-steps.content",
-        "source": "step-text",
-        "sourcePort": "selection",
-        "target": "fill-steps",
-        "targetPort": "content"
-      },
-      {
-        "id": "fill-steps.document>footer-slots.document",
-        "source": "fill-steps",
-        "sourcePort": "document",
-        "target": "footer-slots",
-        "targetPort": "document"
-      },
-      {
-        "id": "text.document>footer-text.document",
-        "source": "text",
-        "sourcePort": "document",
-        "target": "footer-text",
-        "targetPort": "document"
-      },
-      {
-        "id": "footer-slots.selection>fill-footer.where",
-        "source": "footer-slots",
-        "sourcePort": "selection",
-        "target": "fill-footer",
-        "targetPort": "where"
-      },
-      {
-        "id": "footer-text.selection>fill-footer.content",
-        "source": "footer-text",
-        "sourcePort": "selection",
-        "target": "fill-footer",
-        "targetPort": "content"
-      },
-      {
-        "id": "fill-footer.document>page.document",
-        "source": "fill-footer",
+        "id": "fill.document>page.document",
+        "source": "fill",
         "sourcePort": "document",
         "target": "page",
         "targetPort": "document"
-      }
-    ],
-    "groups": [
-      {
-        "id": "group-header",
-        "name": "Header",
-        "nodeIds": [
-          "header-slots",
-          "header-text",
-          "fill-header"
-        ],
-        "color": "#2563eb"
-      },
-      {
-        "id": "group-steps",
-        "name": "Steps",
-        "nodeIds": [
-          "step-slots",
-          "step-text",
-          "fill-steps"
-        ],
-        "color": "#7c3aed"
-      },
-      {
-        "id": "group-footer",
-        "name": "Footer",
-        "nodeIds": [
-          "footer-slots",
-          "footer-text",
-          "fill-footer"
-        ],
-        "color": "#0d9488"
       }
     ],
     "notes": [

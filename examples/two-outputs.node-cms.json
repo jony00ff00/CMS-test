@@ -11,32 +11,35 @@
         "name": "Garden report (Word)",
         "position": {
           "x": 40,
-          "y": 345
+          "y": 260
         },
         "config": {
           "fileId": "garden-word"
         }
       },
       {
-        "id": "tables-static",
+        "id": "tables",
         "type": "selector",
         "name": "Data tables",
         "position": {
-          "x": 290,
-          "y": 60
+          "x": 330,
+          "y": 260
         },
         "config": {
           "mode": "css",
-          "selector": "table"
+          "selector": "table",
+          "expect": {
+            "min": 1
+          }
         }
       },
       {
-        "id": "charts-static",
+        "id": "charts",
         "type": "snippet",
-        "name": "Static charts",
+        "name": "Charts",
         "position": {
-          "x": 540,
-          "y": 60
+          "x": 620,
+          "y": 260
         },
         "config": {
           "snippet": {
@@ -65,98 +68,152 @@
           "params": {
             "types": "bar, line, donut"
           }
-        }
-      },
-      {
-        "id": "static-place-dawn",
-        "type": "selector",
-        "name": "After the introduction",
-        "position": {
-          "x": 790,
-          "y": 60
         },
-        "config": {
-          "mode": "css",
-          "selector": "h1 + p",
-          "place": "after"
-        }
-      },
-      {
-        "id": "picture-dawn",
-        "type": "object",
-        "name": "Picture: dawn",
-        "position": {
-          "x": 1040,
-          "y": 60
-        },
-        "config": {
-          "content": {
-            "kind": "image",
-            "fileId": "picture-dawn",
-            "alt": "The vegetable beds at dawn, with the sun rising behind the hills",
-            "caption": "The beds at dawn in May."
+        "variants": {
+          "interactive": {
+            "snippet": {
+              "kind": "snippet",
+              "id": "chart-interactive",
+              "name": "Chart (interactive)",
+              "description": "Draws the table as a chart that animates in and shows values on hover (the table stays for screen readers)",
+              "version": 1,
+              "mode": "wrap",
+              "template": "<figure class=\"cms-chart\" data-chart=\"{{item params.types index}}\">{{content}}</figure>",
+              "params": [
+                {
+                  "name": "types",
+                  "label": "Chart type for each table, in order (bar, line, donut)",
+                  "type": "text",
+                  "default": "bar, line, donut"
+                }
+              ],
+              "css": "figure.cms-chart{position:relative;margin:1.25rem 0;padding:1rem;border:1px solid #e5e7eb;border-radius:10px;background:#fff}\nfigure.cms-chart svg{display:block;width:100%;height:auto;font:12px system-ui,sans-serif}\n.cms-chart-grid{stroke:#e5e7eb}.cms-chart-axis{fill:#6b7280}.cms-chart-centre{fill:#374151;font-weight:600;font-size:15px}\n.cms-chart-table{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}\n.cms-chart-legend{display:flex;flex-wrap:wrap;gap:.4rem 1rem;margin:.5rem 0 0;padding:0;list-style:none;font:13px system-ui,sans-serif;color:#374151}\n.cms-chart-legend span{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:2px}\n.cms-chart-bar{transition:y .7s cubic-bezier(.2,.8,.2,1),height .7s cubic-bezier(.2,.8,.2,1),opacity .2s}\n.cms-chart-line{transition:stroke-dashoffset 1.6s ease-in-out}\n.cms-chart-dot{opacity:0;transition:opacity .4s 1.2s}figure.cms-chart.is-drawn .cms-chart-dot{opacity:1}\n.cms-chart-arc{transition:stroke-dasharray .8s ease-out,stroke-width .2s}\nfigure.is-hovering .cms-chart-bar{opacity:.35}figure.is-hovering .cms-chart-bar.is-active{opacity:1}\n.cms-chart-arc.is-active{stroke-width:52px;cursor:pointer}.cms-chart-bar{cursor:pointer}\n.cms-chart-guide{stroke:#9ca3af;stroke-dasharray:4 4}\n.cms-chart-tip{position:absolute;z-index:1;padding:.35rem .55rem;border-radius:6px;background:#111827;color:#fff;font:12px/1.4 system-ui,sans-serif;pointer-events:none;white-space:nowrap}\n@media (prefers-reduced-motion:reduce){.cms-chart-bar,.cms-chart-line,.cms-chart-dot,.cms-chart-arc{transition:none}}\nfigure.cms-chart video{display:block;max-width:100%}",
+              "js": "(function () {\n  var INTERACTIVE = true;\n  var NS = 'http://www.w3.org/2000/svg';\n  var COLORS = ['#2563eb', '#16a34a', '#d97706', '#db2777', '#7c3aed'];\n  var still = !INTERACTIVE || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);\n  function el(tag, attrs, parent) {\n    var e = document.createElementNS(NS, tag);\n    for (var k in attrs) e.setAttribute(k, attrs[k]);\n    if (parent) parent.appendChild(e);\n    return e;\n  }\n  function text(parent, x, y, s, attrs) {\n    var t = el('text', Object.assign({ x: x, y: y }, attrs || {}), parent);\n    t.textContent = s;\n    return t;\n  }\n  function read(table) {\n    var rows = Array.prototype.map.call(table.querySelectorAll('tr'), function (tr) {\n      return Array.prototype.map.call(tr.querySelectorAll('th, td'), function (c) { return c.textContent.trim(); });\n    });\n    var head = rows.shift();\n    return {\n      head: head,\n      units: head.map(function (h) { var m = /\\(([^)]+)\\)/.exec(h); return m ? m[1] : ''; }),\n      names: head.map(function (h) { return h.replace(/\\s*\\([^)]*\\)/, ''); }),\n      labels: rows.map(function (r) { return r[0]; }),\n      series: head.slice(1).map(function (_, i) { return rows.map(function (r) { return parseFloat(r[i + 1]) || 0; }); }),\n    };\n  }\n  function nice(max) {\n    var step = Math.pow(10, Math.floor(Math.log10(max)));\n    var top = Math.ceil(max / step) * step;\n    return top / max > 1.6 ? Math.ceil(max / (step / 2)) * (step / 2) : top;\n  }\n  function tooltip(fig) {\n    var tip = document.createElement('div');\n    tip.className = 'cms-chart-tip';\n    tip.hidden = true;\n    fig.appendChild(tip);\n    return {\n      show: function (html, evt) {\n        tip.innerHTML = html;\n        tip.hidden = false;\n        var box = fig.getBoundingClientRect();\n        tip.style.left = Math.min(evt.clientX - box.left + 12, box.width - tip.offsetWidth - 4) + 'px';\n        tip.style.top = (evt.clientY - box.top - tip.offsetHeight - 10) + 'px';\n      },\n      hide: function () { tip.hidden = true; },\n    };\n  }\n  function legend(fig, names) {\n    var ul = document.createElement('ul');\n    ul.className = 'cms-chart-legend';\n    names.forEach(function (n, i) {\n      var li = document.createElement('li');\n      li.innerHTML = '<span style=\"background:' + COLORS[i % COLORS.length] + '\"></span>' + n;\n      ul.appendChild(li);\n    });\n    fig.appendChild(ul);\n  }\n  // Charts start drawn (static) or start empty and animate once they are in view (interactive).\n  function reveal(fig, run) {\n    if (still) return run();\n    fig.classList.add('is-waiting');\n    var go = function () { fig.classList.remove('is-waiting'); requestAnimationFrame(function () { requestAnimationFrame(run); }); };\n    if (!('IntersectionObserver' in window)) return go();\n    var io = new IntersectionObserver(function (entries) {\n      if (entries.some(function (e) { return e.isIntersecting; })) { io.disconnect(); go(); }\n    }, { threshold: 0.3 });\n    io.observe(fig);\n  }\n  var W = 600, H = 310, L = 48, R = 16, T = 30, B = 36;\n  function axes(svg, top, labels, unit) {\n    for (var i = 0; i <= 4; i++) {\n      var y = T + (H - T - B) * (1 - i / 4);\n      el('line', { x1: L, x2: W - R, y1: y, y2: y, class: 'cms-chart-grid' }, svg);\n      text(svg, L - 8, y + 4, String(Math.round(top * i / 4)), { 'text-anchor': 'end', class: 'cms-chart-axis' });\n    }\n    if (unit) text(svg, L - 8, T - 16, unit, { 'text-anchor': 'end', class: 'cms-chart-axis' });\n    var band = (W - L - R) / labels.length;\n    labels.forEach(function (l, i) { text(svg, L + band * (i + 0.5), H - B + 18, l, { 'text-anchor': 'middle', class: 'cms-chart-axis' }); });\n    return band;\n  }\n  var draw = {\n    bar: function (fig, svg, d) {\n      var values = d.series[0], top = nice(Math.max.apply(null, values)), band = axes(svg, top, d.labels, d.units[1]);\n      var tip = INTERACTIVE && tooltip(fig);\n      var bars = values.map(function (v, i) {\n        var h = (H - T - B) * v / top, x = L + band * i + band * 0.15, w = band * 0.7;\n        var bar = el('rect', { x: x, width: w, y: still ? H - B - h : H - B, height: still ? h : 0, rx: 3, fill: COLORS[0], class: 'cms-chart-bar' }, svg);\n        if (!still) bar.style.transitionDelay = (i * 45) + 'ms';\n        if (tip) {\n          bar.addEventListener('mousemove', function (e) { tip.show('<strong>' + d.labels[i] + '</strong> ' + v + ' ' + d.units[1], e); fig.classList.add('is-hovering'); bar.classList.add('is-active'); });\n          bar.addEventListener('mouseleave', function () { tip.hide(); fig.classList.remove('is-hovering'); bar.classList.remove('is-active'); });\n        }\n        return { bar: bar, y: H - B - h, h: h };\n      });\n      reveal(fig, function () { bars.forEach(function (b) { b.bar.setAttribute('y', b.y); b.bar.setAttribute('height', b.h); }); });\n    },\n    line: function (fig, svg, d) {\n      var all = [].concat.apply([], d.series), top = nice(Math.max.apply(null, all)), band = axes(svg, top, d.labels, '');\n      var xs = d.labels.map(function (_, i) { return L + band * (i + 0.5); });\n      var ys = function (v) { return T + (H - T - B) * (1 - v / top); };\n      var paths = d.series.map(function (s, k) {\n        var path = el('path', { d: s.map(function (v, i) { return (i ? 'L' : 'M') + xs[i] + ' ' + ys(v); }).join(' '), fill: 'none', stroke: COLORS[k], 'stroke-width': 3, class: 'cms-chart-line' }, svg);\n        s.forEach(function (v, i) { el('circle', { cx: xs[i], cy: ys(v), r: 3.5, fill: COLORS[k], class: 'cms-chart-dot' }, svg); });\n        return path;\n      });\n      legend(fig, d.head.slice(1));\n      if (!still) paths.forEach(function (p) { var n = p.getTotalLength(); p.style.strokeDasharray = n; p.style.strokeDashoffset = n; });\n      reveal(fig, function () { paths.forEach(function (p) { p.style.strokeDashoffset = 0; }); fig.classList.add('is-drawn'); });\n      if (INTERACTIVE) {\n        var tip = tooltip(fig), guide = el('line', { y1: T, y2: H - B, class: 'cms-chart-guide' }, svg);\n        guide.style.display = 'none';\n        var hit = el('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' }, svg);\n        hit.addEventListener('mousemove', function (e) {\n          var box = svg.getBoundingClientRect(), x = (e.clientX - box.left) * W / box.width;\n          var i = Math.max(0, Math.min(xs.length - 1, Math.round((x - L) / band - 0.5)));\n          guide.setAttribute('x1', xs[i]); guide.setAttribute('x2', xs[i]); guide.style.display = '';\n          tip.show('<strong>' + d.labels[i] + '</strong>' + d.series.map(function (s, k) { return '<br><span style=\"color:' + COLORS[k] + '\">●</span> ' + d.names[k + 1] + ': ' + s[i] + ' ' + d.units[k + 1]; }).join(''), e);\n        });\n        hit.addEventListener('mouseleave', function () { tip.hide(); guide.style.display = 'none'; });\n      }\n    },\n    donut: function (fig, svg, d) {\n      var values = d.series[0], total = values.reduce(function (a, b) { return a + b; }, 0);\n      var cx = W / 2, cy = H / 2, r = 100, C = 2 * Math.PI * r, start = 0;\n      var tip = INTERACTIVE && tooltip(fig);\n      var arcs = values.map(function (v, i) {\n        var len = C * v / total;\n        var arc = el('circle', { cx: cx, cy: cy, r: r, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': 42, class: 'cms-chart-arc', transform: 'rotate(-90 ' + cx + ' ' + cy + ')' }, svg);\n        arc.style.strokeDasharray = (still ? len : 0) + ' ' + C;\n        arc.style.strokeDashoffset = -start;\n        if (!still) arc.style.transitionDelay = (i * 150) + 'ms';\n        if (tip) {\n          arc.addEventListener('mousemove', function (e) { tip.show('<strong>' + d.labels[i] + '</strong> ' + v + d.units[1], e); arc.classList.add('is-active'); });\n          arc.addEventListener('mouseleave', function () { tip.hide(); arc.classList.remove('is-active'); });\n        }\n        start += len;\n        return { arc: arc, len: len };\n      });\n      text(svg, cx, cy + 6, d.names[1], { 'text-anchor': 'middle', class: 'cms-chart-centre' });\n      legend(fig, d.labels.map(function (l, i) { return l + ' ' + values[i] + d.units[1]; }));\n      reveal(fig, function () { arcs.forEach(function (a) { a.arc.style.strokeDasharray = a.len + ' ' + C; }); });\n    },\n  };\n  Array.prototype.forEach.call(document.querySelectorAll('figure.cms-chart'), function (fig) {\n    var table = fig.querySelector('table');\n    var kind = draw[fig.getAttribute('data-chart')] ? fig.getAttribute('data-chart') : 'bar';\n    if (!table || fig.querySelector('svg')) return;\n    var d = read(table);\n    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': d.head.join(', ') + ': see the table' });\n    fig.insertBefore(svg, table);\n    table.classList.add('cms-chart-table');\n    draw[kind](fig, svg, d);\n  });\n})();"
+            },
+            "ref": {
+              "id": "chart-interactive",
+              "version": 1
+            }
           }
         }
       },
       {
-        "id": "static-place-hives",
-        "type": "selector",
-        "name": "Before “Rainfall”",
-        "position": {
-          "x": 1290,
-          "y": 60
-        },
-        "config": {
-          "mode": "heading",
-          "text": "Rainfall",
-          "place": "before"
-        }
-      },
-      {
-        "id": "picture-hives",
+        "id": "media",
         "type": "object",
-        "name": "Picture: hives",
+        "name": "Pictures and videos",
         "position": {
-          "x": 1540,
-          "y": 60
+          "x": 910,
+          "y": 260
         },
         "config": {
           "content": {
-            "kind": "image",
-            "fileId": "picture-hives",
-            "alt": "Three bee hives by the hedge, with bees flying around them",
-            "caption": "Our three hives, kept by volunteers since March."
-          }
-        }
-      },
-      {
-        "id": "static-place-rain",
-        "type": "selector",
-        "name": "Before “Where the harvest went”",
-        "position": {
-          "x": 1790,
-          "y": 60
+            "kind": "imageUrl",
+            "url": "",
+            "alt": ""
+          },
+          "items": [
+            {
+              "id": "item-dawn",
+              "label": "After the introduction: dawn",
+              "selector": {
+                "mode": "css",
+                "selector": "h1 + p"
+              },
+              "place": "after",
+              "content": {
+                "kind": "image",
+                "fileId": "picture-dawn",
+                "alt": "The vegetable beds at dawn, with the sun rising behind the hills",
+                "caption": "The beds at dawn in May."
+              }
+            },
+            {
+              "id": "item-hives",
+              "label": "Before “Rainfall”: hives",
+              "selector": {
+                "mode": "heading",
+                "text": "Rainfall"
+              },
+              "place": "before",
+              "content": {
+                "kind": "image",
+                "fileId": "picture-hives",
+                "alt": "Three bee hives by the hedge, with bees flying around them",
+                "caption": "Our three hives, kept by volunteers since March."
+              }
+            },
+            {
+              "id": "item-rain",
+              "label": "Before “Where the harvest went”: rain",
+              "selector": {
+                "mode": "heading",
+                "text": "Where the harvest went"
+              },
+              "place": "before",
+              "content": {
+                "kind": "image",
+                "fileId": "picture-rain",
+                "alt": "Rain falling on the two ponds at the bottom of the garden",
+                "caption": "Autumn rain filling the ponds."
+              }
+            }
+          ]
         },
-        "config": {
-          "mode": "heading",
-          "text": "Where the harvest went",
-          "place": "before"
-        }
-      },
-      {
-        "id": "picture-rain",
-        "type": "object",
-        "name": "Picture: rain",
-        "position": {
-          "x": 2040,
-          "y": 60
-        },
-        "config": {
-          "content": {
-            "kind": "image",
-            "fileId": "picture-rain",
-            "alt": "Rain falling on the two ponds at the bottom of the garden",
-            "caption": "Autumn rain filling the ponds."
+        "variants": {
+          "interactive": {
+            "items": [
+              {
+                "id": "item-dawn",
+                "label": "After the introduction: dawn",
+                "selector": {
+                  "mode": "css",
+                  "selector": "h1 + p"
+                },
+                "place": "after",
+                "content": {
+                  "kind": "video",
+                  "fileId": "video-dawn",
+                  "caption": "The beds at dawn in May.",
+                  "autoplay": true,
+                  "loop": true,
+                  "muted": true
+                }
+              },
+              {
+                "id": "item-hives",
+                "label": "Before “Rainfall”: hives",
+                "selector": {
+                  "mode": "heading",
+                  "text": "Rainfall"
+                },
+                "place": "before",
+                "content": {
+                  "kind": "video",
+                  "fileId": "video-hives",
+                  "caption": "Our three hives, kept by volunteers since March.",
+                  "autoplay": true,
+                  "loop": true,
+                  "muted": true
+                }
+              },
+              {
+                "id": "item-rain",
+                "label": "Before “Where the harvest went”: rain",
+                "selector": {
+                  "mode": "heading",
+                  "text": "Where the harvest went"
+                },
+                "place": "before",
+                "content": {
+                  "kind": "video",
+                  "fileId": "video-rain",
+                  "caption": "Autumn rain filling the ponds.",
+                  "autoplay": true,
+                  "loop": true,
+                  "muted": true
+                }
+              }
+            ]
           }
         }
       },
@@ -165,162 +222,13 @@
         "type": "output",
         "name": "Static page",
         "position": {
-          "x": 2290,
-          "y": 60
+          "x": 1258,
+          "y": 120
         },
         "config": {
           "format": "html",
           "fullDocument": true,
           "inlineAssets": true
-        }
-      },
-      {
-        "id": "tables-interactive",
-        "type": "selector",
-        "name": "Data tables",
-        "position": {
-          "x": 290,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "mode": "css",
-          "selector": "table"
-        }
-      },
-      {
-        "id": "charts-interactive",
-        "type": "snippet",
-        "name": "Interactive charts",
-        "position": {
-          "x": 540,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "snippet": {
-            "kind": "snippet",
-            "id": "chart-interactive",
-            "name": "Chart (interactive)",
-            "description": "Draws the table as a chart that animates in and shows values on hover (the table stays for screen readers)",
-            "version": 1,
-            "mode": "wrap",
-            "template": "<figure class=\"cms-chart\" data-chart=\"{{item params.types index}}\">{{content}}</figure>",
-            "params": [
-              {
-                "name": "types",
-                "label": "Chart type for each table, in order (bar, line, donut)",
-                "type": "text",
-                "default": "bar, line, donut"
-              }
-            ],
-            "css": "figure.cms-chart{position:relative;margin:1.25rem 0;padding:1rem;border:1px solid #e5e7eb;border-radius:10px;background:#fff}\nfigure.cms-chart svg{display:block;width:100%;height:auto;font:12px system-ui,sans-serif}\n.cms-chart-grid{stroke:#e5e7eb}.cms-chart-axis{fill:#6b7280}.cms-chart-centre{fill:#374151;font-weight:600;font-size:15px}\n.cms-chart-table{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}\n.cms-chart-legend{display:flex;flex-wrap:wrap;gap:.4rem 1rem;margin:.5rem 0 0;padding:0;list-style:none;font:13px system-ui,sans-serif;color:#374151}\n.cms-chart-legend span{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:2px}\n.cms-chart-bar{transition:y .7s cubic-bezier(.2,.8,.2,1),height .7s cubic-bezier(.2,.8,.2,1),opacity .2s}\n.cms-chart-line{transition:stroke-dashoffset 1.6s ease-in-out}\n.cms-chart-dot{opacity:0;transition:opacity .4s 1.2s}figure.cms-chart.is-drawn .cms-chart-dot{opacity:1}\n.cms-chart-arc{transition:stroke-dasharray .8s ease-out,stroke-width .2s}\nfigure.is-hovering .cms-chart-bar{opacity:.35}figure.is-hovering .cms-chart-bar.is-active{opacity:1}\n.cms-chart-arc.is-active{stroke-width:52px;cursor:pointer}.cms-chart-bar{cursor:pointer}\n.cms-chart-guide{stroke:#9ca3af;stroke-dasharray:4 4}\n.cms-chart-tip{position:absolute;z-index:1;padding:.35rem .55rem;border-radius:6px;background:#111827;color:#fff;font:12px/1.4 system-ui,sans-serif;pointer-events:none;white-space:nowrap}\n@media (prefers-reduced-motion:reduce){.cms-chart-bar,.cms-chart-line,.cms-chart-dot,.cms-chart-arc{transition:none}}\nfigure.cms-chart video{display:block;max-width:100%}",
-            "js": "(function () {\n  var INTERACTIVE = true;\n  var NS = 'http://www.w3.org/2000/svg';\n  var COLORS = ['#2563eb', '#16a34a', '#d97706', '#db2777', '#7c3aed'];\n  var still = !INTERACTIVE || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);\n  function el(tag, attrs, parent) {\n    var e = document.createElementNS(NS, tag);\n    for (var k in attrs) e.setAttribute(k, attrs[k]);\n    if (parent) parent.appendChild(e);\n    return e;\n  }\n  function text(parent, x, y, s, attrs) {\n    var t = el('text', Object.assign({ x: x, y: y }, attrs || {}), parent);\n    t.textContent = s;\n    return t;\n  }\n  function read(table) {\n    var rows = Array.prototype.map.call(table.querySelectorAll('tr'), function (tr) {\n      return Array.prototype.map.call(tr.querySelectorAll('th, td'), function (c) { return c.textContent.trim(); });\n    });\n    var head = rows.shift();\n    return {\n      head: head,\n      units: head.map(function (h) { var m = /\\(([^)]+)\\)/.exec(h); return m ? m[1] : ''; }),\n      names: head.map(function (h) { return h.replace(/\\s*\\([^)]*\\)/, ''); }),\n      labels: rows.map(function (r) { return r[0]; }),\n      series: head.slice(1).map(function (_, i) { return rows.map(function (r) { return parseFloat(r[i + 1]) || 0; }); }),\n    };\n  }\n  function nice(max) {\n    var step = Math.pow(10, Math.floor(Math.log10(max)));\n    var top = Math.ceil(max / step) * step;\n    return top / max > 1.6 ? Math.ceil(max / (step / 2)) * (step / 2) : top;\n  }\n  function tooltip(fig) {\n    var tip = document.createElement('div');\n    tip.className = 'cms-chart-tip';\n    tip.hidden = true;\n    fig.appendChild(tip);\n    return {\n      show: function (html, evt) {\n        tip.innerHTML = html;\n        tip.hidden = false;\n        var box = fig.getBoundingClientRect();\n        tip.style.left = Math.min(evt.clientX - box.left + 12, box.width - tip.offsetWidth - 4) + 'px';\n        tip.style.top = (evt.clientY - box.top - tip.offsetHeight - 10) + 'px';\n      },\n      hide: function () { tip.hidden = true; },\n    };\n  }\n  function legend(fig, names) {\n    var ul = document.createElement('ul');\n    ul.className = 'cms-chart-legend';\n    names.forEach(function (n, i) {\n      var li = document.createElement('li');\n      li.innerHTML = '<span style=\"background:' + COLORS[i % COLORS.length] + '\"></span>' + n;\n      ul.appendChild(li);\n    });\n    fig.appendChild(ul);\n  }\n  // Charts start drawn (static) or start empty and animate once they are in view (interactive).\n  function reveal(fig, run) {\n    if (still) return run();\n    fig.classList.add('is-waiting');\n    var go = function () { fig.classList.remove('is-waiting'); requestAnimationFrame(function () { requestAnimationFrame(run); }); };\n    if (!('IntersectionObserver' in window)) return go();\n    var io = new IntersectionObserver(function (entries) {\n      if (entries.some(function (e) { return e.isIntersecting; })) { io.disconnect(); go(); }\n    }, { threshold: 0.3 });\n    io.observe(fig);\n  }\n  var W = 600, H = 310, L = 48, R = 16, T = 30, B = 36;\n  function axes(svg, top, labels, unit) {\n    for (var i = 0; i <= 4; i++) {\n      var y = T + (H - T - B) * (1 - i / 4);\n      el('line', { x1: L, x2: W - R, y1: y, y2: y, class: 'cms-chart-grid' }, svg);\n      text(svg, L - 8, y + 4, String(Math.round(top * i / 4)), { 'text-anchor': 'end', class: 'cms-chart-axis' });\n    }\n    if (unit) text(svg, L - 8, T - 16, unit, { 'text-anchor': 'end', class: 'cms-chart-axis' });\n    var band = (W - L - R) / labels.length;\n    labels.forEach(function (l, i) { text(svg, L + band * (i + 0.5), H - B + 18, l, { 'text-anchor': 'middle', class: 'cms-chart-axis' }); });\n    return band;\n  }\n  var draw = {\n    bar: function (fig, svg, d) {\n      var values = d.series[0], top = nice(Math.max.apply(null, values)), band = axes(svg, top, d.labels, d.units[1]);\n      var tip = INTERACTIVE && tooltip(fig);\n      var bars = values.map(function (v, i) {\n        var h = (H - T - B) * v / top, x = L + band * i + band * 0.15, w = band * 0.7;\n        var bar = el('rect', { x: x, width: w, y: still ? H - B - h : H - B, height: still ? h : 0, rx: 3, fill: COLORS[0], class: 'cms-chart-bar' }, svg);\n        if (!still) bar.style.transitionDelay = (i * 45) + 'ms';\n        if (tip) {\n          bar.addEventListener('mousemove', function (e) { tip.show('<strong>' + d.labels[i] + '</strong> ' + v + ' ' + d.units[1], e); fig.classList.add('is-hovering'); bar.classList.add('is-active'); });\n          bar.addEventListener('mouseleave', function () { tip.hide(); fig.classList.remove('is-hovering'); bar.classList.remove('is-active'); });\n        }\n        return { bar: bar, y: H - B - h, h: h };\n      });\n      reveal(fig, function () { bars.forEach(function (b) { b.bar.setAttribute('y', b.y); b.bar.setAttribute('height', b.h); }); });\n    },\n    line: function (fig, svg, d) {\n      var all = [].concat.apply([], d.series), top = nice(Math.max.apply(null, all)), band = axes(svg, top, d.labels, '');\n      var xs = d.labels.map(function (_, i) { return L + band * (i + 0.5); });\n      var ys = function (v) { return T + (H - T - B) * (1 - v / top); };\n      var paths = d.series.map(function (s, k) {\n        var path = el('path', { d: s.map(function (v, i) { return (i ? 'L' : 'M') + xs[i] + ' ' + ys(v); }).join(' '), fill: 'none', stroke: COLORS[k], 'stroke-width': 3, class: 'cms-chart-line' }, svg);\n        s.forEach(function (v, i) { el('circle', { cx: xs[i], cy: ys(v), r: 3.5, fill: COLORS[k], class: 'cms-chart-dot' }, svg); });\n        return path;\n      });\n      legend(fig, d.head.slice(1));\n      if (!still) paths.forEach(function (p) { var n = p.getTotalLength(); p.style.strokeDasharray = n; p.style.strokeDashoffset = n; });\n      reveal(fig, function () { paths.forEach(function (p) { p.style.strokeDashoffset = 0; }); fig.classList.add('is-drawn'); });\n      if (INTERACTIVE) {\n        var tip = tooltip(fig), guide = el('line', { y1: T, y2: H - B, class: 'cms-chart-guide' }, svg);\n        guide.style.display = 'none';\n        var hit = el('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' }, svg);\n        hit.addEventListener('mousemove', function (e) {\n          var box = svg.getBoundingClientRect(), x = (e.clientX - box.left) * W / box.width;\n          var i = Math.max(0, Math.min(xs.length - 1, Math.round((x - L) / band - 0.5)));\n          guide.setAttribute('x1', xs[i]); guide.setAttribute('x2', xs[i]); guide.style.display = '';\n          tip.show('<strong>' + d.labels[i] + '</strong>' + d.series.map(function (s, k) { return '<br><span style=\"color:' + COLORS[k] + '\">●</span> ' + d.names[k + 1] + ': ' + s[i] + ' ' + d.units[k + 1]; }).join(''), e);\n        });\n        hit.addEventListener('mouseleave', function () { tip.hide(); guide.style.display = 'none'; });\n      }\n    },\n    donut: function (fig, svg, d) {\n      var values = d.series[0], total = values.reduce(function (a, b) { return a + b; }, 0);\n      var cx = W / 2, cy = H / 2, r = 100, C = 2 * Math.PI * r, start = 0;\n      var tip = INTERACTIVE && tooltip(fig);\n      var arcs = values.map(function (v, i) {\n        var len = C * v / total;\n        var arc = el('circle', { cx: cx, cy: cy, r: r, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': 42, class: 'cms-chart-arc', transform: 'rotate(-90 ' + cx + ' ' + cy + ')' }, svg);\n        arc.style.strokeDasharray = (still ? len : 0) + ' ' + C;\n        arc.style.strokeDashoffset = -start;\n        if (!still) arc.style.transitionDelay = (i * 150) + 'ms';\n        if (tip) {\n          arc.addEventListener('mousemove', function (e) { tip.show('<strong>' + d.labels[i] + '</strong> ' + v + d.units[1], e); arc.classList.add('is-active'); });\n          arc.addEventListener('mouseleave', function () { tip.hide(); arc.classList.remove('is-active'); });\n        }\n        start += len;\n        return { arc: arc, len: len };\n      });\n      text(svg, cx, cy + 6, d.names[1], { 'text-anchor': 'middle', class: 'cms-chart-centre' });\n      legend(fig, d.labels.map(function (l, i) { return l + ' ' + values[i] + d.units[1]; }));\n      reveal(fig, function () { arcs.forEach(function (a) { a.arc.style.strokeDasharray = a.len + ' ' + C; }); });\n    },\n  };\n  Array.prototype.forEach.call(document.querySelectorAll('figure.cms-chart'), function (fig) {\n    var table = fig.querySelector('table');\n    var kind = draw[fig.getAttribute('data-chart')] ? fig.getAttribute('data-chart') : 'bar';\n    if (!table || fig.querySelector('svg')) return;\n    var d = read(table);\n    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': d.head.join(', ') + ': see the table' });\n    fig.insertBefore(svg, table);\n    table.classList.add('cms-chart-table');\n    draw[kind](fig, svg, d);\n  });\n})();"
-          },
-          "ref": {
-            "id": "chart-interactive",
-            "version": 1
-          },
-          "params": {
-            "types": "bar, line, donut"
-          }
-        }
-      },
-      {
-        "id": "interactive-place-dawn",
-        "type": "selector",
-        "name": "After the introduction",
-        "position": {
-          "x": 790,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "mode": "css",
-          "selector": "h1 + p",
-          "place": "after"
-        }
-      },
-      {
-        "id": "video-dawn",
-        "type": "object",
-        "name": "Video: dawn",
-        "position": {
-          "x": 1040,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "content": {
-            "kind": "video",
-            "fileId": "video-dawn",
-            "caption": "The beds at dawn in May.",
-            "autoplay": true,
-            "loop": true,
-            "muted": true
-          }
-        }
-      },
-      {
-        "id": "interactive-place-hives",
-        "type": "selector",
-        "name": "Before “Rainfall”",
-        "position": {
-          "x": 1290,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "mode": "heading",
-          "text": "Rainfall",
-          "place": "before"
-        }
-      },
-      {
-        "id": "video-hives",
-        "type": "object",
-        "name": "Video: hives",
-        "position": {
-          "x": 1540,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "content": {
-            "kind": "video",
-            "fileId": "video-hives",
-            "caption": "Our three hives, kept by volunteers since March.",
-            "autoplay": true,
-            "loop": true,
-            "muted": true
-          }
-        }
-      },
-      {
-        "id": "interactive-place-rain",
-        "type": "selector",
-        "name": "Before “Where the harvest went”",
-        "position": {
-          "x": 1790,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "mode": "heading",
-          "text": "Where the harvest went",
-          "place": "before"
-        }
-      },
-      {
-        "id": "video-rain",
-        "type": "object",
-        "name": "Video: rain",
-        "position": {
-          "x": 2040,
-          "y": 478.00000000000006
-        },
-        "config": {
-          "content": {
-            "kind": "video",
-            "fileId": "video-rain",
-            "caption": "Autumn rain filling the ponds.",
-            "autoplay": true,
-            "loop": true,
-            "muted": true
-          }
         }
       },
       {
@@ -328,199 +236,63 @@
         "type": "output",
         "name": "Interactive page",
         "position": {
-          "x": 2290,
-          "y": 478.00000000000006
+          "x": 1258,
+          "y": 400
         },
         "config": {
           "format": "html",
           "fullDocument": true,
-          "inlineAssets": true
+          "inlineAssets": true,
+          "variant": "interactive"
         }
       }
     ],
     "edges": [
       {
-        "id": "word.document>tables-static.document",
+        "id": "word.document>tables.document",
         "source": "word",
         "sourcePort": "document",
-        "target": "tables-static",
+        "target": "tables",
         "targetPort": "document"
       },
       {
-        "id": "tables-static.selection>charts-static.selection",
-        "source": "tables-static",
+        "id": "tables.selection>charts.selection",
+        "source": "tables",
         "sourcePort": "selection",
-        "target": "charts-static",
+        "target": "charts",
         "targetPort": "selection"
       },
       {
-        "id": "charts-static.document>static-place-dawn.document",
-        "source": "charts-static",
+        "id": "charts.document>media.where",
+        "source": "charts",
         "sourcePort": "document",
-        "target": "static-place-dawn",
-        "targetPort": "document"
-      },
-      {
-        "id": "static-place-dawn.point>picture-dawn.where",
-        "source": "static-place-dawn",
-        "sourcePort": "point",
-        "target": "picture-dawn",
+        "target": "media",
         "targetPort": "where"
       },
       {
-        "id": "picture-dawn.document>static-place-hives.document",
-        "source": "picture-dawn",
-        "sourcePort": "document",
-        "target": "static-place-hives",
-        "targetPort": "document"
-      },
-      {
-        "id": "static-place-hives.point>picture-hives.where",
-        "source": "static-place-hives",
-        "sourcePort": "point",
-        "target": "picture-hives",
-        "targetPort": "where"
-      },
-      {
-        "id": "picture-hives.document>static-place-rain.document",
-        "source": "picture-hives",
-        "sourcePort": "document",
-        "target": "static-place-rain",
-        "targetPort": "document"
-      },
-      {
-        "id": "static-place-rain.point>picture-rain.where",
-        "source": "static-place-rain",
-        "sourcePort": "point",
-        "target": "picture-rain",
-        "targetPort": "where"
-      },
-      {
-        "id": "picture-rain.document>static.document",
-        "source": "picture-rain",
+        "id": "media.document>static.document",
+        "source": "media",
         "sourcePort": "document",
         "target": "static",
         "targetPort": "document"
       },
       {
-        "id": "word.document>tables-interactive.document",
-        "source": "word",
-        "sourcePort": "document",
-        "target": "tables-interactive",
-        "targetPort": "document"
-      },
-      {
-        "id": "tables-interactive.selection>charts-interactive.selection",
-        "source": "tables-interactive",
-        "sourcePort": "selection",
-        "target": "charts-interactive",
-        "targetPort": "selection"
-      },
-      {
-        "id": "charts-interactive.document>interactive-place-dawn.document",
-        "source": "charts-interactive",
-        "sourcePort": "document",
-        "target": "interactive-place-dawn",
-        "targetPort": "document"
-      },
-      {
-        "id": "interactive-place-dawn.point>video-dawn.where",
-        "source": "interactive-place-dawn",
-        "sourcePort": "point",
-        "target": "video-dawn",
-        "targetPort": "where"
-      },
-      {
-        "id": "video-dawn.document>interactive-place-hives.document",
-        "source": "video-dawn",
-        "sourcePort": "document",
-        "target": "interactive-place-hives",
-        "targetPort": "document"
-      },
-      {
-        "id": "interactive-place-hives.point>video-hives.where",
-        "source": "interactive-place-hives",
-        "sourcePort": "point",
-        "target": "video-hives",
-        "targetPort": "where"
-      },
-      {
-        "id": "video-hives.document>interactive-place-rain.document",
-        "source": "video-hives",
-        "sourcePort": "document",
-        "target": "interactive-place-rain",
-        "targetPort": "document"
-      },
-      {
-        "id": "interactive-place-rain.point>video-rain.where",
-        "source": "interactive-place-rain",
-        "sourcePort": "point",
-        "target": "video-rain",
-        "targetPort": "where"
-      },
-      {
-        "id": "video-rain.document>interactive.document",
-        "source": "video-rain",
+        "id": "media.document>interactive.document",
+        "source": "media",
         "sourcePort": "document",
         "target": "interactive",
         "targetPort": "document"
       }
     ],
-    "groups": [
-      {
-        "id": "group-static-charts",
-        "name": "Static charts",
-        "nodeIds": [
-          "tables-static",
-          "charts-static"
-        ],
-        "color": "#2563eb"
-      },
-      {
-        "id": "group-pictures",
-        "name": "Pictures added",
-        "nodeIds": [
-          "static-place-dawn",
-          "picture-dawn",
-          "static-place-hives",
-          "picture-hives",
-          "static-place-rain",
-          "picture-rain"
-        ],
-        "color": "#0d9488"
-      },
-      {
-        "id": "group-interactive-charts",
-        "name": "Interactive charts",
-        "nodeIds": [
-          "tables-interactive",
-          "charts-interactive"
-        ],
-        "color": "#7c3aed"
-      },
-      {
-        "id": "group-videos",
-        "name": "Videos added",
-        "nodeIds": [
-          "interactive-place-dawn",
-          "video-dawn",
-          "interactive-place-hives",
-          "video-hives",
-          "interactive-place-rain",
-          "video-rain"
-        ],
-        "color": "#059669"
-      }
-    ],
     "notes": [
       {
         "id": "note-1",
-        "text": "One Word document (text and tables), two pages.\nTop: static charts, and pictures the CMS adds. Bottom: the same figures as charts that animate and show values on hover, and short videos in the same places.\nEdit the Word file once; both pages follow.",
+        "text": "One Word document (text and tables), two pages from one flow.\nThe Static page uses the nodes' own settings: static charts and pictures the CMS adds. The Interactive page (its page variant) gives two nodes their own settings: charts that animate and show values on hover, and short videos in the same places.\nEdit the Word file once; both pages follow.",
         "position": {
           "x": 40,
-          "y": -110
+          "y": -130
         },
-        "width": 560
+        "width": 600
       }
     ]
   },
@@ -529,7 +301,7 @@
       "id": "garden-word",
       "name": "garden-year.docx",
       "encoding": "base64",
-      "data": "UEsDBBQAAAAIAGe7d10IvxIi+wAAACIEAAAcAAAAd29yZC9fcmVscy9kb2N1bWVudC54bWwucmVsc62TTU7DMBCFr2J5T5wUKAjV7QYhdYvCAVxn8iPisWVPEb09FqVpiiqrCy/n2fPep9HMavNtRvYFPgwWJa+KkjNAbZsBO8k/6re7Z75Zr95hVBR/hH5wgcUWDJL3RO5FiKB7MCoU1gHGl9Z6oyiWvhNO6U/VgViU5VL4uQe/9GTbRnK/bSrO6oODW7xt2w4aXq3eG0C6EiECHUYI0VH5DkjyY11EHy6uxy9yxuPe7MDHOZ4JJikFcZ8TorWW0NJ8DJOUgnjICQHY/GM4KSmEx6y7AERx7vNt+FNSCMucCBR74Zz/Wx7FKsXwlHcdkGq1G2cck3SCEBfHvv4BUEsDBBQAAAAIAGe7d10yn+/6dQYAACA7AAARAAAAd29yZC9kb2N1bWVudC54bWztW9tu2zgQ/RVCQIEu0EaWJTuOt06RTdAbkLZosu0zLdESYYkUSMqK+7S/sb+3X7JDXWwndhTbyYbqJi+mKJNnhsPLDI/IN2+vkhjNiJCUs5HlHHQsRJjPA8rCkfXn5bvXAwtJhVmAY87IyJoTab09fpMPA+5nCWEKJf7wY8i4wOMY/s8dD+VOD+Wp41kIwJkc5qk/siKl0qFtSz8iCZYHCfUFl3yiDnye2HwyoT6xcy4Cu9txOsVTKrhPpARNTjGbYVnDJetoPCUM/pxwkWAFWRHaCRbTLH0N6ClWdExjquaA3enXMHxkZYINK4jXC4V0lWGpUJXUNcQ2cssqZ5V1Com2IDHowJmMaLpsxr5o8GdUg8yaGjFL4mUXON79+uBM4BySJeA26gdlpSQuNW9GdDpb9IiGWNTYRoXrMmtNEkzZUvBeplkxrtPbDaB7EyCFyXafznkveJYu0ej90D6y6QJLz/kdsKpOXm2avJ8yFxFOFzPQv9oOrBp3Gs+z/QgLRa6WGM7OID37yB6sA3X3AIIGdp11KHdnqL6ttVoD2nIs3wACrdaQthzUN5E2NK6/H1J3HelwPyR3HWmwH9LacIKFZLoHFNRaICRusDPCoZ3wgMTucjF0+j7ZcnrUc21QTVYbaq7i0C31qXHqSW9DzRWc/ZRZAZCBCqKdULr12mzruljhCMuFs9SIuy1nMF9ruHkCNtKBz5gHc52mxc9XUSQXah4TlA9nOB5ZHwjW8ZNj2cdv7EWZ4kdpVYYyxT4okgoiiZgR6/gEzQkWCCv0jRbBWEDQKU+SjEHUgt5jERCmoVQBCEgadqFEE/KXTKAZjzOmCOCiUJAcJVwQNOE8QCrCDBGQCE9UFkq8QlOSKjQmREIZ/QeUpUIqpGhCEESCKMhCpHKOUs4CeYAuIxCGMGCWZcMMpB/crm6Tzbrb2+wDhgTUGs+hQUxF+9kHlEcwoQuklOApCRBl6CQLM6leoTwirGiV4hBQcCJfgWEwk4UZfJ6JkCgFhsJxjHwM5oG60ImcQaSCnF4XTUP9CiLnUsfNVlHjuErKVsPDD7CLmqdaVV9ZkIFYp9fpdLR5igJ/wLCEDi1yPK2tqB1mDN4yH/o85hCv4kxxnZU/R5ZXVo7JRO1SfswVtH6XGoKG0U4iKNMj/sPuVb5vX0UbfsVsZXZh7/eCBvoxhPSUx6XBvZ7jltI2vi4h6pqqhBILSD2iiajK1a/964Oyej0uDX0qy9J14c0j9vyWwa7fFPAPIaSeXC+n4W+3yypattL4WwTXnTTBsSTVoDqVa2/vVOoT3rQI3tnuhxLvtcYQ78jYpCH6rTHEORYmDeH0WmOJk9SoJdxuayxxjucmLdEbtMYSnzKj6+VRe9aJT1lsdJ3wOq0xBYS2ZpfM9qwUFyQ1agqnPUvFF18ZjSjaE1t95jOTlug6rbHEGfFNWuLuyaGTcuv8kLzCN2D0QMu42ONLTmPYulOpgNTYj2E4QYGYI5klCdAsaRbHQDFoSuEaNAp4DkwDR27nxZKA+L0oWNAshTY6BxvbLGFIgJZoDLS/3mpTYEGwP31mF34ldsHtdI42sAt3vC6R/5+kw2LmvUySBtbhYYRdXJt+L1880xyV+MOGhfdJRQKmWZaGSOARpLdnx2KY5Ok1kDxmpT8tisk7NCr9qDX9YJrgatjAP0I/uK3pB8P0mtfgKR+B8G2YjU+L3HONxktue/gCw8yiZzRectsTLxmmNXtG/XTTbHxanOrAqJ9uEc1vmNFt+gz2CPu49sRLpvlks7zG3R9DdfLwdPaPiFQn8+pjbjncJNiPyj7nUJ1P1tBQxOHsW05VVPy1ct4wj3h55pDCaTpNYTM4YhjPEdYHDgUw2rw8NKgPI44xe6awfykKu50H5M5gWFJWXLj5z0lkmAXtIo+/L+becxRWsrj10vK8S6vZ1ClR+k5fbPZMTHsINThpn4JnM2qNu8PlG+FB45gvz+CjiQC/pP1rWNwg+OevvyXS35kF8WGZh8Ps8Kkpw/B1GtwwRGckGROx2QNL4qsqHgkvfpbLvOMc6duU+RCuaDj9gQs3RfMhFxQCAlCGCwXfqFVpkzSEYac9Nodrg47nwS3Tygsus6UbXea1G17mosJZjKzDTiEGAga1kg0zOIYP2cr9p+HnLLmE6KDIwU1V7YM0JGXkK1U+KOz2i7LQvrpp8Fhe7YCH+nLr8b9QSwMEFAAAAAgAZ7t3XaqOUPtXBAAAJx4AAA8AAAB3b3JkL3N0eWxlcy54bWzlWVtz2jgU/isevzfcDEmY0k5LyjQz3TbTTWefhS2DprbkleQS+uv36GJzkR2IDUx29wl0ztHR+c7FfBZv3z+lifcLc0EYnfi9q67vYRqyiNDFxP/xOHtz43tCIhqhhFE88ddY+O/fvV2NhVwnWHhpOL5fUMbRPAHtqhd4q97Q98ArFeM0nPhLKbNxpyPCJU6RuGIZpqCMGU+RhCVfdFLEf+bZm5ClGZJkThIi151+tzsq3PBjvLA4JiG+Y2GeYir1/g7HCXhkVCxJJgpvq2O8rRiPMs5CLARkIk2MvxQRWrrpBY6jlIScCRbLKwBjI9KuYHuvq7+lycbB8GUO+oUDlf6IhXc4RnkihVryB26XHbXMtpcdx1rXzluN5TqDomWIowVH2dIHkVbdRxP/q8oGBAubzU7oDn0yRana+wslpZE+8++Zzp85ULtxj5KqTXaOeVSSirMkz3HNcZ7eYw7NyQMnjEPHFDa3t0YjcEo+kyjC1BjSJYnwX0tMfwgcaZGcJw/cfrmnURlk9IRUKNAnXeMK9FOcJH8gY82yetMEx7JC2+veGP2cScnS+v2cLJbPOIDMbgdjlgpEfcqrq/tIJKRwP79GagJFkKZvtKrQFD+pEJ9pAN2POpTfheFwZMvyeyp2ZRC6tn4phM8YqaeU25RW4fVOiSRkCeOFbf/TdfBxWAAqpIO+C9HIWkLs10K0J14MYr+iikbWEuKgFuLgbBB7s+Du2s7lFsSgAqKWtYQY1EK0J54GItELMhX6s6amLaEMa6HYjjlrQ7YMflQbvG3us7Za0+D/lJzRhRO6FZ8w7rnxpfunabBfiJAPpWY/ZqX1NupDsR/DK6rDmKJMsT8ngNDKm2bNJR2D4kl5kHRsZxxYmt6UoVC132qMYomB7ALXtK1iLQ6PdhAMg9EHhV4Ck8RTpQP+AMy6/FEqe7F85G0ecEbWtNwfyTwhTMvXTrJ3lCfM+LXV7Kf4xUzo29SlEJKFLehDRbRHk9K6nujt9kQDlC6LUCibM4gzooQm13xcsWlnHBpAd9mFgt6cWVwMetAauss6FPTmjONi0EetobssRUFvzlAuBv2mNXSX4yjozfnNxaCDsC3260rs9ufiVWNv/6C7qcRe3D28Zuztn3S3ldhtuK8a+9GPunAJ4EPwtPteAzqeEPrTfbEpNVVJsDeCJROfMSoP3apVYK163+kORwOgVWZLIVQ3qeZ66TDRrEY6Y0xSJvF3HGMO19TuDVZsLTxempwK+uGq20zAbbr8kJBFeZrIoQwi5CTThzSl2QX6R2jYeuBSaQ/1vOqJQr7tdgppb5+Huu6H/xb00YCwH5SL77n65wDlklW+9GzdzNjZ2bmZKSanVT+V0PezWhh4ysLbZOfodqpL9Mma7Zzp+USj56cNG4P/4rBZ7JWzVsB+8ahtOf2fTdo+8v2UWv1J5my7dP+GMfsCpfmap3MQ76dFVc2jRnep0dqEX3wT7/4BUEsDBBQAAAAIAGe7d11I49jjOgEAAIMCAAARAAAAZG9jUHJvcHMvY29yZS54bWylkl1vgjAUhv8K6T2UQuYMAUy2xauZLJlmy+6a9qjN6EfaTvTfr1RFzbzbZXkfHt5zaD3byy7ZgXVCqwaRLEcJKKa5UJsGrZbzdIoS56nitNMKGnQAh2ZtzUzFtIU3qw1YL8AlwaNcxUyDtt6bCmPHtiCpywKhQrjWVlIfjnaDDWXfdAO4yPMJluApp57iQZia0YhOSs5GpfmxXRRwhqEDCco7TDKCL6wHK93dF2JyRUrhDyZMdAc9hyO9d2IE+77P+jKioT/Bn4vX9zhqKtSwKQaorTmrmAXqtW1XKlVUAq+Ddnw4LLCjzi/CptcC+NPhivubDbiFnRj+UksiMR7Dt+JoRzfwJJStjqOdk4/y+WU5R22RF5OUkLQol0VZFY8Vecim0+JrqHbjuEjlqcS/rGdJG5vfXpz2F1BLAwQUAAAACABnu3ddH6OSluYAAADOAgAACwAAAF9yZWxzLy5yZWxzrZLPTgIxEIdfpemdnQWNMYbCxZhwMwYfYNLO7jbSP5kOim9vQzSKgYUDx05/8/XrZObLXdiod+LiUzR62rRaUbTJ+dgb/bp+mtzr5WL+QhuUmiiDz0XVlliMHkTyA0CxAwUsTcoU602XOKDUI/eQ0b5hTzBr2zvgvwx9yFQrZzSv3FSr9WemS9ip67ylx2S3gaIceeJfopKRexKjPxI7cN/lpmI1HLeZXW5z+qcQSNChINjENMlcu1k8lV+h6vJcy2WfGBO6ueZ4aCcUHblxJcx5zOj2mkZ2WySFMyPaZ36U4GAxF19QSwMEFAAAAAgAZ7t3XVh52yKSAAAA5AAAABMAAABkb2NQcm9wcy9jdXN0b20ueG1snc5BCsIwEIXhq5TsbaoLkdK0G3HtoroP6bQNNDMhMy329kYED+Dy8cPHa7pXWIoNEntCo45lpQpAR4PHyahHfztcVMFicbALIRi1A6uube6JIiTxwEUGkI2aRWKtNbsZguUyZ8xlpBSs5JkmTePoHVzJrQFQ9KmqztqtLBQO8cepr1dv8i85kPu842e/x+zp9g1QSwMEFAAAAAgAZ7t3XeL8ndqTAAAA5gAAABAAAABkb2NQcm9wcy9hcHAueG1snc5BCsIwEIXhq4TsbaoLkdK0G3HtoroPybQNNJOQGUt7eyOCB3D5+OHjtf0WFrFCJh9Ry2NVSwFoo/M4afkYboeLFMQGnVkigpY7kOy79p5jgsweSBQAScuZOTVKkZ0hGKpKxlLGmIPhMvOk4jh6C9doXwGQ1amuzwo2BnTgDukHyq/YrPwv6qL9/KPnsKfiqe4NUEsDBBQAAAAIAGe7d12cicmR0gEAAK0GAAASAAAAd29yZC9mb290bm90ZXMueG1s1ZTNbuMgEMdfxeKe2I66q5UVp4etuupt1bQPQDGOUYFBgO3m7TvY2Ek/FKXNqRcwMPOb/zBm1tcvSiYdt06ALkm+zEjCNYNK6F1JHh9uF39I4jzVFZWgeUn23JHrzbovagCvwXOXIEG7ojesJI33pkhTxxquqFsqwSw4qP2SgUqhrgXjaQ+2SldZng1fxgLjzmG4v1R31JGIUx9pYLjGwxqsoh6Xdpcqap9bs0C6oV48CSn8HtnZ7wkDJWmtLiJiMQsKLsUoKE6Thz0n7uhyA6xVXPshYmq5RA2gXSPMIY3v0vCwmSDdqSQ6JSe73uRXl9XgxtIepwPwHPnV6KTkqPw0Mc/OqEhAzB7nSHgbc1KiqNCHwN+6mqPLzX99DbB6DzD4oi4pzj8LrTnQxGW0O/08s8LD/gIrFvk4NXeZmG1DDb5AxYq7nQZLnyQqwpIleOtJ+K3JcctJ+sLvDVo4bqilHizBLVGVZJEPhmYY/tswOUMZRkADWnuOrxs7XF9IEXJeXc2L+zaEpK0Hkm7W6ew+DvF76/cyRO+oLMltVHPPa26xZ/LoGI0nsXgc92fcLHs+CPGGcfL6NF0G2gvdDl1m+z717Cdk/mkGp27haOE2r1BLAwQUAAAACABnu3dd0nf8t20AAAB7AAAAHQAAAHdvcmQvX3JlbHMvZm9vdG5vdGVzLnhtbC5yZWxzTYxBDsIgEEWvQmZvB10YY0q78wBGDzDBEYhlIAwxHl+WXf789968/vJmvtw0FXFwnCwYFl9eSYKD5+N2uMC6zHfeqA9CY6pqhiLqIPZer4jqI2fSqVSW8bxLy9THbAEr+Q8FxpO1Z2z7BuDyB1BLAwQUAAAACABnu3ddP0qOjcYBAACSBgAAEQAAAHdvcmQvZW5kbm90ZXMueG1szZTNctsgEMdfRcPdRvKknY7Gcg5N28mtE7cPQBCymADLAJLqt+9KQpLzMR4nvuQCCHZ/+19W7Pb2n1ZJK5yXYAqSrVOSCMOhlOZQkL9/fq6+kdvdtsuFKQ0E4RO0Nz7vLC9IHYLNKfW8Fpr5tZbcgYcqrDloClUluaAduJJu0iwdVtYBF94j/DszLfMk4vRrGlhh8LACp1nAT3egmrmnxq6QblmQj1LJcER2+nXCQEEaZ/KIWM2Cepd8FBSnycNdEnd0uQPeaGHCEJE6oVADGF9Lu6TxURoe1hOkPZdEq9Vk19ns5roa3DnW4bQAL5Ffjk5ajcrPE7P0gor0iNnjEgnPY05KNJNmCfyhqzm53OzL+wCblwCL7+ea4vxy0NiFJq+j3ZunmWXEu1ixyKep+evE7Gtm8QVqnt8fDDj2qFARlizBW0/635qcdJyky8PRooEXljkWwBHckmVBVtlgZ4fht+snbxnHAGjAqiDwcWM763Il+5Q3N/PHQ9NHZE0AQndbOruPQ1zvw1H10VumCvJjFPMgKuGwP4roF22jVDyN2zNsFj0f9NGGMTq9lSoHE6Rphgazf5l2+vmzflP/mRtY1n73H1BLAwQUAAAACABnu3dd0nf8t20AAAB7AAAAHAAAAHdvcmQvX3JlbHMvZW5kbm90ZXMueG1sLnJlbHNNjEEOwiAQRa9CZm8HXRhjSrvzAEYPMMERiGUgDDEeX5Zd/vz33rz+8ma+3DQVcXCcLBgWX15JgoPn43a4wLrMd96oD0JjqmqGIuog9l6viOojZ9KpVJbxvEvL1MdsASv5DwXGk7VnbPsG4PIHUEsDBBQAAAAIAGe7d106CoF4swEAAJIFAAARAAAAd29yZC9zZXR0aW5ncy54bWyllM1u2zAMx1/F0D2xHazbYNQtthXbehh2SPsAjCTHQiRRkGS7efvSdhz3AyiS5iQaJH/8i7R4fftkdNJKHxTakuXLjCXSchTKbkv2+PB78Z0lIYIVoNHKku1lYLc3110RZIwUFBIC2FB0jpesjtEVaRp4LQ2EpVHcY8AqLjmaFKtKcZl26EW6yvJssJxHLkMg0C+wLQR2wJn3NHTSkrNCbyDSp9+mBvyucQuiO4hqo7SKe2JnXycMlqzxtjggFkdBfUoxCjocU4Y/pe6Ycoe8MdLGoWLqpSYNaEOt3HyNz9LIWU+Q9qNLtEZPcZ3Lv1w2gzsPHR0z8BT5YkwyelT+MTHPTphIjzhmnCLhdc1JiQFl58Kfas2L5uZX5wFWbwGOHtQlw/njsXEzTV1Gu7e7I6t/12ewDkN+ebVwmZh1DY5eoOHF/daih40mRTSyhLqe9L816zeOUMFp2P8EvttSL6wY0tLBJStodHyAzTqiS7qiBV2yb6uMDW7ZSvvDiv9C/JUgaNlNERXoIMeYcYnM1nrcb1NkfsXItGBI2at98w8FSe+Kxp8xkb5kOtckc1qnN89QSwMEFAAAAAgAZ7t3XWPtXtYjAQAAQwMAABIAAAB3b3JkL2ZvbnRUYWJsZS54bWyd0lFvgjAQB/CvQvquRTONIaIvy5K9bx+gtkWa9XqkV6d8+x0MGYkvsgegtPn/ctd2f7yBz75tJIehFKtlLjIbNBoXzqX4/Hhb7ERGSQWjPAZbitaSOB7216LCkCjjdKACdCnqlJpCStK1BUVLbGzgxQojqMS/8SxBxa9Ls9AIjUru5LxLrVzn+VYMTHxGwapy2r6ivoANqc/LaD2LGKh2Dd216zPaFaNpImpLxB2D//VAuTAyq5cHCJyOSFilJTczVNRTHF/l/Qj8H7CZB6wfgK22t3nGbjAkJ6eOM/Oc7eg4M3H+V8wEIJNMPUtZ3/dVdlmVVK2onop8OecUtRm5Fro9Al28nwNGdfIs8alnfHD8MNy9uf/u0w/trZ/vWhDy8ANQSwMEFAAAAAgAZ7t3XdJ3/LdtAAAAewAAAB0AAAB3b3JkL19yZWxzL2ZvbnRUYWJsZS54bWwucmVsc02MQQ7CIBBFr0JmbwddGGNKu/MARg8wwRGIZSAMMR5fll3+/PfevP7yZr7cNBVxcJwsGBZfXkmCg+fjdrjAusx33qgPQmOqaoYi6iD2Xq+I6iNn0qlUlvG8S8vUx2wBK/kPBcaTtWds+wbg8gdQSwMEFAAAAAgAZ7t3XdRtP2wnBgAAyh8AABUAAAB3b3JkL3RoZW1lL3RoZW1lMS54bWztWc1uGzcQfpXF3hvLtmTFRpTAlqw4iZ0YkZIix9EutUuLu1yQlB3diuTUS4ECadFDA/TWQ1E0QAM06KUPYyBBmz5Eh1xJu5S4dX7sIkBtARLJ/Wb4cWY4HHOv3XicMO+YCEl52vJXr9R8j6QBD2katfwH/e5nV31PKkhDYDwlLX9CpH/j+jXYUjFJiIfSqdyClh8rlW2trMgAh0Fe4RlJ8dmQiwQUdkW0Ego4Qa0JW1mr1TZWEqCp76WQoNJ7wyENiNfXKv258l2GX6mSeiBgoqdVE0vCYMPRqv6RE9lmwjsG1vJxnpCf9Mlj5XsMpMIHLb9m/vyV69dW5kJMVciW5Lrmbyo3FQhHa0ZORIO5YL3eqG9sz/UbAFPLuN3m7sbuxlyfAUAQ4EpzLrbO5lq7PsWWQHnTobvT7KyvWviS/vUl/HZDfyy8AeXN+hK+220XNiyB8mZjCd/Y2dzp2PoNKG9uLOGbte1OvWnhDShmNB0toWuNjfX2bLVzyJCzPSd8s1HvNtem8AKFnXl05fKpqoq1BI646CLAOBcUTT01ycgQAsS1gdGBoN4+jWIMvAxSLnG4tlbr1tbxW3/qpmU8ClsEStL5UCCXhjQfTwaCZqrl30atfgny+tWr0ycvT5/8dvr06emTX6ZzL8vtQRqV5d7++PXfz7/w/vr1h7fPvnHjZRn/5ucv3/z+x7+pxxWXaH374s3LF6+/++rPn5454NsCBmV4nyZEenfJiXefJ7hAxwRkIN5Poh8DLUtsp5GEFLSMA72rYgt9dwIMHLgdYtvxocB04QLeHB9ZhHuxGCvqAN6JEwt4wDnb4cK5pjt6rrIVxmnknlyMy7j7AMeuudsLXt4dZxj31KWyHROL5iFDl0NEUqI8/YyPCHGIPaLUsusBDQSXfKi8R9TbAeo0SZ8OrGgqhPZogn6ZuAiivy3bHDz0djhzqe+QYxuJewOYSyVhlhlvwlhB4mQMCSsj90HFLpK9iQgsg0uFno4I495uSKR0ydwTuN6SzB1MM263H7BJYiOFoiMXch84LyM7fNSOIcmcnGkal7G35AhDFLxDrpwkuL1DdB/9AGmlux9SYrn77L39ANOQO0D0k7FwbQnC7f04YUMgLuXbIrFS7LagzujYGUdWaO8TwuAEQkK8B7dceJ5ZNi9I344xq+wRl21ugx2rup8SibWSLm4cjqXSCtkeiXgFn4PJQuKZQJqAqNJ8F71uhS4edYkzXlkwslIpxRoQ48VJ4p5EHe+i9TAGK6x0X7rjdSIs/73LHkOZow+QIe8tg4n9nW3TB2ZNUARMH7DKcKVbFLHcX4jo7WTExk65ob1pCzdgdWQVPQlNz6yAFmqfxsXVPlhhvP7++YXVO+df6VQlk8X6pgq3WNW0uQjpp1/UdGCcHhI8Ry5rmsua5v9Y01Tt58tK5rKSuaxk/rNKpihezBXQ7KLHaEkqb32GlLGemjCyL03ZI3Hvh10cNB0jNL9kymJsTqezcJEA0/YEV59TFfdiyHAaJXAZ5rmcao+kl3GJtZMZdqo3tdc4OeBhPrq6OrvaRAFQxTjWXrNxrNRUPrrRLO7w5upNLzJ3rTMCWvZ9SJQms0msO0g0Z4NnkDArOxcWmw4WV7X6ShbmZ+oVPJ883BNolXrOCCMOozps+UNg0kSihk+dfBEOr7KpvXq8W19a5aamfD4Ot0iUos4mUYrGGI+RxeFzdvlm4VmLnjbFMo3m1YtyuU4pC5mCpXbPO8Htt95AVQFkqAf/gcJmkqFOqfMWsAjfwgRqauwPyTOZkKoDMs5h5lFug4QqIjxGEwz7sitYWnBbXcPc8MmS28S9/amRMz9lJ5PhkASqYqTo4rNcifPpR4J1h4+RdC8OT7wBG4v7gIZqNFe1AUMq8aCcWjOk+IprHuCFFReyVh7xxprWG5hiqwLLYpgeMOXcnsNNe06ptBbDdnFldn+6oEGkHfXR5/DZQgvJs+I80YeoO49c6LFfIlYcARaxPIsvpr3NWdqrOjA+/mwoUSsms6hpxg5qVcfIOZYIpenm0Vl1XFzEwbAYvPqsmBWcprf0xpsPjnADdLCMHTMl8zuzx1iXI6lcbJ4UjOj1fwBQSwMEFAAAAAgAZ7t3XaDQThp6AgAAUgwAABIAAAB3b3JkL251bWJlcmluZy54bWzNVtuOmzAQ/RXk9w2QkIvQsqu2q61S9SY1/QAHnMSKb7INbL6hD31rX/tt/ZKOIZBsKq0S0kq8MNgzc+b4MjO+vX/izCuINlSKBIWDAHlEpDKjYp2gr4vHmxnyjMUiw0wKkqAdMej+7raMRc6XRIOZx9N4vhZS4yUDgzKMvDIce6UKI+QBujBxqdIEbaxVse+bdEM4NgNOUy2NXNlBKrkvVyuaEr+UOvOHQRhUf0rLlBgDMd5gUWDTwPG/0aQiApQrqTm2MNRrn2O9zdUNoCts6ZIyaneAHUwaGJmgXIt4D3HTEnIucU1oLxoPfU7c2uVBpjknwlYRfU0YcJDCbKg6LKMrGig3DUjx0iIKzg5HEEbXncGDxiWIA+A59LPaibOa+cuIYXDGiTiI1uMcCs9jNkw4puIQuNPWHG1uOL4MYHgKoCDbrjmct1rm6oBGr0Obi22L5ZL+Aqz9IR8vzVxH5ssGK4JcycFLYzVO7cece89G8wxKF3JlJ9YEqpV2k3V1erWyRL/WBG8TFFQoPGeWvicFYYudIgBUYAYMd0tNsw9Ox5wO+c6WFQwMKAjnDb8WkhAyuYBNCSu0KloDEtZeUBofeTu5zBkjtsVbkKdW9fvn93b+XdrMMrLam6vP2gkqMtC56QRNhxWPDRbrqkSPJoGz9ffGIAHrlLrbm39O/dul1MMo6sB9+B+4//h1KfdhCFwv5j7qxZUZzmYduEPz7sGdAaoduI97cWeiUZdchedJD+7MOOiSq9N+cJ92yVV45/aA+yQ6L1dBHvW/PSvwg2/dDE/65dyFOF4EoHyCZz/0PNcCmw7XLvlId/CqgzeqagzxGln327s/UEsDBBQAAAAIAGe7d13q4XZQoAEAACgIAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLVVy07DMBD8lShX1LhwQAi15cDjCBzgA1x7kxrih+xNaf+edZJWSmlKoc0lynp2dsbetTy5W+kyWYIPypppepmN0wSMsFKZYpq+vz2NbtK72eRt7SAklGrCNF0gulvGgliA5iGzDgwhufWaI4W+YI6LT14AuxqPr5mwBsHgCGONdDZ5gJxXJSb3zXosPU2VjvnOFGnyuKLlxk6M2UHGh4MupV74M+c3yly7DiPGhxmFyjuMGB9mhGVxQefYYdFaL4s7VyrBkRLZ0sidPozaHmQeyjonLJQLPwQIDUcp7BJj/E9nNs+VAGlFpYmS2XleBcoG+URFOiJWItbH9kIT6pWEU3S+rJfOWwEh0HDrMtsimivTnMwr9/jMNdVmMZ1tU9rtDuIj4LqEtjW7BhrsJPnNIAjrYUTCDjyqPXpk8JXQQBfWwzk3LKqAVh8nXaeeUxziNEmQR8lT6UE7bSo9B0//+5u9hQc1kVuLxmLfxG3hQU1QTw542KDDXjtApL++i9eiA7eCCvF5CX2taOFzmkB6tXv0aqj5Xm4kWf30z74BUEsBAhQAFAAAAAgAZ7t3XQi/EiL7AAAAIgQAABwAAAAAAAAAAAAAAAAAAAAAAHdvcmQvX3JlbHMvZG9jdW1lbnQueG1sLnJlbHNQSwECFAAUAAAACABnu3ddMp/v+nUGAAAgOwAAEQAAAAAAAAAAAAAAAAA1AQAAd29yZC9kb2N1bWVudC54bWxQSwECFAAUAAAACABnu3ddqo5Q+1cEAAAnHgAADwAAAAAAAAAAAAAAAADZBwAAd29yZC9zdHlsZXMueG1sUEsBAhQAFAAAAAgAZ7t3XUjj2OM6AQAAgwIAABEAAAAAAAAAAAAAAAAAXQwAAGRvY1Byb3BzL2NvcmUueG1sUEsBAhQAFAAAAAgAZ7t3XR+jkpbmAAAAzgIAAAsAAAAAAAAAAAAAAAAAxg0AAF9yZWxzLy5yZWxzUEsBAhQAFAAAAAgAZ7t3XVh52yKSAAAA5AAAABMAAAAAAAAAAAAAAAAA1Q4AAGRvY1Byb3BzL2N1c3RvbS54bWxQSwECFAAUAAAACABnu3dd4vyd2pMAAADmAAAAEAAAAAAAAAAAAAAAAACYDwAAZG9jUHJvcHMvYXBwLnhtbFBLAQIUABQAAAAIAGe7d12cicmR0gEAAK0GAAASAAAAAAAAAAAAAAAAAFkQAAB3b3JkL2Zvb3Rub3Rlcy54bWxQSwECFAAUAAAACABnu3dd0nf8t20AAAB7AAAAHQAAAAAAAAAAAAAAAABbEgAAd29yZC9fcmVscy9mb290bm90ZXMueG1sLnJlbHNQSwECFAAUAAAACABnu3ddP0qOjcYBAACSBgAAEQAAAAAAAAAAAAAAAAADEwAAd29yZC9lbmRub3Rlcy54bWxQSwECFAAUAAAACABnu3dd0nf8t20AAAB7AAAAHAAAAAAAAAAAAAAAAAD4FAAAd29yZC9fcmVscy9lbmRub3Rlcy54bWwucmVsc1BLAQIUABQAAAAIAGe7d106CoF4swEAAJIFAAARAAAAAAAAAAAAAAAAAJ8VAAB3b3JkL3NldHRpbmdzLnhtbFBLAQIUABQAAAAIAGe7d11j7V7WIwEAAEMDAAASAAAAAAAAAAAAAAAAAIEXAAB3b3JkL2ZvbnRUYWJsZS54bWxQSwECFAAUAAAACABnu3dd0nf8t20AAAB7AAAAHQAAAAAAAAAAAAAAAADUGAAAd29yZC9fcmVscy9mb250VGFibGUueG1sLnJlbHNQSwECFAAUAAAACABnu3dd1G0/bCcGAADKHwAAFQAAAAAAAAAAAAAAAAB8GQAAd29yZC90aGVtZS90aGVtZTEueG1sUEsBAhQAFAAAAAgAZ7t3XaDQThp6AgAAUgwAABIAAAAAAAAAAAAAAAAA1h8AAHdvcmQvbnVtYmVyaW5nLnhtbFBLAQIUABQAAAAIAGe7d13q4XZQoAEAACgIAAATAAAAAAAAAAAAAAAAAIAiAABbQ29udGVudF9UeXBlc10ueG1sUEsFBgAAAAARABEAXwQAAFEkAAAAAA=="
+      "data": "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"
     },
     {
       "id": "picture-dawn",

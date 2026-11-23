@@ -1,7 +1,9 @@
 // Generates the "Two outputs" example: one Word document (a garden's year in figures: text and three data tables)
 // makes two pages. The static page draws the tables as charts once, and the CMS adds three pictures; the interactive
 // page's charts animate in and show values on hover, and the CMS adds three short looping videos in the same places.
-// The pictures and videos are not in the Word file: Selectors give the places (their Point output), Objects add them.
+// One flow makes both pages: the Interactive Output is a page variant, and two nodes have their own settings for it
+// (the chart snippet, and videos instead of pictures). The pictures and videos are not in the Word file: one Insert
+// node adds them as three items, each at its own place.
 // The pictures and videos are drawn by scripts/make-example-media.py (examples/two-outputs/).
 // Run with `npm run example:two-outputs`. Writes examples/two-outputs/garden-year.docx and
 // examples/two-outputs.node-cms.json.
@@ -9,7 +11,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
-import { storeFile, type CanvasNote, type Graph, type GraphEdge, type GraphNode, type NodeGroup, type Snippet } from '../src/engine';
+import { storeFile, variantDifference, type InsertItem, type CanvasNote, type Graph, type GraphEdge, type GraphNode, type Snippet } from '../src/engine';
 import { seedLibrary } from '../src/snippets/seed';
 import { toProjectFile } from '../src/store/project';
 
@@ -287,64 +289,65 @@ const chartSnippet = (interactive: boolean): Snippet => ({
 });
 
 export function twoOutputsGraph(wordId: string, pictureIds: string[], videoIds: string[], snippets: Snippet[]): Graph {
-  const at = (col: number, row: number) => ({ x: 40 + col * 250, y: 60 + row * 190 });
+  const at = (col: number, row: number) => ({ x: 40 + col * 290, y: 60 + row * 200 });
   const lib = (id: string) => {
     const s = snippets.find((x) => x.id === id)!;
     return { snippet: structuredClone(s), ref: { id, version: s.version }, params: Object.fromEntries(s.params.map((p) => [p.name, p.default])) };
   };
   const edge = (source: string, sourcePort: string, target: string, targetPort: string): GraphEdge => ({ id: `${source}.${sourcePort}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
-  const nodes: GraphNode[] = [{ id: 'word', type: 'documentSource', name: 'Garden report (Word)', position: at(0, 1.5), config: { fileId: wordId } }];
-  const edges: GraphEdge[] = [];
-  // Each page: tables → charts, then for each picture a Selector (the place) → an Object (the picture or video).
-  const branch = (kind: 'static' | 'interactive', row: number) => {
-    const tables = `tables-${kind}`;
-    const charts = `charts-${kind}`;
-    nodes.push(
-      { id: tables, type: 'selector', name: 'Data tables', position: at(1, row), config: { mode: 'css', selector: 'table' } },
-      { id: charts, type: 'snippet', name: kind === 'static' ? 'Static charts' : 'Interactive charts', position: at(2, row), config: lib(kind === 'static' ? 'chart-static' : 'chart-interactive') },
-    );
-    edges.push(edge('word', 'document', tables, 'document'), edge(tables, 'selection', charts, 'selection'));
-    let previous = charts;
-    PICTURES.forEach((p, i) => {
-      const place = `${kind}-place-${p.find}`;
-      const media = `${kind === 'static' ? 'picture' : 'video'}-${p.find}`;
-      nodes.push(
-        { id: place, type: 'selector', name: p.where.label, position: at(3 + i * 2, row), config: { ...p.where.selector, place: p.where.place } },
-        {
-          id: media,
-          type: 'object',
-          name: `${kind === 'static' ? 'Picture' : 'Video'}: ${p.find}`,
-          position: at(4 + i * 2, row),
-          config: {
-            content: kind === 'static'
-              ? { kind: 'image', fileId: pictureIds[i], alt: p.alt, caption: p.caption }
-              : { kind: 'video', fileId: videoIds[i], caption: p.caption, autoplay: true, loop: true, muted: true },
-          },
-        },
-      );
-      edges.push(edge(previous, 'document', place, 'document'), edge(place, 'point', media, 'where'));
-      previous = media;
-    });
-    nodes.push({ id: kind, type: 'output', name: kind === 'static' ? 'Static page' : 'Interactive page', position: at(9, row), config: { format: 'html', fullDocument: true, inlineAssets: true } });
-    edges.push(edge(previous, 'document', kind, 'document'));
-  };
-  branch('static', 0);
-  branch('interactive', 2.2);
-  const groups: NodeGroup[] = [
-    { id: 'group-static-charts', name: 'Static charts', nodeIds: ['tables-static', 'charts-static'], color: '#2563eb' },
-    { id: 'group-pictures', name: 'Pictures added', nodeIds: PICTURES.flatMap((p) => [`static-place-${p.find}`, `picture-${p.find}`]), color: '#0d9488' },
-    { id: 'group-interactive-charts', name: 'Interactive charts', nodeIds: ['tables-interactive', 'charts-interactive'], color: '#7c3aed' },
-    { id: 'group-videos', name: 'Videos added', nodeIds: PICTURES.flatMap((p) => [`interactive-place-${p.find}`, `video-${p.find}`]), color: '#059669' },
+  // One branch for both pages. The interactive page has its own settings on two nodes (page variants): the chart
+  // snippet that animates, and videos instead of pictures, in the same places.
+  const staticCharts = lib('chart-static');
+  const pictures: InsertItem[] = PICTURES.map((p, i) => ({
+    id: `item-${p.find}`,
+    label: `${p.where.label}: ${p.find}`,
+    selector: p.where.selector,
+    place: p.where.place,
+    content: { kind: 'image', fileId: pictureIds[i], alt: p.alt, caption: p.caption },
+  }));
+  const videos: InsertItem[] = PICTURES.map((p, i) => ({
+    ...pictures[i],
+    content: { kind: 'video', fileId: videoIds[i], caption: p.caption, autoplay: true, loop: true, muted: true },
+  }));
+  const media = { content: { kind: 'imageUrl', url: '', alt: '' }, items: pictures };
+  const nodes: GraphNode[] = [
+    { id: 'word', type: 'documentSource', name: 'Garden report (Word)', position: at(0, 1), config: { fileId: wordId } },
+    { id: 'tables', type: 'selector', name: 'Data tables', position: at(1, 1), config: { mode: 'css', selector: 'table', expect: { min: 1 } } },
+    {
+      id: 'charts',
+      type: 'snippet',
+      name: 'Charts',
+      position: at(2, 1),
+      config: staticCharts,
+      variants: { interactive: variantDifference(staticCharts, lib('chart-interactive'))! },
+    },
+    {
+      id: 'media',
+      type: 'object',
+      name: 'Pictures and videos',
+      position: at(3, 1),
+      config: media,
+      variants: { interactive: variantDifference(media, { ...media, items: videos })! },
+    },
+    { id: 'static', type: 'output', name: 'Static page', position: at(4.2, 0.3), config: { format: 'html', fullDocument: true, inlineAssets: true } },
+    { id: 'interactive', type: 'output', name: 'Interactive page', position: at(4.2, 1.7), config: { format: 'html', fullDocument: true, inlineAssets: true, variant: 'interactive' } },
+  ];
+  const edges: GraphEdge[] = [
+    edge('word', 'document', 'tables', 'document'),
+    edge('tables', 'selection', 'charts', 'selection'),
+    edge('charts', 'document', 'media', 'where'),
+    edge('media', 'document', 'static', 'document'),
+    edge('media', 'document', 'interactive', 'document'),
   ];
   const notes: CanvasNote[] = [
     {
       id: 'note-1',
-      text: 'One Word document (text and tables), two pages.\nTop: static charts, and pictures the CMS adds. Bottom: the same figures as charts that animate and show values on hover, and short videos in the same places.\nEdit the Word file once; both pages follow.',
-      position: { x: 40, y: -110 },
-      width: 560,
+      text: 'One Word document (text and tables), two pages from one flow.\nThe Static page uses the nodes\' own settings: static charts and pictures the CMS adds. The Interactive page (its page variant) gives two nodes their own settings: charts that animate and show values on hover, and short videos in the same places.\nEdit the Word file once; both pages follow.',
+      position: { x: 40, y: -130 },
+      width: 600,
     },
   ];
-  return { nodes, edges, groups, notes };
+  return { nodes, edges, notes };
 }
 
 export async function buildTwoOutputsExample() {

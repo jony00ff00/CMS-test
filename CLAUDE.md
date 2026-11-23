@@ -394,9 +394,10 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   outputs" button opens `examples/two-outputs.node-cms.json` the same way.
 - `examples/` (see its README): `ge16-scrolly.node-cms.json`, a scrollytelling graphic's code
   (`scrolly/*.html`, Document Source with `keepCode`) filled with text from Word (`scrolly/*.docx`, style map for
-  Kicker / Title / Dek) by three Replace nodes (inside, match by match). `npm run example:scrolly`
-  (`scripts/make-example-scrolly.ts`) writes it; `tests/engine/example-scrolly.test.ts` checks every node, edited
-  text, and that the committed file is up to date; `tests/e2e/example-scrolly.spec.ts` opens it and checks the script runs.
+  Kicker / Title / Dek) by one Fill template node (`FILL_ROWS`: three required slots, a repeat of `.gs-step` per "Step"
+  heading section (min 1), the footer); the Output is `strict`. `npm run example:scrolly`
+  (`scripts/make-example-scrolly.ts`) writes it; `tests/engine/example-scrolly.test.ts` checks every node, the row
+  report, edited text, more / fewer steps, a missing kicker as a problem, and that the committed file is up to date; `tests/e2e/example-scrolly.spec.ts` opens it and checks the script runs.
   `ge16-scrolly-from-text.node-cms.json` (`scripts/make-example-scrolly-from-text.ts`, same npm script): only the
   .docx; the code is six library snippets made from the HTML file's pieces (`codePieces`), applied by a chain of
   Selector → Snippet pairs (step cards named with `{{item params.steps index}}`, joined Selectors for one wrapper
@@ -404,14 +405,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   shadow root. Its test checks the page has the HTML file's markup (text aside: the Word text was rewritten) and the Word text.
 - `two-outputs.node-cms.json` (`npm run example:two-outputs`, `scripts/make-example-two-outputs.ts`): one Word file
   (`two-outputs/garden-year.docx`, written by the script with the `docx` package: text and three tables, no pictures)
-  → two Outputs. Each branch: Selector `table` → library snippet "Chart (static)" / "Chart (interactive)" (same
-  `chartScript(interactive)`: an SVG chart per `figure.cms-chart[data-chart]` (bar / line / donut from
-  `{{item params.types index}}`), the table kept but visually hidden; interactive charts animate in when in view
-  (IntersectionObserver; not with reduced motion) and show a tooltip on hover), then for each of `PICTURES` a Selector
-  (its `where`: `h1 + p` after, heading "Rainfall" / "Where the harvest went" before; Point output) → Object (static:
-  image file with alt and caption; interactive: video file, autoplay / loop / muted, same caption). Pictures and WebM
-  videos are drawn by `scripts/make-example-media.py` (Pillow + ffmpeg, VP9). Groups and a note.
-  `tests/engine/example-two-outputs.test.ts`, `tests/e2e/two-outputs.spec.ts`.
+  → one flow, two Outputs (6 nodes): `word` → `tables` (Selector `table`, expect ≥ 1) → `charts` (library snippet "Chart
+  (static)"; variant `interactive`: "Chart (interactive)", both from `chartScript(interactive)`: an SVG chart per
+  `figure.cms-chart[data-chart]` (bar / line / donut from `{{item params.types index}}`), the table kept but visually
+  hidden; interactive charts animate in when in view (IntersectionObserver; not with reduced motion) and show a tooltip
+  on hover) → `media` (Insert with three `items` from `PICTURES`: `h1 + p` after, heading "Rainfall" / "Where the harvest
+  went" before; images with alt and caption; variant `interactive`: the same items with videos, autoplay / loop /
+  muted) → `static` (no variant) and `interactive` (variant `interactive`). Variant settings are written with
+  `variantDifference`. Pictures and WebM videos are drawn by `scripts/make-example-media.py` (Pillow + ffmpeg, VP9).
+  A note. `tests/engine/example-two-outputs.test.ts`, `tests/e2e/two-outputs.spec.ts`.
 - e2e helpers in `tests/e2e/canvas.spec.ts`: `connect(page, from, port, to, port)` drags between handles;
   call `fitView` first (it waits for the view to stop moving). The Playwright viewport is 1920×1080 (at 1440 the
   canvas between the three sidebars is too narrow for reliable drags between handles).
@@ -443,7 +445,7 @@ another document (wrap, source styles, heading levels, Content view, "Two docume
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
 image selection (Images mode, click an image in the preview), notes on the canvas, page variants, Fill template node,
 problems (expectations), Replace node, Object text and Object without a Point, Position node, one Insert node (Object, Replace and Position merged; several items), groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
-Word file; the JSON example button was removed). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+Word file; the JSON example button was removed), examples rebuilt on Fill template and page variants + Insert items. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

@@ -6,8 +6,8 @@ import { buildTwoOutputsExample, chartScript, PROJECT_FILE, WORD_FILE } from '..
 
 async function run() {
   const { project: p, warnings } = parseProject(JSON.stringify(await buildTwoOutputsExample()));
-  const { results } = await new GraphEvaluator(nodeRegistry).evaluate(p.graph, { files: p.files });
-  return { p, warnings, results };
+  const { results, variants } = await new GraphEvaluator(nodeRegistry).evaluate(p.graph, { files: p.files });
+  return { p, warnings, results, variants };
 }
 const count = (html: string, css: string) => runSelector(parseHtml(html, { keepCode: true }), { mode: 'css', selector: css }).matches.length;
 
@@ -15,8 +15,35 @@ describe('example: one Word document, two outputs', () => {
   it('every node runs without warnings', async () => {
     const { p, warnings, results } = await run();
     expect(warnings).toEqual([]);
-    for (const n of p.graph.nodes) expect([n.id, results[n.id].status, results[n.id].warnings]).toEqual([n.id, 'ok', []]);
+    for (const n of p.graph.nodes) expect([n.id, results[n.id].status, results[n.id].warnings, results[n.id].problems]).toEqual([n.id, 'ok', [], undefined]);
     expect(p.graph.notes).toHaveLength(1);
+  });
+
+  it('one flow for both pages: six nodes, and the interactive page has its own settings on two of them', async () => {
+    const { p, variants, results } = await run();
+    expect(p.graph.nodes.map((n) => `${n.type}:${n.id}`)).toEqual([
+      'documentSource:word', 'selector:tables', 'snippet:charts', 'object:media', 'output:static', 'output:interactive',
+    ]);
+    expect(p.graph.nodes.filter((n) => n.variants).map((n) => [n.id, Object.keys(n.variants!.interactive)])).toEqual([
+      ['charts', ['snippet', 'ref']],
+      ['media', ['items']],
+    ]);
+    expect(Object.keys(variants.interactive).sort()).toEqual(['charts', 'media']);
+    expect(results.media.info).toMatchObject({ items: 3, inserted: 3 });
+    expect(variants.interactive.media.info).toMatchObject({ items: 3, inserted: 3 });
+    expect(results.interactive.upstreamProblems).toBeUndefined();
+  });
+
+  it('a place the writer removed from the Word file is a problem on that page', async () => {
+    const project = await buildTwoOutputsExample();
+    const media = project.graph.nodes.find((n) => n.id === 'media')!;
+    const items = (media.config as { items: { selector: unknown }[] }).items;
+    items[1].selector = { mode: 'heading', text: 'No such heading', includeHeading: true };
+    const { project: p } = parseProject(JSON.stringify(project));
+    const { results } = await new GraphEvaluator(nodeRegistry).evaluate(p.graph, { files: p.files });
+    expect(results.static.upstreamProblems).toEqual([{ nodeId: 'media', problem: 'Item 2 (Before “Rainfall”: hives): its place was not found' }]);
+    // The interactive page has its own items (videos) whose place is still there.
+    expect(results.interactive.upstreamProblems).toBeUndefined();
   });
 
   it('the Word document has the text and tables only: no pictures or videos', async () => {
@@ -38,7 +65,6 @@ describe('example: one Word document, two outputs', () => {
     expect(order(results.static.outputs.html as string, 'img')).toEqual(expected);
     expect(order(results.interactive.outputs.html as string, 'video')).toEqual(expected);
     expect((results.static.outputs.html as string)).toContain('alt="The vegetable beds at dawn, with the sun rising behind the hills"');
-    for (const id of ['picture-dawn', 'picture-hives', 'picture-rain', 'video-dawn', 'video-hives', 'video-rain']) expect(results[id].info).toMatchObject({ inserted: 1 });
   });
 
   it('the static page: three charts from the tables, three pictures, no videos, no animation code', async () => {

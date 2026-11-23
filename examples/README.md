@@ -11,24 +11,26 @@ scrollytelling graphic (`scrolly/ge16-scrolly-short.html`: its markup, CSS and J
 files are inside the project file; they are here on their own too. Writers change the Word document, developers
 change the HTML, and the project puts the two together again: choose the new file in either Document Source.
 
+Four nodes:
+
 | Node | What it does |
 | --- | --- |
 | **Scrolly code (HTML)** (Document Source) | Loads the code. "Keep its scripts and styles (code you trust)" is on, so its `<style>` and `<script>` stay inside `<ge16-scrolly>`, where the script expects them. |
 | **Scrolly text (Word)** (Document Source) | Loads the text. Its Word style rules turn the document's own styles Kicker, Title and Dek into `p.kicker`, `p.title` and `p.dek`. |
-| **Header** group | **Header slots** (`.gs-kicker, .gs-headline, .gs-dek` in the code) get **Header text** (`.kicker, .title, .dek` in Word). |
-| **Steps** group | **Step cards** (`.gs-step .gs-card`, 10 of them) get **Step text**: what is under each Word heading that contains "Step" (the heading itself is a label for writers and is left out). A step can have several paragraphs. |
-| **Footer** group | **Footer slots** (the note and the link) get **Footer text** (the paragraphs after the last heading, "Footer"). The link keeps its address. |
-| **Scrolly page** (Output) | The finished page; the preview runs the graphic. |
+| **Fill the scrolly** (Fill template) | One row per slot: `.gs-kicker` ← `.kicker`, `.gs-headline` ← `.title`, `.gs-dek` ← `.dek` (all three required), a **repeat** of `.gs-step` with one card per Word heading that contains "Step" (its `.gs-card` gets what is under the heading; the heading is a label for writers and is left out; at least one step), and the footer (the note and the link's text; the link keeps its address). |
+| **Scrolly page** (Output) | The finished page; the preview runs the graphic. "Don't download while there are problems" is on. |
 
-Each **Fill …** node is a Replace node with "Replace: what is inside it" (the code's elements keep their classes and
-data attributes) and "Match by match" (the 1st slot gets the 1st piece of text, the 2nd the 2nd, …). If the counts
-differ, for example a step was added in Word but not in the code, the Replace node says so.
+The step cards follow the Word document: a writer who adds a step gets another card, and one who removes a step loses
+one. Card *i* keeps the code's own card *i* (its `data-step`, which the script uses for the graphic's state); extra
+steps copy the last card, so they show the last state until a developer adds a state for them. A missing kicker,
+headline or dek, or no steps at all, is a problem: the page is still shown, with the problem on the node, the Output and
+the preview, and it cannot be downloaded until it is fixed.
 
 The Word document's text has been rewritten since the HTML file was made (new headline, dek, step text and footer
 note); the project puts the new text into the code, which is the point: the code does not change when the text does.
 
-Rules for the writers: keep the Kicker, Title and Dek styles on the first three paragraphs, keep one "Step …" heading
-per card in order, and keep "Footer" as the last heading. Bold, italics and links in the text come through.
+Rules for the writers: keep the Kicker, Title and Dek styles on the first three paragraphs, start each step with a
+heading that contains "Step", and keep "Footer" as the last heading. Bold, italics and links in the text come through.
 
 ## The scrolly made from the Word text alone
 
@@ -63,10 +65,16 @@ document in **Scrolly text (Word)**. The rules for writers are the same as above
 pictures), into two pages. Editors change only the Word file; both pages follow. The pictures and videos are not in
 the document: the CMS adds them.
 
-| Page | How |
-| --- | --- |
-| **Static page** | **Data tables** (Selector `table`) → **Static charts** (Snippet "Chart (static)"): each table is drawn once as a chart (bar, line, donut: the snippet's "Chart type for each table" setting), with no animation or hover. Then, three times, a Selector gives a place (its Point output: after the introduction, before "Rainfall and soil moisture", before "Where the harvest went") and an Object adds a picture there, with its alternative text and caption. |
-| **Interactive page** | **Data tables** → **Interactive charts** (Snippet "Chart (interactive)"): the bars grow, the lines draw and the donut fills in when the chart scrolls into view (not for people who prefer reduced motion), and hovering shows the values. Then the same three places get a short looping video each (an Object with the video file, autoplaying and muted), with the same captions. |
+One flow makes both pages (six nodes). The **Interactive page** Output is a *page variant* ("interactive"), and two
+nodes have their own settings for it (shown on the canvas as "Own settings: interactive"; pick the page under
+"Settings for" in a node's inspector to see or change them):
 
-In both, the table stays in the page (hidden from view) for screen readers. The pictures and videos
+| Node | Static page (the nodes' own settings) | Interactive page (its own settings) |
+| --- | --- | --- |
+| **Data tables** (Selector `table`) | The three tables | (same) |
+| **Charts** (Snippet) | "Chart (static)": each table is drawn once as a chart (bar, line, donut: the snippet's "Chart type for each table" setting), with no animation or hover | "Chart (interactive)": the bars grow, the lines draw and the donut fills in when the chart scrolls into view (not for people who prefer reduced motion), and hovering shows the values |
+| **Pictures and videos** (Insert, three items) | A picture at each place (after the introduction, before "Rainfall and soil moisture", before "Where the harvest went"), with its alternative text and caption | A short looping video (autoplaying, muted) at the same places, with the same captions |
+
+Each item has its own place, so a heading the writer renames or removes shows up as a problem on that page.
+In both pages, the table stays (hidden from view) for screen readers. The pictures and videos
 (`two-outputs/*.png`, `*.webm`) are drawn by `scripts/make-example-media.py` (Pillow and ffmpeg).

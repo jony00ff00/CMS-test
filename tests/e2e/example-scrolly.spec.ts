@@ -20,15 +20,16 @@ test('the scrolly example: Word text in the code, and the code runs in the previ
   await page.getByLabel('Project file').setInputFiles(join(import.meta.dirname, '..', '..', 'examples', 'ge16-scrolly.node-cms.json'));
   await expect(page.getByText('Project opened.')).toBeVisible();
   await expect(node(page, 'page')).toContainText('OK');
-  await expect(node(page, 'fill-steps')).toContainText('replaced 10×');
+  await expect(node(page, 'fill')).toContainText('5 of 5 rows filled');
   // The settings that make it work, in the inspector.
   const inspector = page.getByRole('complementary', { name: 'Inspector' });
   await node(page, 'code').click();
   await expect(inspector.getByLabel('Keep its scripts and styles (code you trust)')).toBeChecked();
-  await node(page, 'fill-steps').click();
-  await expect(inspector.getByLabel('Put it', { exact: true })).toHaveValue('inside');
-  await expect(inspector.getByLabel('Match by match')).toBeChecked();
-  await expect(inspector).toContainText('What Step cards selects (10 matches)');
+  await node(page, 'fill').click();
+  const rows = inspector.getByRole('list', { name: 'Rows' });
+  await expect(rows.getByRole('listitem')).toHaveCount(5);
+  await expect(rows.getByRole('listitem').nth(3).getByRole('status').first()).toContainText('10 items · 10 template elements in the template');
+  await page.screenshot({ path: 'test-results/example-scrolly-fill.png' });
   await node(page, 'page').click();
 
   // The script ran: it moved the graphic into a shadow root (Playwright's locators look inside it) and drew the seats.
@@ -89,7 +90,7 @@ test('the "Two documents" button opens the scrolly project, with its Word text i
   await page.goto('/');
   page.once('dialog', (d) => void d.accept()); // only if something is on the canvas already
   await page.getByRole('button', { name: 'Two documents' }).click();
-  await expect(node(page, 'fill-steps')).toContainText('replaced 10×');
+  await expect(node(page, 'fill')).toContainText('5 of 5 rows filled');
   await expect(node(page, 'page')).toContainText('OK');
   await expect(page.getByRole('complementary', { name: 'Inspector' }).getByLabel('Name')).toHaveValue('Scrolly page');
   const host = preview(page).locator('ge16-scrolly');

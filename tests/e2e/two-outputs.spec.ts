@@ -65,3 +65,27 @@ test('the interactive page: charts animate in and show values on hover; short vi
   await expect(line.locator('.cms-chart-tip')).toContainText('Rainfall:');
   await expect(line.locator('.cms-chart-tip')).toContainText('Soil moisture:');
 });
+
+test('one flow, two pages: the interactive page has its own settings for the charts and the media', async ({ page }) => {
+  await expect(page.locator('.react-flow__node.react-flow__node-cms')).toHaveCount(6);
+  await expect(node(page, 'charts')).toContainText('Own settings: interactive');
+  await expect(node(page, 'media')).toContainText('3 items · added 3×');
+  const inspector = page.getByRole('complementary', { name: 'Inspector' });
+  // The Insert node's items: three pictures, each at its own place.
+  await node(page, 'media').click();
+  const items = inspector.getByRole('list', { name: 'Items' });
+  await expect(items.getByRole('listitem')).toHaveCount(3);
+  await expect(items.getByRole('listitem').first().getByLabel('Image file')).toHaveCount(1);
+  // For the interactive page: the same places, with videos.
+  await inspector.getByRole('group', { name: 'Settings for' }).getByRole('button', { name: /interactive/ }).click();
+  await expect(items.getByRole('listitem').first().getByLabel('Video file')).toHaveCount(1);
+  await expect(inspector).toContainText('The “interactive” page uses its own items.');
+  await expect(preview(page).locator('figure > video')).toHaveCount(3);
+  await page.screenshot({ path: 'test-results/two-outputs-items.png' });
+  // A caption changed for the interactive page only.
+  await items.getByRole('listitem').first().getByLabel('Caption').fill('Dawn, moving.');
+  await node(page, 'interactive').click();
+  await expect(preview(page).locator('figure > figcaption').first()).toHaveText('Dawn, moving.');
+  await node(page, 'static').click();
+  await expect(preview(page).locator('figure > figcaption').first()).toHaveText('The beds at dawn in May.');
+});

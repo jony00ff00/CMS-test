@@ -83,7 +83,7 @@ export function ObjectEditor({ node }: { node: GraphNode }) {
 
   return (
     <>
-      <WhereSource nodeId={node.id} kind={kind} point={config.point} onClearPoint={() => update({ point: undefined })} />
+      <WhereSource nodeId={node.id} kind={kind} point={config.point} several={several} onClearPoint={() => update({ point: undefined })} />
       {kind !== 'none' && (
         <div className="field" role="radiogroup" aria-label="What it adds">
           <span className="field-label">What it adds</span>
@@ -236,7 +236,7 @@ const EVERY_MATCH: Record<InsertPlace, string> = {
 };
 
 /** What is connected to Where, in words. */
-function WhereSource({ nodeId, kind, point, onClearPoint }: { nodeId: string; kind?: WhereKind; point?: InsertionPoint; onClearPoint: () => void }) {
+function WhereSource({ nodeId, kind, point, several, onClearPoint }: { nodeId: string; kind?: WhereKind; point?: InsertionPoint; several?: boolean; onClearPoint: () => void }) {
   const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'where'));
   const from = useEditor((s) => (edge ? s.graph.nodes.find((n) => n.id === edge.source) : undefined));
   const count = useEditor((s) => {
@@ -260,6 +260,14 @@ function WhereSource({ nodeId, kind, point, onClearPoint }: { nodeId: string; ki
       {nodeLabel(from)}
     </button>
   );
+  if (several) {
+    return (
+      <div className="field">
+        <span className="field-label">Where</span>
+        <p className="small">In the document from {link}; each item below has its own place in it.</p>
+      </div>
+    );
+  }
   if (kind === 'point') {
     const c = from.config as SelectorNodeConfig;
     const where = from.type !== 'selector' ? '' : c.mode === 'point' ? (c.point ? 'at the point picked in the preview' : 'at a point not picked yet') : EVERY_MATCH[c.place ?? 'after'];
