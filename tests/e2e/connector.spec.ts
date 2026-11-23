@@ -63,7 +63,7 @@ test("a Connector feeds an Output's result into more nodes; a Selector can selec
   await expect(preview(page).locator('body > .callout .callout')).toHaveCount(2);
 
   await node(page, 'selector-6').click();
-  await inspector(page).getByLabel('As').selectOption('blocks');
+  await inspector(page).getByLabel('As', { exact: true }).selectOption('blocks');
   await expect(node(page, 'selector-6')).toContainText(/Every block · \d+ matches/);
 });
 

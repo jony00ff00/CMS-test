@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import {
   buildInsertion, caretTarget, createAnchor, elementMatch, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, imagesOf, imageWithFrame, indexDocument, INSERT_MARKER_CSS,
   insertionPointAt, markInsertionPoint, rangeOf, serialize, type CmsDocument, type InsertWhere, type Match, type ObjectNodeConfig,
-  type InsertionPoint, type PointValue, type PositionNodeConfig, type Selection, type SelectorConfig, type SelectorNodeConfig,
-} from '../../engine';
+  type InsertionPoint, type PointValue, type PositionNodeConfig, type Selection, type SelectorConfig, type SelectorNodeConfig, outputVariant } from '../../engine';
+import { VariantPicker } from '../variants';
 import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
 import { BRIDGE_SOURCE, withBridge, type BridgeMessage } from './bridge';
@@ -23,6 +23,8 @@ interface PreviewSource {
   selection?: Selection;
   /** A finished page (when an Output is shown). */
   html?: string;
+  /** The Output whose page is shown. */
+  outputId?: string;
   /** The selected manual Selector that text can be added to. */
   manualSelectorId?: string;
   /** Show where a point is (marker); with `nodeId` (a Selector in point mode) a click picks the point. */
@@ -208,14 +210,15 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
       message: !input ? 'Connect a document to this Selector.' : (result?.message ?? (input.doc ? undefined : 'Waiting…')),
     };
   }
-  if (selected && ['documentSource', 'snippet', 'connector', 'extractor'].includes(selected.type)) {
+  if (selected && ['documentSource', 'snippet', 'connector', 'extractor', 'fillTemplate'].includes(selected.type)) {
     const result = s.results[selected.id];
     const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
     const views = selected.type === 'extractor' && (selected.config as SelectorConfig).mode === 'manual' ? EXTRACTOR_VIEWS : undefined;
     return { label: `Output of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, views, message: result?.message ?? 'Waiting…' };
   }
   const outputs = s.graph.nodes.filter((n) => n.type === 'output');
-  const output = outputs.find((n) => n.id === selected?.id) ?? outputs[0];
+  const output =
+    outputs.find((n) => n.id === selected?.id) ?? (s.variant ? outputs.find((n) => outputVariant(n) === s.variant) : undefined) ?? outputs[0];
   if (!output) return { label: '', message: 'Add an Output node to see the result.' };
   const result = s.results[output.id];
   const count = s.graph.edges.filter((e) => e.target === output.id && e.targetPort === 'document').length;
@@ -224,6 +227,7 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
   return {
     label: count > 1 ? `${nodeLabel(output)} · ${count} inputs combined` : nodeLabel(output),
     html: result?.status === 'ok' ? (result.outputs.html as string) : undefined,
+    outputId: output.id,
     doc: input?.doc,
     from: input?.from,
     message: result?.message ?? 'Waiting…',
@@ -536,6 +540,8 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
             <span className="muted small">{popup ? 'Showing in its own window.' : label}</span>
             {!popup && page && source.doc && source.from && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text, or click an image, to make a selection from it.</span>}
             {!popup && insertToggle}
+            {!popup && <VariantPicker />}
+            {!popup && source.outputId && <PageProblems outputId={source.outputId} />}
           </div>
         </>
       )}
@@ -547,6 +553,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
                 <span className="muted small">{label}</span>
                 {page && source.doc && source.from && !source.insertNodeId && !source.insert && <span className="muted small preview-tip">Select text, or click an image, to make a selection from it.</span>}
                 {insertToggle}
+                <VariantPicker />
                 <span className="preview-actions">
                   <button type="button" onClick={attach}>
                     Back into the editor
@@ -596,4 +603,18 @@ function toMatch(doc: CmsDocument, picked: TextSelection): Match | undefined {
   const range = block && rangeOf(ix, block);
   if (block && range && range.start === start && range.end === end) return block;
   return { kind: 'text', start, end };
+}
+
+/** The shown page is made, but nodes before it report problems (a required slot empty, a selection gone, …). */
+function PageProblems({ outputId }: { outputId: string }) {
+  const count = useEditor((s) => s.results[outputId]?.upstreamProblems?.length ?? 0);
+  if (!count) return null;
+  return (
+    <span className="problems-note" role="status">
+      ⚠ {count} problem{count === 1 ? '' : 's'} on this page.
+      <button type="button" className="link" onClick={() => editorStore.getState().select(outputId)}>
+        Show
+      </button>
+    </span>
+  );
 }

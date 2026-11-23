@@ -30,9 +30,12 @@ export const replace: NodeDefinition<ReplaceNodeConfig> = {
     const converted = await convertValue(inputs.content, { documentToSelection: config.pairs ? 'blocks' : 'document' });
     const result = await replaceSelection(selection, converted.selection, config);
     const warnings = [...converted.warnings.filter((w) => !result.warnings.includes(w)), ...result.warnings];
+    // Match by match with a different number of parts: some matches keep the old text, or some content is lost.
+    const problems = config.pairs ? warnings.filter((w) => /^The content has \d+ part/.test(w)) : [];
     return {
       outputs: { document: result.document },
-      warnings,
+      warnings: warnings.filter((w) => !problems.includes(w)),
+      ...(problems.length && { problems }),
       info: { replaced: result.replaced, ...(converted.selection.document.meta.fileName && { from: converted.selection.document.meta.fileName }) },
     };
   },

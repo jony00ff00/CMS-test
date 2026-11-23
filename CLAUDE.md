@@ -117,6 +117,24 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   hashes its type, config, dependencies and the keys of its inputs, so a change re-runs only that node and
   the nodes after it. Only `ok` results are cached (LRU, default 200). Files live in a store
   (`storeFile(name, data)` adds a content hash); Document Source nodes refer to them by `fileId`.
+- `variants.ts` (page variants): an Output's `variant` (`OutputConfig.variant`, `cleanVariantName`) names the page it
+  makes; any node can hold settings for a variant in `GraphNode.variants[name]` (only the config keys that differ;
+  `null` = not set there; `variantConfig`, `variantDifference`, `withVariantSettings`). `planVariants` runs before
+  `planMerges`: for each variant it copies the nodes with settings for it and every node between them and an Output of
+  it (`variant~<name>~<id>`, shared by Outputs of the same variant, config merged in, so cache keys differ); the Output
+  reads from the copies, untouched nodes are shared. `GraphResult.variants[name][nodeId]` holds the copies' results;
+  `ran` leaves them out. `variantNames(graph)`, `variantsFor(graph, nodeId)` (variants of the Outputs after it).
+- Problems (expectations): `NodeOutput.problems` / `NodeResult.problems` are things that make a result wrong although
+  the node ran (status stays `ok`, outputs flow on): Selector `expect` { min, max } (`expectation` in
+  `fill-template.ts`: "Found 2 matches, expected at least 3"), Fill template required rows and repeat min / max,
+  Replace match by match with a different number of parts (moved out of its warnings), and any `info.needsAttention`
+  (`problemsOf` in `graph.ts`: a saved selection or point that is gone). Nodes with `gathersProblems` (the Output) get
+  `upstreamProblems` ({ nodeId, problem }, the user's node ids, in node order) from every node before them in the
+  graph that ran, so a variant's Output lists its own page's. `OutputConfig.strict`: no download while there are any.
+  UI: red outline (`has-problems`) and "N problems" pill on nodes (not when the attention pill already says it),
+  "N problems before this page" (· download off) on Outputs, "Problems" / "Problems before this page" lists in the
+  result panel (`UpstreamProblems`: click selects the node), Selector inspector "Expected matches", the Output's
+  "Don't download while there are problems", and "⚠ N problems on this page. Show" in the preview (`PageProblems`).
 - `library.ts`: `SnippetLibrary` (id → versions, oldest first). `addVersion` numbers versions; saved versions
   never change. `refStatus` (outdated / missing), `carryParams` (keep values that still fit), `validateSnippet`,
   `snippetIdFor`. The seed snippets (callout, details, highlight, tooltip, code-block) are content, so they live
@@ -191,6 +209,19 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   warns; and `pairs` (match i gets part i: each content match copied on its own; the
   node reads a document as its blocks then; a count mismatch warns and leaves the extra matches unchanged); info
   `replaced`, `from` (only when the content has a file name));
+  `fillTemplate` ("Fill template", `nodes/fill-template.ts`, engine `fill-template.ts`): inputs `template` (document)
+  and `content` (`any`, `convertValue` to a document); config `rows` (`FillRow`: slot rows { slot (CSS in the
+  template), from (a `SelectorConfig` in the content), target inside (default) | element, required } and repeat rows
+  { repeat (CSS), items (`SelectorConfig`: each match is an item, made a document with `documentFromSelection`), rows
+  (filled from the item, inside the clone), min, max }) and `styles` (default off). One slot takes all matches; several
+  slots take one match each, in order (`replaceSelection` with `pairs`). A repeat: item i fills template element i
+  (keeps its attributes, e.g. `data-step`), extra items copy the last one, elements without an item go; the clones
+  take the first element's place. Outputs `document` and `report` (not a port: `FillReport` per row, `rows` of a
+  repeat for its first item); `problems` for required rows and item counts (`expectation`), warnings otherwise.
+  Waits while there are no rows. `suggestFillRows` ("Match by name"): template class = content class, or ends with
+  `-<class>`, or `data-slot` = class. Inspector `FillTemplateEditor.tsx` (Match by name, Add slot, Add repeat, rows
+  with ↑ ↓ ×, a status line each from the report). Colour lime (`--node-fill`). The scrolly example's page comes out
+  the same from one Fill template node (kicker, dek, title, repeat `.gs-step` per "Step" heading section, footer);
   `position` (a point-mode Selector and an Object in one: inputs `document` and `content` (`any`); config
   `PositionNodeConfig` = `ReplaceOptions` + `point` (an `InsertionPoint` picked in the preview); `insertContent` with
   `{ mode: 'point', point }` and selection content; waits until the point is picked; info `inserted`, `from`,
@@ -266,6 +297,16 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Collapse / Expand, Show on canvas, Duplicate, Ungroup, Delete group and its nodes), `InGroup` on a member's
   editor, "Group" / "Add to …" in `MultiSelection`. Palette: a Groups list (`focusGroup`). Minimap: frames in the
   group's colour (light when expanded).
+- Page variants (UI): store `variant` (the page shown: `results` is `viewResults` of the evaluation's own results and
+  `variantResults[variant]`, so every view reads `s.results` as that page sees it), `editVariant` (the inspector's
+  "Settings for": `updateConfig` then stores the differences for that variant, only when the node is before an Output
+  of it), `setVariant`, `setEditVariant` (also shows it), `resetVariantSettings`. Selecting an Output shows its
+  variant; selecting another node edits the shown variant's settings when it has some, else its own; a variant no
+  Output makes is dropped. `src/ui/variants.tsx`: `VariantPicker` (preview, "Page: Default / …"), `VariantSwitch`
+  (inspector, above the editor, which gets `variantConfig(node, editVariant)`; body keyed by node and variant). Nodes
+  with variant settings show "Own settings: …" (purple, filled for the shown page); their summary uses the shown
+  page's settings. Output inspector: "Page variant" field. `duplicateNode` / `duplicateGroup` copy variant settings;
+  project files keep them (`parseProject` drops broken ones with a warning; their `fileId`s are saved).
 - Notes (annotations): `Graph.notes` (`CanvasNote` { id, text, position, width?, color? (`NOTE_COLORS`) } in
   `engine/graph.ts`; not nodes: no ports, the engine and `sameExceptPositions` ignore them, so they never re-run
   anything). Store: `addNote(position?, text?)` (`note-N`; without a place above the top-left node), `updateNote`
@@ -401,7 +442,8 @@ Connector that turns any input into any output, Extractor, Point output and Obje
 Combinator (since removed), simple custom snippets with node-only CSS / JS, Extractor by hand, Extractor → Object content from
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
-image selection (Images mode, click an image in the preview), notes on the canvas, Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
+image selection (Images mode, click an image in the preview), notes on the canvas, page variants, Fill template node,
+problems (expectations), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
 Word file; the JSON example button was removed). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 

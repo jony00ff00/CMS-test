@@ -20,11 +20,13 @@ export * from './library';
 export * from './hash';
 export * from './graph';
 export * from './merge';
+export * from './variants';
 export * from './convert';
+export * from './fill-template';
 export * from './nodes';
 /**
  * Raised whenever the engine learns something a project can use that an older app does not know (a node option, a
  * template helper, …). Project files record it, so an older app (e.g. a browser tab opened before an update) warns
  * instead of quietly making a different page.
  */
-export const ENGINE_VERSION = '0.6.1';
+export const ENGINE_VERSION = '0.8.0';

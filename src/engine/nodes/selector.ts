@@ -1,3 +1,4 @@
+import { expectation } from '../fill-template';
 import type { NodeDefinition } from '../graph';
 import type { InsertPlace, PointValue } from '../insert';
 import { joinMatches, runSelector, type SelectorConfig } from '../selectors';
@@ -9,6 +10,8 @@ export type SelectorNodeConfig = SelectorConfig & {
   place?: InsertPlace;
   /** Neighbouring matches become one match (e.g. to put one wrapper around several paragraphs). */
   join?: boolean;
+  /** How many matches the page needs (inclusive): fewer or more is a problem (see `NodeOutput.problems`). */
+  expect?: { min?: number; max?: number };
 };
 
 export const selector: NodeDefinition<SelectorNodeConfig> = {
@@ -26,7 +29,7 @@ export const selector: NodeDefinition<SelectorNodeConfig> = {
     if (config.mode === 'point' && !config.point) {
       return { outputs: {}, waiting: 'Click in the preview to pick the point' };
     }
-    const { place, join, ...selectorConfig } = config;
+    const { place, join, expect, ...selectorConfig } = config;
     const found = runSelector(doc, selectorConfig as SelectorConfig);
     const selection = join ? joinMatches(found) : found;
     const point: PointValue = {
@@ -45,6 +48,7 @@ export const selector: NodeDefinition<SelectorNodeConfig> = {
       if (missing) info.needsAttention = missing;
     }
     if (config.mode === 'point' && selection.matches.length === 0) info.needsAttention = 1;
-    return { outputs: { selection, point }, warnings: selection.warnings, info };
+    const expected = expect && expectation(selection.matches.length, expect.min, expect.max, 'match');
+    return { outputs: { selection, point }, warnings: selection.warnings, info, ...(expected && { problems: [`Found ${expected.slice(6)}`] }) };
   },
 };

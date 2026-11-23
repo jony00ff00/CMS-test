@@ -1,5 +1,6 @@
 import type React from 'react';
-import { nodeRegistry } from '../../engine';
+import { nodeRegistry, variantConfig } from '../../engine';
+import { VariantSwitch } from '../variants';
 import { editorStore, selectedNodeIds, useEditor } from '../../store/editor-store';
 import { NODE_COLORS, UNKNOWN_NODE_COLOR } from '../node-colors';
 import { GroupInspector, InGroup } from './GroupInspector';
@@ -8,6 +9,7 @@ import { LibraryEditor } from '../library/LibraryEditor';
 import { TextField } from './fields';
 import { ConnectorEditor } from './ConnectorEditor';
 import { ExtractorEditor } from './ExtractorEditor';
+import { FillTemplateEditor } from './FillTemplateEditor';
 import { ObjectEditor } from './ObjectEditor';
 import { OutputEditor } from './OutputEditor';
 import { ReplaceEditor } from './ReplaceEditor';
@@ -25,6 +27,7 @@ const EDITORS = {
   extractor: ExtractorEditor,
   object: ObjectEditor,
   replace: ReplaceEditor,
+  fillTemplate: FillTemplateEditor,
   position: PositionEditor,
   output: OutputEditor,
   connector: ConnectorEditor,
@@ -36,6 +39,7 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
   const result = useEditor((s) => (s.selectedId ? s.results[s.selectedId] : undefined));
   const openSnippetId = useEditor((s) => s.openSnippetId);
   const selection = useEditor((s) => selectedNodeIds(s).join(' '));
+  const editVariant = useEditor((s) => s.editVariant);
   const groupId = useEditor((s) => (s.selectedGroupId && s.graph.groups?.some((g) => g.id === s.selectedGroupId) ? s.selectedGroupId : undefined));
 
   if (openSnippetId) {
@@ -89,7 +93,7 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
         </span>
       </div>
       {/* key: a fresh editor for each node, so local state never leaks between nodes */}
-      <div className="inspector-body" key={node.id}>
+      <div className="inspector-body" key={`${node.id}:${editVariant ?? ''}`}>
         <InGroup nodeId={node.id} />
         <TextField
           label="Name"
@@ -98,7 +102,9 @@ export function Inspector({ onMinimise }: { onMinimise: () => void }) {
           hint="Shown on the canvas and in the preview. Double-click a node's title to rename it there."
           onChange={(name) => editorStore.getState().renameNode(node.id, name)}
         />
-        {Editor ? <Editor node={node} /> : <p className="error-text">Unknown node type "{node.type}"</p>}
+        <VariantSwitch node={node} />
+        {/* The editor sees the settings it edits: for a page variant, the node's own with that variant's merged in. */}
+        {Editor ? <Editor node={editVariant ? { ...node, config: variantConfig(node, editVariant) } : node} /> : <p className="error-text">Unknown node type "{node.type}"</p>}
       </div>
       <ResultPanel result={result} />
     </aside>

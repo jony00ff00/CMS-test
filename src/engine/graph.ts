@@ -1,6 +1,7 @@
 // The node graph: node definitions, typed ports, validation, ordering and cached evaluation.
 import { hashBytes, hashValue } from './hash';
 import { planMerges } from './merge';
+import { planVariants } from './variants';
 import type { SourceFile } from './source';
 
 /** What travels along an edge. Edges only connect ports of the same type. */
@@ -41,6 +42,11 @@ export interface NodeOutput {
   info?: Record<string, string | number | boolean>;
   /** Set when the node cannot run yet because something is missing (e.g. no file chosen). Not an error. */
   waiting?: string;
+  /**
+   * Things that make the result wrong although the node ran (a required slot left empty, fewer items than
+   * expected): unlike warnings, the canvas and the Outputs after the node show them (see `NodeResult.problems`).
+   */
+  problems?: string[];
 }
 
 export interface NodeDefinition<Config = unknown> {
@@ -58,6 +64,8 @@ export interface NodeDefinition<Config = unknown> {
    * the one merged document into the first of these ports. Undefined: no merging.
    */
   mergePorts?(config: Config): string[] | undefined;
+  /** Collects the problems of every node before it into `NodeResult.upstreamProblems` (the Output). */
+  gathersProblems?: boolean;
   /** Must not change its inputs or config. Inputs are keyed by input port name. */
   evaluate(inputs: Record<string, unknown>, config: Config, ctx: EvalContext): Promise<NodeOutput>;
 }
@@ -71,6 +79,11 @@ export interface GraphNode {
   name?: string;
   config: unknown;
   position?: { x: number; y: number };
+  /**
+   * Settings for page variants (see variants.ts): variant name → the config keys that differ for Outputs of that
+   * variant (`null`: the key is not set there).
+   */
+  variants?: Record<string, Record<string, unknown>>;
 }
 
 export interface GraphEdge {
@@ -259,6 +272,13 @@ export interface NodeResult {
   info: Record<string, string | number | boolean>;
   /** Why the node is waiting, blocked or failed. */
   message?: string;
+  /** What makes this node's result wrong although it ran (see `NodeOutput.problems`). */
+  problems?: string[];
+  /**
+   * Outputs only: the problems of every node before it (that page's nodes, for a page variant), each with the
+   * node's id. The page is made anyway; `OutputConfig.strict` keeps it from being downloaded.
+   */
+  upstreamProblems?: { nodeId: string; problem: string }[];
   /** Hash of the node's type, config, dependencies and input keys. */
   key: string;
   cached: boolean;
@@ -268,6 +288,8 @@ export interface NodeResult {
 
 export interface GraphResult {
   results: Record<string, NodeResult>;
+  /** Page variant → results of the nodes whose results differ for it (keyed by the user's node ids). */
+  variants: Record<string, Record<string, NodeResult>>;
   /** Nodes that actually ran this time (not cached), in the order they finished. */
   ran: string[];
 }
@@ -302,8 +324,10 @@ export class GraphEvaluator {
    * Independent branches run at the same time.
    */
   async evaluate(userGraph: Graph, ctx: EvalContext): Promise<GraphResult> {
+    // Outputs of a page variant read from copies of the nodes whose settings differ for it (see variants.ts).
+    const variantPlan = planVariants(userGraph);
     // Inputs that are combined run through hidden copies of their nodes (see merge.ts).
-    const plan = planMerges(userGraph, this.registry);
+    const plan = planMerges(variantPlan.graph, this.registry);
     const graph = plan.graph;
     const order = topologicalSort(graph);
     const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -324,12 +348,43 @@ export class GraphEvaluator {
       );
     }
     await Promise.all(pending.values());
+    // Outputs list the problems of the nodes before them (in the graph that ran: a variant's copies, merged inputs).
+    for (const node of graph.nodes) {
+      if (!this.registry[node.type]?.gathersProblems || !results[node.id]) continue;
+      const seen = new Set<string>();
+      const found: { nodeId: string; problem: string }[] = [];
+      const stack = [node.id];
+      const visited = new Set<string>();
+      while (stack.length) {
+        const id = stack.pop()!;
+        for (const e of graph.edges) {
+          if (e.target !== id || visited.has(e.source)) continue;
+          visited.add(e.source);
+          stack.push(e.source);
+          // Copies (variant~v~id, output~i~id) report as the user's node.
+          const nodeId = e.source.split('~').at(-1)!;
+          for (const problem of results[e.source]?.problems ?? []) {
+            const key = `${nodeId}\u0000${problem}`;
+            if (!seen.has(key)) (seen.add(key), found.push({ nodeId, problem }));
+          }
+        }
+      }
+      const order = new Map(userGraph.nodes.map((n, i) => [n.id, i]));
+      found.sort((a, b) => (order.get(a.nodeId) ?? 0) - (order.get(b.nodeId) ?? 0));
+      results[node.id] = { ...results[node.id], ...(found.length ? { upstreamProblems: found } : { upstreamProblems: undefined }) };
+      if (!found.length) delete results[node.id].upstreamProblems;
+    }
     for (const id of plan.hidden) delete results[id];
+    const variants: Record<string, Record<string, NodeResult>> = {};
+    for (const [id, { variant, nodeId }] of variantPlan.copies) {
+      if (results[id]) (variants[variant] ??= {})[nodeId] = results[id];
+      delete results[id];
+    }
     for (const [id, count] of Object.entries(plan.merged)) {
       const r = results[id];
       if (r) results[id] = { ...r, info: { ...r.info, combined: count } };
     }
-    return { results, ran: ran.filter((id) => !plan.hidden.has(id)) };
+    return { results, variants, ran: ran.filter((id) => !plan.hidden.has(id) && !variantPlan.copies.has(id)) };
   }
 
   private async run(node: GraphNode, incoming: GraphEdge[], upstream: NodeResult[], ctx: EvalContext, ran: string[]): Promise<NodeResult> {
@@ -380,6 +435,7 @@ export class GraphEvaluator {
         status: out.waiting ? 'waiting' : 'ok',
         outputs: out.waiting ? {} : out.outputs,
         warnings: out.warnings ?? [],
+        ...(problemsOf(out).length && { problems: problemsOf(out) }),
         info: out.info ?? {},
         message: out.waiting,
         key,
@@ -399,6 +455,14 @@ export class GraphEvaluator {
     this.cache.set(key, result);
     while (this.cache.size > this.cacheSize) this.cache.delete(this.cache.keys().next().value!);
   }
+}
+
+/** A node's problems: its own, and saved selections or points it could not find again (`info.needsAttention`). */
+function problemsOf(out: NodeOutput): string[] {
+  const own = out.problems ?? [];
+  const n = out.info?.needsAttention;
+  if (typeof n !== 'number' || n <= 0 || own.length) return own;
+  return [n === 1 ? 'A saved selection or point could not be found in this version of the document' : `${n} saved selections could not be found in this version of the document`];
 }
 
 /** Add a file to a project's file store, with its content hash. */

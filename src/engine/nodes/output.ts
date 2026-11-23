@@ -22,6 +22,13 @@ export interface OutputConfig {
   inlineAssets?: boolean;
   /** JSON only: add the snippets' CSS and JS under "$assets". */
   jsonAssets?: boolean;
+  /** Do not offer the page for download while a node before it has problems (it is still shown). */
+  strict?: boolean;
+  /**
+   * The page variant this Output makes (e.g. "interactive"): nodes before it use their settings for this variant
+   * (see variants.ts). Empty: their own settings.
+   */
+  variant?: string;
 }
 
 export const output: NodeDefinition<OutputConfig> = {
@@ -36,6 +43,7 @@ export const output: NodeDefinition<OutputConfig> = {
     { name: 'result', type: 'result', label: 'Result' },
   ],
   defaultConfig: () => ({ format: 'html', fullDocument: true, inlineAssets: true }),
+  gathersProblems: true,
   mergePorts: (config) => ((config.combine ?? 'merge') === 'merge' ? ['document'] : undefined),
   async evaluate(inputs, config): Promise<NodeOutput> {
     const docs = inputs.document as CmsDocument[];
@@ -60,8 +68,9 @@ export const output: NodeDefinition<OutputConfig> = {
         info: { format: 'json', changed: result.changed.length, bytes: new TextEncoder().encode(result.json).length },
       };
     }
-    const info: Record<string, number> = { bytes: new TextEncoder().encode(html).length };
+    const info: Record<string, number | string> = { bytes: new TextEncoder().encode(html).length };
     if (docs.length > 1) info.documents = docs.length;
+    if (config.variant) info.variant = config.variant;
     return { outputs: { html, document: doc, result: doc }, info };
   },
 };

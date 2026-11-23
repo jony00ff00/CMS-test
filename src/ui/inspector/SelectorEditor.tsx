@@ -47,7 +47,9 @@ export function SelectorEditor({ node }: { node: GraphNode }) {
       <SelectorFields
         config={config}
         input={input}
-        onChange={(next) => set({ ...next, ...(config.place && { place: config.place }), ...(config.join && { join: true }) } as SelectorNodeConfig)}
+        onChange={(next) =>
+          set({ ...next, ...(config.place && { place: config.place }), ...(config.join && { join: true }), ...(config.expect && { expect: config.expect }) } as SelectorNodeConfig)
+        }
         manual={(c, patch) => <ManualSelections node={node} config={c} onChange={(anchors) => patch({ anchors })} />}
       />
       {config.mode !== 'point' && (
@@ -58,6 +60,7 @@ export function SelectorEditor({ node }: { node: GraphNode }) {
           onChange={(join) => set({ ...config, join: join || undefined })}
         />
       )}
+      {config.mode !== 'point' && <ExpectFields value={config.expect} onChange={(expect) => set({ ...config, expect })} />}
       {config.mode === 'point' ? (
         <PointSummary nodeId={node.id} point={config.point} />
       ) : (
@@ -70,6 +73,31 @@ export function SelectorEditor({ node }: { node: GraphNode }) {
         />
       )}
     </>
+  );
+}
+
+/** How many matches the page needs: outside the range, the node and the Outputs after it show a problem. */
+function ExpectFields({ value, onChange }: { value?: { min?: number; max?: number }; onChange: (v: { min?: number; max?: number } | undefined) => void }) {
+  const num = (v: string) => (v.trim() === '' || Number.isNaN(Number(v)) ? undefined : Math.max(0, Math.round(Number(v))));
+  const set = (patch: { min?: number; max?: number }) => {
+    const next = { ...value, ...patch };
+    onChange(next.min === undefined && next.max === undefined ? undefined : next);
+  };
+  return (
+    <fieldset className="params expect-fields">
+      <legend>Expected matches</legend>
+      <div className="fill-row-options">
+        <label className="fill-inline">
+          <span>At least</span>
+          <input type="number" min={0} className="fill-count" value={value?.min ?? ''} onChange={(e) => set({ min: num(e.target.value) })} />
+        </label>
+        <label className="fill-inline">
+          <span>At most</span>
+          <input type="number" min={0} className="fill-count" value={value?.max ?? ''} onChange={(e) => set({ max: num(e.target.value) })} />
+        </label>
+      </div>
+      <p className="hint">Leave empty for any number. Outside this range is a problem, shown here and on the Outputs after this node.</p>
+    </fieldset>
   );
 }
 
