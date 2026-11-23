@@ -18,6 +18,7 @@
   --node-object: #0d9488;
   --node-extractor: #4f46e5;
   --node-replace: #be185d;
+  --node-fill: #65a30d;
   --node-position: #0891b2;
   --node-output: #dc2626;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -87,6 +88,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .palette-object { border-left-color: var(--node-object); }
 .palette-extractor { border-left-color: var(--node-extractor); }
 .palette-replace { border-left-color: var(--node-replace); }
+.palette-fillTemplate { border-left-color: var(--node-fill); }
 .palette-position { border-left-color: var(--node-position); }
 .palette-label { font-weight: 600; }
 .palette-description { font-size: 0.75rem; color: var(--muted); }
@@ -216,6 +218,7 @@ body.preview-window { margin: 0; height: 100vh; }
 .cms-node-object { border-top-color: var(--node-object); }
 .cms-node-extractor { border-top-color: var(--node-extractor); }
 .cms-node-replace { border-top-color: var(--node-replace); }
+.cms-node-fillTemplate { border-top-color: var(--node-fill); }
 .cms-node-position { border-top-color: var(--node-position); }
 .cms-node.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .cms-node.status-error { border-color: #fca5a5; }
@@ -394,3 +397,20 @@ textarea.note-text { display: block; width: 100%; resize: none; border: 0; paddi
 .variant-switch p { margin: 0; }
 .variant-pill { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; background: #f5f0ff; color: #5b21b6; border: 1px solid #ddd0fb; }
 .variant-pill.is-active { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+
+/* Fill template rows */
+.fill-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.fill-rows > li, .fill-inner-row { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; display: grid; gap: 4px; }
+.fill-repeat { border-left: 3px solid var(--node-fill); padding-left: 6px; }
+.fill-row { display: grid; gap: 6px; }
+.fill-row-head { display: flex; align-items: center; justify-content: space-between; }
+.fill-row-actions { display: inline-flex; gap: 2px; }
+.fill-inline { display: grid; gap: 2px; font-size: 0.75rem; color: var(--muted); }
+.fill-inline input, .fill-inline select { color: var(--text); }
+.fill-source { display: grid; gap: 4px; }
+.fill-row-options { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: end; }
+.fill-check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; }
+.fill-count { width: 5em; }
+.fill-inner { display: grid; gap: 6px; margin-top: 4px; }
+.fill-status.is-problem { color: var(--danger); font-weight: 600; }
+.fill-row input[type='text'], .fill-row input[type='number'], .fill-row select { font-size: 0.8rem; padding: 3px 6px; }

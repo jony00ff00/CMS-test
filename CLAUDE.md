@@ -198,6 +198,19 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   warns; and `pairs` (match i gets part i: each content match copied on its own; the
   node reads a document as its blocks then; a count mismatch warns and leaves the extra matches unchanged); info
   `replaced`, `from` (only when the content has a file name));
+  `fillTemplate` ("Fill template", `nodes/fill-template.ts`, engine `fill-template.ts`): inputs `template` (document)
+  and `content` (`any`, `convertValue` to a document); config `rows` (`FillRow`: slot rows { slot (CSS in the
+  template), from (a `SelectorConfig` in the content), target inside (default) | element, required } and repeat rows
+  { repeat (CSS), items (`SelectorConfig`: each match is an item, made a document with `documentFromSelection`), rows
+  (filled from the item, inside the clone), min, max }) and `styles` (default off). One slot takes all matches; several
+  slots take one match each, in order (`replaceSelection` with `pairs`). A repeat: item i fills template element i
+  (keeps its attributes, e.g. `data-step`), extra items copy the last one, elements without an item go; the clones
+  take the first element's place. Outputs `document` and `report` (not a port: `FillReport` per row, `rows` of a
+  repeat for its first item); `problems` for required rows and item counts (`expectation`), warnings otherwise.
+  Waits while there are no rows. `suggestFillRows` ("Match by name"): template class = content class, or ends with
+  `-<class>`, or `data-slot` = class. Inspector `FillTemplateEditor.tsx` (Match by name, Add slot, Add repeat, rows
+  with ↑ ↓ ×, a status line each from the report). Colour lime (`--node-fill`). The scrolly example's page comes out
+  the same from one Fill template node (kicker, dek, title, repeat `.gs-step` per "Step" heading section, footer);
   `position` (a point-mode Selector and an Object in one: inputs `document` and `content` (`any`); config
   `PositionNodeConfig` = `ReplaceOptions` + `point` (an `InsertionPoint` picked in the preview); `insertContent` with
   `{ mode: 'point', point }` and selection content; waits until the point is picked; info `inserted`, `from`,

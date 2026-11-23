@@ -22,6 +22,7 @@ export * from './graph';
 export * from './merge';
 export * from './variants';
 export * from './convert';
+export * from './fill-template';
 export * from './nodes';
 /**
  * Raised whenever the engine learns something a project can use that an older app does not know (a node option, a

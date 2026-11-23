@@ -169,6 +169,10 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
       if (info.needsAttention) return 'The point needs attention';
       return typeof info.inserted === 'number' ? `At a point${info.from ? ` · from ${info.from}` : ''} · added ${info.inserted}×` : 'At a point';
     }
+    case 'fillTemplate': {
+      if (typeof info.rows !== 'number') return 'Connect a template and content';
+      return `${info.from ? `From ${info.from} · ` : ''}${info.filled} of ${info.rows} row${info.rows === 1 ? '' : 's'} filled`;
+    }
     case 'replace': {
       const c = node.config as ReplaceNodeConfig;
       if (typeof info.replaced !== 'number') return 'Connect a selection (and content)';

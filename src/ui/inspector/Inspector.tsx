@@ -9,6 +9,7 @@ import { LibraryEditor } from '../library/LibraryEditor';
 import { TextField } from './fields';
 import { ConnectorEditor } from './ConnectorEditor';
 import { ExtractorEditor } from './ExtractorEditor';
+import { FillTemplateEditor } from './FillTemplateEditor';
 import { ObjectEditor } from './ObjectEditor';
 import { OutputEditor } from './OutputEditor';
 import { ReplaceEditor } from './ReplaceEditor';
@@ -26,6 +27,7 @@ const EDITORS = {
   extractor: ExtractorEditor,
   object: ObjectEditor,
   replace: ReplaceEditor,
+  fillTemplate: FillTemplateEditor,
   position: PositionEditor,
   output: OutputEditor,
   connector: ConnectorEditor,

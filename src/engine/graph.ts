@@ -42,6 +42,11 @@ export interface NodeOutput {
   info?: Record<string, string | number | boolean>;
   /** Set when the node cannot run yet because something is missing (e.g. no file chosen). Not an error. */
   waiting?: string;
+  /**
+   * Things that make the result wrong although the node ran (a required slot left empty, fewer items than
+   * expected): unlike warnings, the canvas and the Outputs after the node show them (see `NodeResult.problems`).
+   */
+  problems?: string[];
 }
 
 export interface NodeDefinition<Config = unknown> {
@@ -265,6 +270,13 @@ export interface NodeResult {
   info: Record<string, string | number | boolean>;
   /** Why the node is waiting, blocked or failed. */
   message?: string;
+  /** What makes this node's result wrong although it ran (see `NodeOutput.problems`). */
+  problems?: string[];
+  /**
+   * Outputs only: the problems of every node before it (that page's nodes, for a page variant), each with the
+   * node's id. The page is made anyway; `OutputConfig.strict` keeps it from being downloaded.
+   */
+  upstreamProblems?: { nodeId: string; problem: string }[];
   /** Hash of the node's type, config, dependencies and input keys. */
   key: string;
   cached: boolean;
@@ -395,6 +407,7 @@ export class GraphEvaluator {
         status: out.waiting ? 'waiting' : 'ok',
         outputs: out.waiting ? {} : out.outputs,
         warnings: out.warnings ?? [],
+        ...(out.problems?.length && { problems: out.problems }),
         info: out.info ?? {},
         message: out.waiting,
         key,
