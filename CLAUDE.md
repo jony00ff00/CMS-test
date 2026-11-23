@@ -407,4 +407,7 @@ dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment
 `.github/workflows/pages.yml` runs unit tests, builds with `VITE_BASE=/<repo-name>/`, and deploys `dist/`
-to GitHub Pages on every push to `main`. Local builds keep base `/`.
+to GitHub Pages. Which branch: a manual run (Run workflow, pick a branch) deploys that branch; a push deploys only
+when its branch is the repository variable `PAGES_BRANCH` (default `main`), other pushes are skipped. The
+`github-pages` environment's deployment branches must allow the branch. Keep the workflow the same on every branch
+that may be deployed (a push runs the workflow file of its own branch). Local builds keep base `/`.
