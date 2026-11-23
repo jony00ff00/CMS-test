@@ -1,8 +1,13 @@
 name: Deploy to GitHub Pages
 
+# Which branch the site shows:
+# - Run this workflow by hand (Actions → Deploy to GitHub Pages → Run workflow) and pick a branch: that branch is deployed.
+# - On a push, only the branch named by the repository variable PAGES_BRANCH (Settings → Secrets and variables →
+#   Actions → Variables) is deployed; without the variable, main. Pushes to other branches are skipped.
+# The github-pages environment must allow the branch (Settings → Environments → github-pages → Deployment branches).
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -16,6 +21,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == (vars.PAGES_BRANCH || 'main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
