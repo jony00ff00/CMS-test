@@ -26,9 +26,9 @@ test('the scrolly example: Word text in the code, and the code runs in the previ
   await node(page, 'code').click();
   await expect(inspector.getByLabel('Keep its scripts and styles (code you trust)')).toBeChecked();
   await node(page, 'fill-steps').click();
-  await expect(inspector.getByLabel('Replace', { exact: true })).toHaveValue('inside');
+  await expect(inspector.getByLabel('Put it', { exact: true })).toHaveValue('inside');
   await expect(inspector.getByLabel('Match by match')).toBeChecked();
-  await expect(inspector).toContainText('Replaces what Step cards selects (10 matches)');
+  await expect(inspector).toContainText('What Step cards selects (10 matches)');
   await node(page, 'page').click();
 
   // The script ran: it moved the graphic into a shadow root (Playwright's locators look inside it) and drew the seats.

@@ -21,7 +21,7 @@ export function twoDocumentsProject() {
   const edges = [
     { id: 'e1', source: 'documentSource-1', sourcePort: 'document', target: 'selector-3', targetPort: 'document' },
     { id: 'e2', source: 'documentSource-2', sourcePort: 'document', target: 'extractor-4', targetPort: 'document' },
-    { id: 'e3', source: 'selector-3', sourcePort: 'point', target: 'object-5', targetPort: 'point' },
+    { id: 'e3', source: 'selector-3', sourcePort: 'point', target: 'object-5', targetPort: 'where' },
     { id: 'e4', source: 'extractor-4', sourcePort: 'document', target: 'object-5', targetPort: 'content' },
     { id: 'e5', source: 'object-5', sourcePort: 'document', target: 'output-6', targetPort: 'document' },
   ];

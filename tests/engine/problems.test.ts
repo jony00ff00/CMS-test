@@ -32,9 +32,9 @@ describe('problems', () => {
     const g: Graph = {
       nodes: [
         node('src', 'documentSource', { fileId: 'html' }), node('parts', 'documentSource', { fileId: 'parts' }),
-        node('sel', 'selector', { mode: 'css', selector: 'h2' }), node('rep', 'replace', { target: 'inside', pairs: true }), node('out', 'output'),
+        node('sel', 'selector', { mode: 'css', selector: 'h2' }), node('rep', 'object', { content: { kind: 'selection' }, place: 'inside', pairs: true }), node('out', 'output'),
       ],
-      edges: [edge('src', 'document', 'sel', 'document'), edge('sel', 'selection', 'rep', 'selection'), edge('parts', 'document', 'rep', 'content'), edge('rep', 'document', 'out', 'document')],
+      edges: [edge('src', 'document', 'sel', 'document'), edge('sel', 'selection', 'rep', 'where'), edge('parts', 'document', 'rep', 'content'), edge('rep', 'document', 'out', 'document')],
     };
     const r = (await run(g)).results;
     expect(r.rep.problems).toEqual(['The content has 3 parts for 2 matches: the last 1 is left out']);

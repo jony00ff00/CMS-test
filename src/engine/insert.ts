@@ -75,7 +75,15 @@ export interface InsertionPoint {
 
 export type InsertWhere =
   | { mode: 'point'; point?: InsertionPoint }
-  | { mode: 'selector'; selector: SelectorConfig; place: InsertPlace };
+  | { mode: 'selector'; selector: SelectorConfig; place: InsertPlace }
+  /** Next to (or inside) matches already found, e.g. a Selection connected to an Insert node. */
+  | { mode: 'matches'; matches: Match[]; place: InsertPlace };
+
+/** The same places with another place (before / after / start / end) next to them. */
+export function withPlace(where: InsertWhere, place: InsertPlace): InsertWhere {
+  if (where.mode === 'point') return where.point ? { mode: 'point', point: { ...where.point, place } } : where;
+  return { ...where, place };
+}
 
 /**
  * What a Selector's Point output carries: the document and where in it things go (a picked point, or a place
@@ -126,7 +134,7 @@ const el = (tagName: string, properties: Element['properties'], children: Elemen
 });
 const text = (value: string): ElementContent => ({ type: 'text', value });
 
-interface Built {
+export interface Built {
   nodes: ElementContent[];
   assets: Asset[];
   /** Block content cannot go inside a paragraph. */
@@ -496,6 +504,9 @@ export function insertionTargets(doc: CmsDocument, where: InsertWhere, block: bo
     if (r.status === 'fuzzy') warnings.push('The text at the insertion point changed a little; check that it is still in the right place');
     matches = [r.match];
     place = where.point.place;
+  } else if (where.mode === 'matches') {
+    matches = where.matches;
+    place = where.place;
   } else {
     const selection = runSelector(doc, where.selector);
     warnings.push(...selection.warnings);
@@ -534,7 +545,7 @@ export function insertionTargets(doc: CmsDocument, where: InsertWhere, block: bo
       return seen.has(k) ? false : (seen.add(k), true);
     });
   }
-  if (matches.length === 0 && where.mode === 'selector' && !warnings.length) warnings.push('The selector matched nothing, so nothing was inserted');
+  if (matches.length === 0 && where.mode !== 'point' && !warnings.length) warnings.push('The selector matched nothing, so nothing was inserted');
   return { matches, place, warnings, needsAttention };
 }
 
@@ -681,6 +692,30 @@ export async function replaceSelection(selection: Selection, content: Selection,
     );
   }
 
+  return replaceWithPieces(selection, pieces, options, warnings);
+}
+
+/**
+ * A copy of the selection's document with every match replaced by built content (an image, a video, code, text:
+ * what an Insert node holds), the same way `replaceSelection` puts in copied content.
+ */
+export async function replaceWithContent(selection: Selection, built: Built, options: ReplaceMode = {}): Promise<ReplaceResult> {
+  const warnings = [...selection.warnings, ...built.warnings];
+  if (selection.matches.length === 0) {
+    if (!warnings.length) warnings.push('The selection is empty, so nothing was replaced');
+    return { document: selection.document, warnings, replaced: 0 };
+  }
+  const r = await replaceWithPieces(selection, [built], { ...options, pairs: false }, warnings);
+  const out = r.document;
+  if (out !== selection.document) {
+    const assets = out.meta.snippetAssets ?? [];
+    if (!assets.some((a) => a.key === 'cms-insert@1')) out.meta.snippetAssets = [...assets, { key: 'cms-insert@1', name: 'Insert', css: INSERT_CSS }];
+  }
+  return r;
+}
+
+async function replaceWithPieces(selection: Selection, pieces: Built[], options: ReplaceOptions & ReplaceMode, warnings: string[]): Promise<ReplaceResult> {
+  const doc = selection.document;
   // One job per place: what goes there (a piece, inline or not), worked out against this document.
   const ix = indexDocument(doc);
   interface Job { match: Match; nodes: ElementContent[] }

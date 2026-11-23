@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, useState } from 'react';
-import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, variantConfig, type GraphNode, type NodeResult, type ObjectNodeConfig, type ReplaceNodeConfig, type PositionNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
+import { cleanClassNames, describeInsertion, nodeRegistry, refStatus, variantConfig, type GraphNode, type NodeResult, type ObjectNodeConfig, type SelectorConfig, type SelectorNodeConfig, type SnippetNodeConfig } from '../../engine';
 import { editorStore, useEditor } from '../../store/editor-store';
 
 export type CmsFlowNode = Node<Record<string, never>, 'cms'>;
@@ -177,25 +177,17 @@ function summarize(node: GraphNode, result: NodeResult | undefined): string {
     }
     case 'object': {
       const c = node.config as ObjectNodeConfig;
-      const added = info.alone ? ' · on its own' : typeof info.inserted === 'number' ? ` · added ${info.inserted}×` : '';
-      return `${describeInsertion(c.content)}${added}`;
-    }
-    case 'position': {
-      const c = node.config as PositionNodeConfig;
-      if (!c.point) return 'Click in the preview to pick the point';
+      if (c.items) return typeof info.items === 'number' ? `${info.items} item${info.items === 1 ? '' : 's'} · added ${info.inserted}×` : `${c.items.length} item${c.items.length === 1 ? '' : 's'}`;
+      if (info.removed) return `Removed ${info.replaced}×${c.place === 'inside' ? ' · inside' : ''}`;
+      const what = `${describeInsertion(c.content)}${info.from ? ` from ${info.from}` : ''}`;
+      if (typeof info.replaced === 'number') return `${what} · ${c.place === 'inside' ? 'inside, ' : ''}replaced ${info.replaced}×${c.pairs ? ' · match by match' : ''}`;
       if (info.needsAttention) return 'The point needs attention';
-      return typeof info.inserted === 'number' ? `At a point${info.from ? ` · from ${info.from}` : ''} · added ${info.inserted}×` : 'At a point';
+      const added = info.alone ? ' · on its own' : typeof info.inserted === 'number' ? ` · added ${info.inserted}×` : '';
+      return `${what}${added}`;
     }
     case 'fillTemplate': {
       if (typeof info.rows !== 'number') return 'Connect a template and content';
       return `${info.from ? `From ${info.from} · ` : ''}${info.filled} of ${info.rows} row${info.rows === 1 ? '' : 's'} filled`;
-    }
-    case 'replace': {
-      const c = node.config as ReplaceNodeConfig;
-      if (typeof info.replaced !== 'number') return 'Connect a selection (and content)';
-      if (info.removed) return `No content: removed ${info.replaced}×${c.target === 'inside' ? ' · inside' : ''}`;
-      const wrap = `${c.wrap === 'div' ? ' in a box' : c.wrap === 'section' ? ' in a section' : ''}${c.pairs ? ' · match by match' : ''}${c.target === 'inside' ? ' · inside' : ''}`;
-      return `${info.from ? `From ${info.from}` : 'Content'}${wrap} · replaced ${info.replaced}×`;
     }
     case 'output':
       if (info.format === 'json') return `JSON · ${info.changed} field${info.changed === 1 ? '' : 's'} changed`;

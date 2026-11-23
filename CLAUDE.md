@@ -1,6 +1,6 @@
 # Node CMS
 
-Node-based CMS: Document Source → Selector → Snippet → Output (plus Extractor, Object, Replace, Position, Connector).
+Node-based CMS: Document Source → Selector → Snippet → Output (plus Insert, Fill template, Extractor, Connector).
 Sources (.html, .docx, .pptx, .json) become one internal Document (a hast tree). Selectors pick parts of it,
 Snippet nodes wrap or add to those parts, and Output previews or exports the result.
 
@@ -173,13 +173,21 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `point`, a `PointValue` { kind: 'point', document, where: `InsertWhere` }): mode `point` (picked in the preview;
   waits until picked) gives `{ mode: 'point', point }`, every other mode `{ mode: 'selector', selector, place }`
   (place default after);
-  `object` (was Insert: `content` only; input `point` (optional: without it the Object gives its content alone as
-  a document, `contentAlone` in `insert.ts`, info `alone`; the preview shows just that, no views) + optional `content` input of port type `any`
-  (`PortDef.optional`: the node runs without it; was `selection`, `parseProject` renames old edges) used by content
-  `{ kind: 'selection', wrap?, className?, styles?, headings? }` ("Content from another node"): the input goes
-  through `convertValue`, so a document (e.g. an Extractor's) means all of it, a selection what it picked, HTML its
-  body; `insertContent` at the point's `where`; depends on its media file's hash; reports `needsAttention` when its
-  point is gone; outputs also carry `content` (not a port: what it adds, for the preview) and `info.from`).
+  `object` (shown as **Insert**; type id kept so projects and tests carry over. Replace and Position nodes were merged
+  into it: `parseProject`'s `upgradeToInsert` turns `replace` nodes into ones with `place` replace / inside (+ `pairs`,
+  copy options into `content: { kind: 'selection', … }`) and `position` nodes into ones with `point`, and renames the
+  edges `point` / `selection` / `document` → `where`; ids, names and connections stay, no warning). Inputs `where`
+  (`any`, optional) and `content` (`any`, optional). Config `ObjectNodeConfig` { content, place?, pairs?, point?,
+  items? }. By what comes into Where (`valueKind`): nothing → the content alone as a document (`contentAlone`, info
+  `alone`); a Point → `insertContent` at its `where`, a `place` before / after / start / end overrides its place
+  (`withPlace`), replace / inside use `selectionAtPoint`; a Selection → default replace (`place` undefined), inside, or
+  next to its matches (`InsertWhere` mode `matches`); a document / HTML → the `point` picked in the preview (waits until
+  picked). Replacing: "Content from another node" → `replaceSelection` (copy options, `pairs`; a count mismatch is a
+  problem), with nothing connected → `removeSelection` (info `removed`); other content → `replaceWithContent` (built
+  nodes in place of each match, via `replaceWithPieces`). `items` (`InsertItem` { id, label?, selector, place, content
+  (not selection) }): each goes in turn next to every match of its own selector in the Where document; a place not
+  found is a problem ("Item 2 (label): its place was not found"); `dependencies` hash every item's file. Outputs also
+  carry `content` (not a port: what it adds, for the preview) and `info.from` / `what` / `inserted` / `replaced`.
   `copySelection` in `insert.ts` copies what a selection matched, in document order, via a wrap snippet with a
   `cms-extract` marker; the copy drops `data-json-path` and brings its images and the source's snippet assets.
   `copyContent` adds the options: `wrap` none | div (class `className`, default `inserted`) | section
@@ -195,20 +203,13 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   the tree, so pieces of one element share it), so CSS aimed at them or at a wrapper still applies; off: only the
   picked content, as the Object and Connector copy it; its outputs also carry `selection`, not a port, for the preview and the
   saved selections' status);
-  `replace` (inputs `selection` (port type selection) and `content` (`any`, through `convertValue`; optional: with nothing
-  connected it removes the selection, `removeSelection` in `insert.ts` (an empty `replace` snippet; `target: 'inside'` empties
-  the elements instead; JSON field blocks stay, their content goes), info `removed`, the copy options are hidden); config
-  `ReplaceOptions` = the Object's selection-content options (wrap, className, styles, headings); output `document`;
   `replaceSelection` in `insert.ts`: a `replace` snippet with the placeholder, filled with `copyContent` (one copy
   per match; a text range across blocks gets it once). Selected text takes inline content: one `<p>`'s children, or
   inline nodes; block content widens a text match to its block, with a warning. JSON field blocks are kept (replace
   works inside them); `ReplaceMode`: `target` element (default) | inside (the element and its attributes stay, its
   children are replaced; an empty element is filled first, by an append inside; a paragraph, heading or inline
   element takes `inlineOf` the content); block content (or a `<video>` / `<audio>` / `<iframe>`, `MEDIA_BLOCKS`) for the only
-  thing in a `<p>` / heading (e.g. a Word picture in its own paragraph) replaces that paragraph, for part of one it
-  warns; and `pairs` (match i gets part i: each content match copied on its own; the
-  node reads a document as its blocks then; a count mismatch warns and leaves the extra matches unchanged); info
-  `replaced`, `from` (only when the content has a file name));
+  thing in a `<p>` / heading replaces that paragraph, for part of one it warns; and `pairs` (match i gets part i);
   `fillTemplate` ("Fill template", `nodes/fill-template.ts`, engine `fill-template.ts`): inputs `template` (document)
   and `content` (`any`, `convertValue` to a document); config `rows` (`FillRow`: slot rows { slot (CSS in the
   template), from (a `SelectorConfig` in the content), target inside (default) | element, required } and repeat rows
@@ -222,10 +223,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   `-<class>`, or `data-slot` = class. Inspector `FillTemplateEditor.tsx` (Match by name, Add slot, Add repeat, rows
   with ↑ ↓ ×, a status line each from the report). Colour lime (`--node-fill`). The scrolly example's page comes out
   the same from one Fill template node (kicker, dek, title, repeat `.gs-step` per "Step" heading section, footer);
-  `position` (a point-mode Selector and an Object in one: inputs `document` and `content` (`any`); config
-  `PositionNodeConfig` = `ReplaceOptions` + `point` (an `InsertionPoint` picked in the preview); `insertContent` with
-  `{ mode: 'point', point }` and selection content; waits until the point is picked; info `inserted`, `from`,
-  `needsAttention`). The Combinator node was removed: `parseProject` leaves old ones out
+  The Combinator node was removed: `parseProject` leaves old ones out
   with a warning (`mergePorts` / `planMerges` stay for the Output);
   `connector` (one input `input` of port type `any`, which `edgeError` lets every output type into; outputs
   `document`, `selection`, `html` and `result`, all filled from whatever came in by `convertValue` in `convert.ts`
@@ -246,7 +244,7 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   edge type (`DeletableEdge.tsx`): a delete button at the middle while selected. In e2e, click a connection by
   position between its handles (a straight one has no height).
 - Node colours: CSS `--node-*` / `--port-*`, and `NODE_COLORS` (`src/ui/node-colors.ts`) for the minimap; keep them
-  the same. Connector is grey, Replace pink; the `point` port and its dotted connections are cyan.
+  the same. Connector is grey, Insert (object) teal; the `point` port and its dotted connections are cyan.
 - "Save project file…" opens `SaveDialog` (`src/ui/canvas/SaveDialog.tsx`, a `<dialog>`): a file name
   (`projectFileName`, `.node-cms.json`, remembered in localStorage `node-cms:project-name`), then the browser's own
   save dialog (`showSaveFilePicker`, to pick the folder; cancelling it keeps our dialog open), or a download where
@@ -350,13 +348,14 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   on `PreviewSource`): "Pick" (its input with the kept parts highlighted; selected text → "Add to <extractor>",
   `addAnchor`) and "Kept" (its output). `chooseMediaFile` adds an image or video file. Project files save every `fileId` found
   anywhere in a node's settings.
-- A Position node selected: views "Where it goes" (its input with the marker; clicks pick the point, as for a
-  point-mode Selector: `placeInsertion` sets `point` on a Position, `mode` + `point` on a Selector), "Content" and
-  "Result". Inspector: `PositionEditor` (`PointSummary` with `noun`, Clear the point, `ContentSource`,
-  `CopyOptionsFields`). Colour cyan, like the point port.
-- A Replace node selected: views "What it replaces" (its Selection's document highlighted), "Content" (what comes
-  into Content, highlighted when it is a selection) and "Result". The inspector (`ReplaceEditor`) reuses
-  `ContentSource` and `CopyOptionsFields` from `ObjectEditor.tsx`.
+- An Insert node selected: nothing at Where or items → its result alone; otherwise views "Where it goes" (a Point:
+  its document with the marker, clicks move it when it comes straight from a point-mode Selector; a Selection: its
+  matches highlighted; a document: the marker, clicks pick the node's own `point` (`placeInsertion` sets `point` on an
+  Insert, `mode` + `point` on a Selector)), "Content" (content from another node) and "Result". Inspector
+  (`ObjectEditor.tsx`): `WhereSource`, "What it adds" (one thing / several items), "Put it" (`PUT_FOR_POINT` /
+  `PUT_FOR_SELECTION`), "Content" (kind) + `ContentFields` (`onFile` for items' uploads: `chooseItemMediaFile`), "Match
+  by match"; `ItemsEditor` (name, Where (`SourceFields` from `FillTemplateEditor.tsx`), Put it, content). Palette: the
+  main nodes, then "Advanced" (Extractor, Connector).
 - An image clicked in the preview (the bridge posts `image` with its number among the page's `<img>`s, outside
   `data-cms-preview`, and its alt) → "Selected image" (with "With its figure / link" when it has one): "Create
   selector from image" / "Add to <selector>" (`imageMatch` in `Preview.tsx`). Not while picking a point or showing an
@@ -443,7 +442,7 @@ Combinator (since removed), simple custom snippets with node-only CSS / JS, Extr
 another document (wrap, source styles, heading levels, Content view, "Two documents" example), minimap
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
 image selection (Images mode, click an image in the preview), notes on the canvas, page variants, Fill template node,
-problems (expectations), Replace node, Object text and Object without a Point, Position node, groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
+problems (expectations), Replace node, Object text and Object without a Point, Position node, one Insert node (Object, Replace and Position merged; several items), groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
 Word file; the JSON example button was removed). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 

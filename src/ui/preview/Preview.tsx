@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   buildInsertion, caretTarget, createAnchor, elementMatch, enclosingBlock, highlightSelection, HIGHLIGHT_CSS, imagesOf, imageWithFrame, indexDocument, INSERT_MARKER_CSS,
   insertionPointAt, markInsertionPoint, rangeOf, serialize, type CmsDocument, type InsertWhere, type Match, type ObjectNodeConfig,
-  type InsertionPoint, type PointValue, type PositionNodeConfig, type Selection, type SelectorConfig, type SelectorNodeConfig, outputVariant } from '../../engine';
+  type InsertionPoint, type PointValue, type Selection, type SelectorConfig, type SelectorNodeConfig, outputVariant, parseHtml, withPlace } from '../../engine';
 import { VariantPicker } from '../variants';
 import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
 import { nodeLabel } from '../node-label';
@@ -51,8 +51,6 @@ const OBJECT_VIEWS = ['Where it goes', 'Result'];
 /** An Object with content from another node can also show just that content. */
 const OBJECT_CONTENT_VIEWS = ['Where it goes', 'Content', 'Result'];
 const EXTRACTOR_VIEWS = ['Pick', 'Kept'];
-const REPLACE_VIEWS = ['What it replaces', 'Content', 'Result'];
-const POSITION_VIEWS = ['Where it goes', 'Content', 'Result'];
 
 /** What comes into a node's input, for the preview: a document, a selection (highlighted) or HTML. */
 function incoming(s: EditorState, nodeId: string, port: string) {
@@ -74,20 +72,19 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
   const selected = s.graph.nodes.find((n) => n.id === s.selectedId);
   if (selected?.type === 'object') {
     const config = selected.config as ObjectNodeConfig;
-    const views = config.content.kind === 'selection' ? OBJECT_CONTENT_VIEWS : OBJECT_VIEWS;
-    // No Point: the Object's output is its content alone, so there is just that to show.
-    if (!s.graph.edges.some((e) => e.target === selected.id && e.targetPort === 'point')) {
-      const result = s.results[selected.id];
-      const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
-      return { label: `${nodeLabel(selected)} on its own (no Point connected)`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, message: result?.message ?? 'Waiting…' };
+    const result = s.results[selected.id];
+    const resultDoc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
+    const where = incoming(s, selected.id, 'where');
+    // Nothing at Where: the output is the content alone. Items: just the result (each has its own place).
+    if (!where.edge || config.items) {
+      const label = !where.edge ? `${nodeLabel(selected)} on its own (nothing connected to Where)` : `Result of ${nodeLabel(selected)} · ${config.items!.length} item${config.items!.length === 1 ? '' : 's'}`;
+      return { label, doc: resultDoc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, message: result?.message ?? 'Waiting…' };
     }
+    const views = config.content.kind === 'selection' ? OBJECT_CONTENT_VIEWS : OBJECT_VIEWS;
     if (view === 'Result') {
-      const result = s.results[selected.id];
-      const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
-      return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, views, message: result?.message ?? 'Waiting…' };
+      return { label: `Result of ${nodeLabel(selected)}`, doc: resultDoc, from: { nodeId: selected.id, port: 'document' }, insertNodeId: selected.id, views, message: result?.message ?? 'Waiting…' };
     }
     if (view === 'Content' && views.includes('Content')) {
-      const result = s.results[selected.id];
       const doc = result?.status === 'ok' ? (result.outputs.content as CmsDocument | undefined) : undefined;
       const from = s.graph.edges.find((e) => e.target === selected.id && e.targetPort === 'content');
       return {
@@ -95,79 +92,49 @@ function previewSource(s: EditorState, view: string | undefined): PreviewSource 
         doc,
         insertNodeId: selected.id,
         views,
-        message: !from ? 'Connect something to the Content input.' : doc ? undefined : (result?.message ?? 'Waiting…'),
+        message: !from ? 'Nothing is connected to Content.' : doc ? undefined : (result?.message ?? 'Waiting…'),
       };
     }
-    const edge = s.graph.edges.find((e) => e.target === selected.id && e.targetPort === 'point');
-    const pointer = edge && s.graph.nodes.find((n) => n.id === edge.source);
-    const r = edge && s.results[edge.source];
-    const point = r?.status === 'ok' ? (r.outputs[edge!.sourcePort] as PointValue | undefined) : undefined;
+    const pointer = s.graph.nodes.find((n) => n.id === where.edge!.source);
+    const waiting = where.value === undefined ? (s.results[where.edge.source]?.message ?? 'Waiting…') : undefined;
+    // A Selection: its matches highlighted (what is replaced, or what the content goes next to).
+    if (where.selection) {
+      const count = where.selection.matches.length;
+      const replaces = !config.place || config.place === 'replace' || config.place === 'inside';
+      return {
+        label: `${replaces ? 'What' : 'Where'} ${nodeLabel(selected)} ${replaces ? 'replaces' : 'goes next to'} · ${count} match${count === 1 ? '' : 'es'} highlighted`,
+        doc: where.doc,
+        selection: where.selection,
+        insertNodeId: selected.id,
+        views,
+        message: waiting,
+      };
+    }
     const built = buildInsertion(config.content, s.files);
     // Until the content is complete, guess from its kind whether it is block content.
     const block = 'nodes' in built ? built.block : config.content.kind === 'video' || config.content.kind === 'videoUrl' || config.content.kind === 'code' || (config.content.kind === 'text' && config.content.as !== 'inline');
-    // Clicks move the point when it comes straight from a Selector in point mode.
-    const pickable = pointer?.type === 'selector' && (pointer.config as SelectorConfig).mode === 'point';
-    return {
-      label: `Where ${nodeLabel(selected)} goes${pointer ? ` (the Point of ${nodeLabel(pointer)})` : ''}${pickable ? ' · click to move it' : ''}`,
-      doc: point?.document,
-      insert: point ? { nodeId: pickable ? pointer!.id : undefined, where: point.where, block } : undefined,
-      insertNodeId: selected.id,
-      views,
-      message: !edge ? "Connect a Selector's Point to this Object." : point ? undefined : (r?.message ?? 'Waiting…'),
-    };
-  }
-  if (selected?.type === 'position') {
-    const config = selected.config as PositionNodeConfig;
-    const result = s.results[selected.id];
-    if (view === 'Content') {
-      const c = incoming(s, selected.id, 'content');
-      const count = c.selection?.matches.length ?? 0;
+    const point = (where.value as PointValue | undefined)?.kind === 'point' ? (where.value as PointValue) : undefined;
+    if (point) {
+      // Clicks move the point when it comes straight from a Selector in point mode.
+      const pickable = pointer?.type === 'selector' && (pointer.config as SelectorConfig).mode === 'point';
+      const placed = config.place && config.place !== 'replace' && config.place !== 'inside' ? withPlace(point.where, config.place) : point.where;
       return {
-        label: `Content for ${nodeLabel(selected)}${c.selection ? ` · ${count} match${count === 1 ? '' : 'es'} highlighted` : ''}`,
-        doc: c.doc,
-        html: c.html,
-        selection: c.selection,
-        views: POSITION_VIEWS,
-        message: !c.edge ? 'Connect something to the Content input.' : c.value === undefined ? (s.results[c.edge.source]?.message ?? 'Waiting…') : undefined,
+        label: `Where ${nodeLabel(selected)} goes (the Point of ${nodeLabel(pointer)})${pickable ? ' · click to move it' : ''}`,
+        doc: point.document,
+        insert: { nodeId: pickable ? pointer!.id : undefined, where: placed, block },
+        insertNodeId: selected.id,
+        views,
+        message: waiting,
       };
     }
-    if (view === 'Result') {
-      const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
-      return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, views: POSITION_VIEWS, message: result?.message ?? 'Waiting…' };
-    }
-    const input = inputOf(s, selected.id, 'document');
+    // A document: the point is picked here, in the preview.
     return {
       label: `Where ${nodeLabel(selected)} goes · ${config.point ? 'the marker shows the point; click to move it' : 'click where the content should go'}`,
-      doc: input?.doc,
-      insert: { nodeId: selected.id, where: pointWhere(config), block: false },
-      views: POSITION_VIEWS,
-      message: !input ? 'Connect a document to this Position node.' : input.doc ? undefined : 'Waiting…',
+      doc: where.doc ?? (where.html ? parseHtml(where.html) : undefined),
+      insert: { nodeId: selected.id, where: pointWhere(config), block },
+      views,
+      message: waiting,
     };
-  }
-  if (selected?.type === 'replace') {
-    const result = s.results[selected.id];
-    if (view !== 'Result') {
-      const port = view === 'Content' ? 'content' : 'selection';
-      const edge = s.graph.edges.find((e) => e.target === selected.id && e.targetPort === port);
-      const value = edge ? s.results[edge.source]?.outputs[edge.sourcePort] : undefined;
-      const sel = (value as Selection | undefined)?.kind === 'selection' ? (value as Selection) : undefined;
-      const doc = sel ? sel.document : typeof value === 'object' && (value as { kind?: string })?.kind === 'document' ? (value as CmsDocument) : undefined;
-      const count = sel?.matches.length ?? 0;
-      return {
-        label: view === 'Content' ? `Content for ${nodeLabel(selected)}${sel ? ` · ${count} match${count === 1 ? '' : 'es'} highlighted` : ''}` : `What ${nodeLabel(selected)} replaces · ${count} match${count === 1 ? '' : 'es'} highlighted`,
-        doc,
-        html: typeof value === 'string' ? value : undefined,
-        selection: sel,
-        views: REPLACE_VIEWS,
-        message: !edge
-          ? view === 'Content'
-            ? 'Nothing is connected to Content, so the selection is removed.'
-            : 'Connect something to the Selection input.'
-          : value === undefined ? (s.results[edge.source]?.message ?? 'Waiting…') : undefined,
-      };
-    }
-    const doc = result?.status === 'ok' ? (result.outputs.document as CmsDocument) : undefined;
-    return { label: `Result of ${nodeLabel(selected)}`, doc, from: { nodeId: selected.id, port: 'document' }, views: REPLACE_VIEWS, message: result?.message ?? 'Waiting…' };
   }
   if (selected?.type === 'selector' && (selected.config as SelectorConfig).mode === 'point') {
     const input = inputOf(s, selected.id, 'document');
@@ -365,7 +332,7 @@ export function Preview({ width, onWidthChange, onDetachedChange, minimised, onM
     if (!point) return;
     const state = editorStore.getState();
     const target = state.graph.nodes.find((n) => n.id === source.insert!.nodeId);
-    if (target?.type === 'position') state.updateConfig<PositionNodeConfig>(target.id, (c) => ({ ...c, point }));
+    if (target?.type === 'object') state.updateConfig<ObjectNodeConfig>(target.id, (c) => ({ ...c, point }));
     else state.updateConfig<SelectorNodeConfig>(source.insert.nodeId, (c) => ({ ...c, mode: 'point', point }) as SelectorNodeConfig);
   };
 

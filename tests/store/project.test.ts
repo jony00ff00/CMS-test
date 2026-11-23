@@ -66,10 +66,11 @@ describe('project files', () => {
           { id: 'a', type: 'documentSource', config: {} },
           { id: 'b', type: 'teleporter', config: {} },
           { id: 'a', type: 'selector', config: {} },
-          { id: 'c', type: 'object', config: {} },
+          { id: 'c', type: 'output', config: {} },
+          { id: 'd', type: 'selector', config: {} },
         ],
         edges: [
-          { id: 'e1', source: 'a', sourcePort: 'document', target: 'c', targetPort: 'point' },
+          { id: 'e1', source: 'd', sourcePort: 'selection', target: 'c', targetPort: 'document' },
           { id: 'e2', source: 'a', sourcePort: 'document', target: 'gone', targetPort: 'document' },
         ],
       },
@@ -77,14 +78,14 @@ describe('project files', () => {
       library: { ok: [{ kind: 'snippet', id: 'ok', name: 'Ok', version: 1, mode: 'wrap', template: '{{content}}', params: [] }], bad: [{}] },
     });
     const { project, warnings } = parseProject(text);
-    expect(project.graph.nodes.map((n) => n.id)).toEqual(['a', 'c']);
+    expect(project.graph.nodes.map((n) => n.id)).toEqual(['a', 'c', 'd']);
     expect(project.graph.edges).toEqual([]);
     expect(Object.keys(project.library)).toEqual(['ok']);
     expect(warnings).toEqual([
       'A file (x.docx) could not be read and was left out',
       'A node of unknown type "teleporter" was left out',
       'A second node "a" was left out',
-      'A connection was left out: Cannot connect a document output to a point input',
+      'A connection was left out: Cannot connect a selection output to a document input',
       'A connection was left out: Both ends of a connection must be nodes in the graph',
       'The snippet "bad" could not be read and was left out',
     ]);
@@ -255,9 +256,9 @@ describe('project files and Object nodes', () => {
     expect(byId['insert-3-point']).toMatchObject({ type: 'selector', config: { mode: 'point', point: { anchor, place: 'after' } } });
     const edges = project.graph.edges.map((e) => `${e.source}.${e.sourcePort}>${e.target}.${e.targetPort}`).sort();
     expect(edges).toEqual([
-      'insert-2-point.point>insert-2.point',
+      'insert-2-point.point>insert-2.where',
       'insert-2.document>insert-3-point.document',
-      'insert-3-point.point>insert-3.point',
+      'insert-3-point.point>insert-3.where',
       'insert-3.document>out.document',
       'src.document>insert-2-point.document',
     ]);

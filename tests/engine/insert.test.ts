@@ -233,7 +233,7 @@ describe('Object node', () => {
       ],
       edges: [
         { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
-        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
+        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'where' },
         { id: 'e2', source: 'i', sourcePort: 'document', target: 'o', targetPort: 'document' },
       ],
     };
@@ -257,7 +257,7 @@ describe('Object node', () => {
         ],
         edges: [
           { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
-          { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
+          { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'where' },
         ],
       };
       const r = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files: { src: source } });
@@ -277,7 +277,7 @@ describe('Object node', () => {
       ],
       edges: [
         { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
-        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
+        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'where' },
       ],
     });
     const unpicked = await new GraphEvaluator(nodeRegistry).evaluate(graph({ mode: 'point' }), { files });
@@ -297,7 +297,7 @@ describe('Object node', () => {
       ],
       edges: [
         { id: 'e0', source: 's', sourcePort: 'document', target: 'p', targetPort: 'document' },
-        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'point' },
+        { id: 'e1', source: 'p', sourcePort: 'point', target: 'i', targetPort: 'where' },
       ],
     };
     const r = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files: { src: storeFile('a.html', serialize(doc), 'src') } });
@@ -407,10 +407,10 @@ describe('inserting selected content', () => {
       ],
       edges: [
         { id: 'e1', source: 'a', sourcePort: 'document', target: 'pt', targetPort: 'document' },
-        { id: 'e1b', source: 'pt', sourcePort: 'point', target: 'ins', targetPort: 'point' },
+        { id: 'e1b', source: 'pt', sourcePort: 'point', target: 'ins', targetPort: 'where' },
         { id: 'e2', source: 'b', sourcePort: 'document', target: 'sel', targetPort: 'document' },
         { id: 'e3', source: 'sel', sourcePort: 'selection', target: 'ins', targetPort: 'content' },
-        { id: 'e4', source: 'pt', sourcePort: 'point', target: 'plain', targetPort: 'point' },
+        { id: 'e4', source: 'pt', sourcePort: 'point', target: 'plain', targetPort: 'where' },
       ],
     };
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(g, { files: { a: html, b: notes } });

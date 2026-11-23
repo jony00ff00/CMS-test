@@ -322,7 +322,7 @@ export function twoOutputsGraph(wordId: string, pictureIds: string[], videoIds: 
           },
         },
       );
-      edges.push(edge(previous, 'document', place, 'document'), edge(place, 'point', media, 'point'));
+      edges.push(edge(previous, 'document', place, 'document'), edge(place, 'point', media, 'where'));
       previous = media;
     });
     nodes.push({ id: kind, type: 'output', name: kind === 'static' ? 'Static page' : 'Interactive page', position: at(9, row), config: { format: 'html', fullDocument: true, inlineAssets: true } });

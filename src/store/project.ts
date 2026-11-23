@@ -100,6 +100,7 @@ export function parseProject(text: string, registry: NodeRegistry = nodeRegistry
   const rawNodes = Array.isArray(p.graph?.nodes) ? p.graph.nodes : [];
   const rawEdges = Array.isArray(p.graph?.edges) ? p.graph.edges : [];
   upgradeInsertNodes(rawNodes, rawEdges, warnings);
+  upgradeToInsert(rawNodes, rawEdges);
   const nodes = rawNodes.filter((n) => {
     const ok = n && typeof n.id === 'string' && typeof n.type === 'string' && registry[n.type];
     if (!ok) {
@@ -197,7 +198,7 @@ function upgradeInsertNodes(nodes: any[], edges: any[], warnings: string[]) {
     for (const e of edges) {
       if (e?.target === n.id && e.targetPort === 'document') e.target = id;
     }
-    edges.push({ id: `${id}-to-${n.id}`, source: id, sourcePort: 'point', target: n.id, targetPort: 'point' });
+    edges.push({ id: `${id}-to-${n.id}`, source: id, sourcePort: 'point', target: n.id, targetPort: 'where' });
     upgraded++;
   }
   for (const n of nodes) if (n && n.name === undefined) delete n.name;
@@ -205,6 +206,34 @@ function upgradeInsertNodes(nodes: any[], edges: any[], warnings: string[]) {
     warnings.push(
       `${upgraded} Insert node${upgraded === 1 ? ' is' : 's are'} now ${upgraded === 1 ? 'an Object node' : 'Object nodes'}: where ${upgraded === 1 ? 'it goes' : 'they go'} is set by a new Selector (its Point output)`,
     );
+  }
+}
+
+/**
+ * Object, Replace and Position nodes are one node now (type "object", shown as Insert): its input "where" takes a
+ * Point, a Selection or a document. Replace nodes become ones that replace (place "replace" / "inside"), Position
+ * nodes ones with a picked point; ids, names and connections stay, so nothing else changes.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function upgradeToInsert(nodes: any[], edges: any[]) {
+  const port: Record<string, string> = { object: 'point', replace: 'selection', position: 'document' };
+  const kinds = new Map<string, string>();
+  for (const n of nodes) {
+    if (!n || typeof n !== 'object' || !(n.type in port)) continue;
+    kinds.set(n.id, n.type);
+    const c = n.config && typeof n.config === 'object' ? n.config : {};
+    if (n.type === 'replace') {
+      const { target, pairs, ...options } = c;
+      n.config = { content: { kind: 'selection', ...options }, place: target === 'inside' ? 'inside' : 'replace', ...(pairs && { pairs: true }) };
+    } else if (n.type === 'position') {
+      const { point, ...options } = c;
+      n.config = { content: { kind: 'selection', ...options }, ...(point && { point }) };
+    }
+    n.type = 'object';
+  }
+  for (const e of edges) {
+    const kind = e && kinds.get(e.target);
+    if (kind && e.targetPort === port[kind]) e.targetPort = 'where';
   }
 }
 

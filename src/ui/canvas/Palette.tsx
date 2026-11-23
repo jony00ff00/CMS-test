@@ -6,6 +6,34 @@ export const DRAG_TYPE = 'application/x-cms-node';
 /** Dragged with DRAG_TYPE: a note, not a node. */
 export const NOTE_DRAG = 'note';
 
+/** Node types for special cases: listed after the others. */
+const ADVANCED = ['extractor', 'connector'];
+
+function NodeList({ types, add }: { types: string[]; add: (type: string) => void }) {
+  return (
+    <ul>
+      {types.map((type) => nodeRegistry[type]).filter(Boolean).map((def) => (
+        <li key={def.type}>
+          <button
+            type="button"
+            className={`palette-item palette-${def.type}`}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_TYPE, def.type);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            onClick={() => add(def.type)}
+            title={def.description}
+          >
+            <span className="palette-label">{def.label}</span>
+            <span className="palette-description">{def.description}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function Palette({ onMinimise }: { onMinimise: () => void }) {
   const addNode = useEditor((s) => s.addNode);
   return (
@@ -15,26 +43,9 @@ export function Palette({ onMinimise }: { onMinimise: () => void }) {
         <MinimiseButton panel="palette" onClick={onMinimise} />
       </div>
       <p className="muted small">Click to add, or drag onto the canvas.</p>
-      <ul>
-        {Object.values(nodeRegistry).map((def) => (
-          <li key={def.type}>
-            <button
-              type="button"
-              className={`palette-item palette-${def.type}`}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData(DRAG_TYPE, def.type);
-                e.dataTransfer.effectAllowed = 'copy';
-              }}
-              onClick={() => addNode(def.type)}
-              title={def.description}
-            >
-              <span className="palette-label">{def.label}</span>
-              <span className="palette-description">{def.description}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <NodeList types={Object.keys(nodeRegistry).filter((t) => !ADVANCED.includes(t))} add={addNode} />
+      <h2 className="palette-section">Advanced</h2>
+      <NodeList types={ADVANCED} add={addNode} />
       <h2 className="palette-section">Annotations</h2>
       <ul>
         <li>

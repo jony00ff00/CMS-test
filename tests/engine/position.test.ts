@@ -12,14 +12,14 @@ const files = {
 const run = async (nodes: GraphNode[], edges: GraphEdge[]) => (await new GraphEvaluator(nodeRegistry).evaluate({ nodes, edges }, { files })).results;
 const guide = parseHtml(guideHtml);
 
-describe('the Position node', () => {
-  const graph = (config: Record<string, unknown>) => ({
+describe('the Insert node at a picked point (was the Position node)', () => {
+  const graph = (config: { point?: unknown; options?: Record<string, unknown> }) => ({
     nodes: [
       node('g', 'documentSource', { fileId: 'guide' }),
       node('n', 'documentSource', { fileId: 'notes' }),
-      node('pos', 'position', config),
+      node('pos', 'object', { content: { kind: 'selection', ...config.options }, point: config.point }),
     ],
-    edges: [edge('g', 'document', 'pos', 'document'), edge('n', 'document', 'pos', 'content')],
+    edges: [edge('g', 'document', 'pos', 'where'), edge('n', 'document', 'pos', 'content')],
   });
 
   it('waits for a point, then puts the content there with the source’s styles', async () => {
@@ -27,7 +27,7 @@ describe('the Position node', () => {
     expect((await run(g.nodes, g.edges)).pos.status).toBe('waiting');
 
     const point = insertionPointAt(guide, 'Guide\nHello world'.length, 'after')!;
-    const h = graph({ point, headings: 'fit' });
+    const h = graph({ point, options: { headings: 'fit' } });
     const r = await run(h.nodes, h.edges);
     expect(r.pos.status).toBe('ok');
     const out = r.pos.outputs.document as CmsDocument;
@@ -39,8 +39,8 @@ describe('the Position node', () => {
   it('at the cursor, inline content goes inside the paragraph; an Object’s text works as content', async () => {
     const point = insertionPointAt(guide, 'Guide\nHello'.length, 'cursor')!;
     const r = await run(
-      [node('g', 'documentSource', { fileId: 'guide' }), node('t', 'object', { content: { kind: 'text', text: ',', as: 'inline' } }), node('pos', 'position', { point })],
-      [edge('g', 'document', 'pos', 'document'), edge('t', 'document', 'pos', 'content')],
+      [node('g', 'documentSource', { fileId: 'guide' }), node('t', 'object', { content: { kind: 'text', text: ',', as: 'inline' } }), node('pos', 'object', { content: { kind: 'selection' }, point })],
+      [edge('g', 'document', 'pos', 'where'), edge('t', 'document', 'pos', 'content')],
     );
     expect(serialize(r.pos.outputs.document as CmsDocument)).toBe('<h1>Guide</h1><p>Hello, world</p><h2>End</h2>');
   });

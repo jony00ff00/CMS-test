@@ -28,7 +28,7 @@ const twoDocuments = (content: Record<string, unknown>): Graph => ({
   edges: [
     edge('guide', 'document', 'pt', 'document'),
     edge('notes', 'document', 'x', 'document'),
-    edge('pt', 'point', 'obj', 'point'),
+    edge('pt', 'point', 'obj', 'where'),
     edge('x', 'document', 'obj', 'content'),
   ],
 });

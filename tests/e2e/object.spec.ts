@@ -38,11 +38,11 @@ async function setUp(page: Page, pointMode = true) {
   await page.getByRole('button', { name: 'HTML example' }).click();
   const palette = page.getByRole('complementary', { name: 'Node palette' });
   await palette.getByRole('button', { name: /^Selector/ }).click();
-  await palette.getByRole('button', { name: /^Object/ }).click();
+  await palette.getByRole('button', { name: /^Insert/ }).click();
   await palette.getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
   await connect(page, 'snippet-3', 'document', 'selector-5', 'document');
-  await connect(page, 'selector-5', 'point', 'object-6', 'point');
+  await connect(page, 'selector-5', 'point', 'object-6', 'where');
   await connect(page, 'object-6', 'document', 'output-7', 'document');
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);
   if (pointMode) {
@@ -130,7 +130,7 @@ test('an Object adds an uploaded video after a heading', async ({ page }) => {
   await setUp(page);
   await pickPoint(page, 'Pricing', 'After this heading');
   await node(page, 'object-6').click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('video');
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('video');
   await inspector(page).getByLabel('Video file').setInputFiles({ name: 'clip.mp4', mimeType: 'video/mp4', buffer: Buffer.from([0, 0, 0, 24, 102, 116, 121, 112]) });
   await inspector(page).getByLabel('Caption').fill('How it works');
   await node(page, 'output-7').click();
@@ -142,7 +142,7 @@ test('an Object adds an uploaded video after a heading', async ({ page }) => {
 test('code in an Object can bring its own CSS and JavaScript', async ({ page }) => {
   await setUp(page, false);
   await node(page, 'object-6').click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('code');
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('code');
   await inspector(page).getByLabel('Show it as').selectOption('html');
   await inspector(page).locator('.cm-content[aria-label="Code"]').click();
   await page.keyboard.insertText('<div class="banner">Hello</div>');
@@ -165,7 +165,7 @@ test('an Object adds a code block after every match of its Selector', async ({ p
   await inspector(page).getByLabel('CSS selector').fill('blockquote, ol');
   await inspector(page).getByLabel('Point output').selectOption('after');
   await node(page, 'object-6').click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('code');
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('code');
   await inspector(page).getByLabel('Language').selectOption('shell');
   const code = inspector(page).locator('.cm-content[aria-label="Code"]');
   await code.click();
@@ -187,7 +187,7 @@ test('an Object adds a YouTube video from a link', async ({ page }) => {
   await setUp(page);
   await pickPoint(page, 'Field Guide to Node Gardens', 'After this heading');
   await node(page, 'object-6').click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('videoUrl');
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('videoUrl');
   await inspector(page).getByLabel('Video address').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   await expect(node(page, 'object-6')).toContainText('1 warning');
   await node(page, 'output-7').click();
@@ -198,7 +198,7 @@ test('an uploaded image with a caption is kept after a reload', async ({ page })
   await setUp(page);
   await pickPoint(page, 'Every node does one job well.', 'After this paragraph');
   await node(page, 'object-6').click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('image');
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('image');
   await inspector(page).getByLabel('Image file').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(PNG_BASE64, 'base64') });
   await inspector(page).getByLabel('Alternative text').fill('Logo');
   await inspector(page).getByLabel('Caption').fill('Our logo');
@@ -218,16 +218,16 @@ test('an Output combines the changes of several inputs into one document', async
   await page.getByRole('button', { name: 'HTML example' }).click();
   const palette = page.getByRole('complementary', { name: 'Node palette' });
   await palette.getByRole('button', { name: /^Selector/ }).click();
-  await palette.getByRole('button', { name: /^Object/ }).click();
+  await palette.getByRole('button', { name: /^Insert/ }).click();
   await fitView(page);
   await connect(page, 'documentSource-1', 'document', 'selector-5', 'document');
-  await connect(page, 'selector-5', 'point', 'object-6', 'point');
+  await connect(page, 'selector-5', 'point', 'object-6', 'where');
   await connect(page, 'object-6', 'document', 'output-4', 'document');
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);
   await node(page, 'selector-5').click();
   await inspector(page).getByLabel('CSS selector').fill('h1');
   await node(page, 'object-6').click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('code');
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('code');
   await inspector(page).getByLabel('Show it as').selectOption('html');
   await inspector(page).locator('.cm-content[aria-label="Code"]').click();
   await page.keyboard.insertText('<p class="from-object">Added by the Object node</p>');
@@ -241,9 +241,9 @@ test('an Output combines the changes of several inputs into one document', async
   await page.screenshot({ path: 'test-results/output-combined.png' });
 
   const order = inspector(page).getByRole('list', { name: 'Documents in page order' });
-  await expect(order.getByRole('listitem')).toHaveText([/Snippet · snippet-3/, /Object · object-6/]);
+  await expect(order.getByRole('listitem')).toHaveText([/Snippet · snippet-3/, /Insert · object-6/]);
   await inspector(page).getByRole('button', { name: 'Move object-6 up' }).click();
-  await expect(order.getByRole('listitem')).toHaveText([/Object · object-6/, /Snippet · snippet-3/]);
+  await expect(order.getByRole('listitem')).toHaveText([/Insert · object-6/, /Snippet · snippet-3/]);
   await expect(result.locator('h1 + p.from-object')).toHaveCount(1);
   await expect(result.locator('aside.callout')).toHaveCount(2);
 
@@ -298,7 +298,7 @@ test('an Object adds content picked by another Selector', async ({ page }) => {
   await node(page, 'selector-8').click();
   await inspector(page).getByLabel('CSS selector').fill('h1');
   await node(page, 'object-6').click();
-  await expect(inspector(page).getByLabel('Object', { exact: true })).toHaveValue('selection');
+  await expect(inspector(page).getByLabel('Content', { exact: true })).toHaveValue('selection');
   await expect(inspector(page)).toContainText('A copy of what comes from selector-8 (1 match)');
   await expect(node(page, 'object-6')).toContainText('added 2×'); // after each h2 of selector-5
 
@@ -314,7 +314,7 @@ test('"Two documents": an Extractor’s section of one document goes into anothe
   await page.goto('/');
   await page.getByLabel('Project file').setInputFiles(twoDocumentsFile());
   await expect(page.getByText('Project opened.')).toBeVisible();
-  await expect(node(page, 'object-5')).toContainText('Content (labelled section) · added 1×');
+  await expect(node(page, 'object-5')).toContainText('Content (labelled section) from notes.html · added 1×');
   // The Output: the notes' Watering section before the guide's quote, its headings one level down.
   await expect(preview(page).locator('section.cms-from h3')).toHaveText('Watering');
   await expect(preview(page).locator('section.cms-from h4')).toHaveText('In winter');
@@ -345,12 +345,12 @@ test('"Two documents": an Extractor’s section of one document goes into anothe
 test('an Object with plain text works on its own, and goes into a paragraph at the cursor', async ({ page }) => {
   await page.getByRole('button', { name: 'HTML example' }).click();
   const palette = page.getByRole('complementary', { name: 'Node palette' });
-  await palette.getByRole('button', { name: /^Object/ }).click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('text');
+  await palette.getByRole('button', { name: /^Insert/ }).click();
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('text');
   await inspector(page).getByLabel('Text', { exact: true }).fill('Fresh <news> & more\n\nSecond paragraph');
-  // No Point: the Object gives its text alone.
+  // Nothing at Where: the node gives its text alone.
   await expect(node(page, 'object-5')).toContainText('Text paragraphs · on its own');
-  await expect(inspector(page)).toContainText('No Point connected');
+  await expect(inspector(page)).toContainText('Nothing is connected to Where');
   await expect(preview(page).locator('body > p')).toHaveText(['Fresh <news> & more', 'Second paragraph']);
   await page.screenshot({ path: 'test-results/object-text-alone.png' });
 
@@ -359,7 +359,7 @@ test('an Object with plain text works on its own, and goes into a paragraph at t
   await palette.getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
   await connect(page, 'documentSource-1', 'document', 'selector-6', 'document');
-  await connect(page, 'selector-6', 'point', 'object-5', 'point');
+  await connect(page, 'selector-6', 'point', 'object-5', 'where');
   await connect(page, 'object-5', 'document', 'output-7', 'document');
   await node(page, 'selector-6').click();
   await inspector(page).getByLabel('Select by').selectOption('regex');
@@ -372,26 +372,28 @@ test('an Object with plain text works on its own, and goes into a paragraph at t
   await expect(preview(page).locator('h2').nth(1)).toHaveText('Pricing (updated)');
 });
 
-test('a Position node puts content at a point clicked in its input', async ({ page }) => {
+test('an Insert node with a document at Where puts content at a point clicked in the preview', async ({ page }) => {
   await page.getByRole('button', { name: 'HTML example' }).click();
   const palette = page.getByRole('complementary', { name: 'Node palette' });
-  await palette.getByRole('button', { name: /^Position/ }).click();
-  await palette.getByRole('button', { name: /^Object/ }).click();
+  await palette.getByRole('button', { name: /^Insert/ }).click();
+  await palette.getByRole('button', { name: /^Insert/ }).click();
   await palette.getByRole('button', { name: /^Output/ }).click();
   await fitView(page);
   await node(page, 'object-6').click();
-  await inspector(page).getByLabel('Object', { exact: true }).selectOption('text');
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('text');
   await inspector(page).getByLabel('Text', { exact: true }).fill('A note placed by hand.');
-  await connect(page, 'snippet-3', 'document', 'position-5', 'document');
-  await connect(page, 'object-6', 'document', 'position-5', 'content');
-  await connect(page, 'position-5', 'document', 'output-7', 'document');
+  await node(page, 'object-5').click();
+  await inspector(page).getByLabel('Content', { exact: true }).selectOption('selection');
+  await connect(page, 'snippet-3', 'document', 'object-5', 'where');
+  await connect(page, 'object-6', 'document', 'object-5', 'content');
+  await connect(page, 'object-5', 'document', 'output-7', 'document');
 
-  await node(page, 'position-5').click();
-  await expect(node(page, 'position-5')).toContainText('Click in the preview to pick the point');
-  await expect(inspector(page)).toContainText('With this Position node selected, click in the preview');
+  await node(page, 'object-5').click();
+  await expect(node(page, 'object-5')).toContainText('click in the preview where the content goes');
+  await expect(inspector(page)).toContainText('With this Insert node selected, click in the preview');
   await clickAfter(page, 'Pricing');
   await page.getByRole('dialog', { name: 'Point here' }).getByRole('button', { name: 'After this heading' }).click();
-  await expect(node(page, 'position-5')).toContainText('added 1×');
+  await expect(node(page, 'object-5')).toContainText('added 1×');
   await expect(inspector(page)).toContainText('After the heading “Pricing”');
   await expect(preview(page).locator('.cms-insert-marker')).toHaveCount(1);
   await page.screenshot({ path: 'test-results/position.png' });

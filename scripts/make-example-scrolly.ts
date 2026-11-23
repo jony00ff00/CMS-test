@@ -24,7 +24,7 @@ const STYLE_MAP = [
 
 export function scrollyGraph(codeId: string, textId: string): Graph {
   const at = (col: number, row: number) => ({ x: 40 + col * 260, y: 40 + row * 200 });
-  const replace = { target: 'inside', pairs: true, styles: false };
+  const replace = { content: { kind: 'selection', styles: false }, place: 'inside', pairs: true };
   const nodes: GraphNode[] = [
     { id: 'code', type: 'documentSource', name: 'Scrolly code (HTML)', position: at(0, 0), config: { fileId: codeId, html: { keepCode: true } } },
     { id: 'text', type: 'documentSource', name: 'Scrolly text (Word)', position: at(0, 2), config: { fileId: textId, docx: { styleMap: STYLE_MAP } } },
@@ -32,17 +32,17 @@ export function scrollyGraph(codeId: string, textId: string): Graph {
     // Header: kicker, headline, dek.
     { id: 'header-slots', type: 'selector', name: 'Header slots', position: at(1, 0), config: { mode: 'css', selector: '.gs-kicker, .gs-headline, .gs-dek' } },
     { id: 'header-text', type: 'selector', name: 'Header text', position: at(1, 1), config: { mode: 'css', selector: '.kicker, .title, .dek' } },
-    { id: 'fill-header', type: 'replace', name: 'Fill the header', position: at(2, 0), config: { ...replace } },
+    { id: 'fill-header', type: 'object', name: 'Fill the header', position: at(2, 0), config: { ...replace } },
 
     // Steps: one card per step, in order.
     { id: 'step-slots', type: 'selector', name: 'Step cards', position: at(3, 0), config: { mode: 'css', selector: '.gs-step .gs-card' } },
     { id: 'step-text', type: 'selector', name: 'Step text', position: at(3, 1), config: { mode: 'heading', text: 'Step', match: 'contains', includeHeading: false } },
-    { id: 'fill-steps', type: 'replace', name: 'Fill the steps', position: at(4, 0), config: { ...replace } },
+    { id: 'fill-steps', type: 'object', name: 'Fill the steps', position: at(4, 0), config: { ...replace } },
 
     // Footer: the note and the link's text (the link itself stays).
     { id: 'footer-slots', type: 'selector', name: 'Footer slots', position: at(5, 0), config: { mode: 'css', selector: '.gs-footer > p:first-child, .gs-footer a' } },
     { id: 'footer-text', type: 'selector', name: 'Footer text', position: at(5, 1), config: { mode: 'css', selector: 'h2:last-of-type ~ p' } },
-    { id: 'fill-footer', type: 'replace', name: 'Fill the footer', position: at(6, 0), config: { ...replace } },
+    { id: 'fill-footer', type: 'object', name: 'Fill the footer', position: at(6, 0), config: { ...replace } },
 
     { id: 'page', type: 'output', name: 'Scrolly page', position: at(7, 0), config: { format: 'html', fullDocument: true, inlineAssets: true } },
   ];
@@ -50,17 +50,17 @@ export function scrollyGraph(codeId: string, textId: string): Graph {
   const edges = [
     edge('code', 'document', 'header-slots', 'document'),
     edge('text', 'document', 'header-text', 'document'),
-    edge('header-slots', 'selection', 'fill-header', 'selection'),
+    edge('header-slots', 'selection', 'fill-header', 'where'),
     edge('header-text', 'selection', 'fill-header', 'content'),
 
     edge('fill-header', 'document', 'step-slots', 'document'),
     edge('text', 'document', 'step-text', 'document'),
-    edge('step-slots', 'selection', 'fill-steps', 'selection'),
+    edge('step-slots', 'selection', 'fill-steps', 'where'),
     edge('step-text', 'selection', 'fill-steps', 'content'),
 
     edge('fill-steps', 'document', 'footer-slots', 'document'),
     edge('text', 'document', 'footer-text', 'document'),
-    edge('footer-slots', 'selection', 'fill-footer', 'selection'),
+    edge('footer-slots', 'selection', 'fill-footer', 'where'),
     edge('footer-text', 'selection', 'fill-footer', 'content'),
 
     edge('fill-footer', 'document', 'page', 'document'),

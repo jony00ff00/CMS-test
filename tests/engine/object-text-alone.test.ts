@@ -56,9 +56,9 @@ describe('Object without a Point', () => {
         node('src', 'documentSource', { fileId: 'doc' }),
         node('sel', 'selector', { mode: 'css', selector: 'blockquote' }),
         node('obj', 'object', { content: { kind: 'text', text: 'New text' } }),
-        node('rep', 'replace'),
+        node('rep', 'object', { content: { kind: 'selection' }, place: 'replace' }),
       ],
-      [edge('src', 'document', 'sel', 'document'), edge('sel', 'selection', 'rep', 'selection'), edge('obj', 'document', 'rep', 'content')],
+      [edge('src', 'document', 'sel', 'document'), edge('sel', 'selection', 'rep', 'where'), edge('obj', 'document', 'rep', 'content')],
     );
     expect(html(r.rep.outputs.document)).toBe('<h1>Title</h1><p>Hello world</p><p>New text</p>');
 

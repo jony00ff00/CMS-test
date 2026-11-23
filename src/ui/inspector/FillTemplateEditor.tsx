@@ -219,7 +219,7 @@ function RepeatRowFields({ row, report, onChange }: { row: FillRepeatRow; report
 }
 
 /** Where content comes from: a few Selector modes in one line. */
-function SourceFields({ label, value, onChange }: { label: string; value: SelectorConfig; onChange: (v: SelectorConfig) => void }) {
+export function SourceFields({ label, value, onChange }: { label: string; value: SelectorConfig; onChange: (v: SelectorConfig) => void }) {
   const mode = (SOURCE_MODES.some((m) => m.value === value.mode) ? value.mode : 'css') as SourceMode;
   const setMode = (m: SourceMode) =>
     onChange(

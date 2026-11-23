@@ -51,7 +51,7 @@ describe('Object code with its own CSS and JavaScript', () => {
     ],
     edges: [
       edge('src', 'document', 'pt', 'document'),
-      ...configs.flatMap((_, i) => [edge('pt', 'point', `obj${i}`, 'point'), edge(`obj${i}`, 'document', 'out', 'document')]),
+      ...configs.flatMap((_, i) => [edge('pt', 'point', `obj${i}`, 'where'), edge(`obj${i}`, 'document', 'out', 'document')]),
     ],
   });
 

@@ -114,7 +114,7 @@ describe('block content for an image alone in its paragraph', () => {
   });
 });
 
-describe('the Replace node', () => {
+describe('the Insert node replacing a selection (was the Replace node)', () => {
   const node = (id: string, type: string, config?: unknown): GraphNode => ({ id, type, config: config ?? nodeRegistry[type].defaultConfig() });
   const edge = (source: string, sourcePort: string, target: string, targetPort: string): GraphEdge => ({ id: `${source}.${sourcePort}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
   const files = { guide: storeFile('guide.html', '<h1>Guide</h1><blockquote><p>Quote</p></blockquote>', 'guide'), notes: storeFile('notes.html', notesHtml, 'notes') };
@@ -126,28 +126,28 @@ describe('the Replace node', () => {
         node('notes', 'documentSource', { fileId: 'notes' }),
         node('sel', 'selector', { mode: 'css', selector: 'blockquote' }),
         node('x', 'extractor', { mode: 'heading', text: 'Winter' }),
-        node('rep', 'replace'),
+        node('rep', 'object', { content: { kind: 'selection' }, place: 'replace' }),
       ],
       edges: [
         edge('guide', 'document', 'sel', 'document'),
         edge('notes', 'document', 'x', 'document'),
-        edge('sel', 'selection', 'rep', 'selection'),
+        edge('sel', 'selection', 'rep', 'where'),
         edge('x', 'document', 'rep', 'content'),
       ],
     };
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(graph, { files });
     expect(results.rep.status).toBe('ok');
     expect(serialize(results.rep.outputs.document as CmsDocument)).toBe('<h1>Guide</h1><h3>Winter</h3><p>Less.</p>');
-    expect(results.rep.info).toEqual({ replaced: 1, from: 'notes.html' });
+    expect(results.rep.info).toMatchObject({ replaced: 1, from: 'notes.html' });
 
     // Without content it removes what is selected.
     const removed = await new GraphEvaluator(nodeRegistry).evaluate({ ...graph, edges: graph.edges.slice(0, 3) }, { files });
     expect(removed.results.rep.status).toBe('ok');
     expect(serialize(removed.results.rep.outputs.document as CmsDocument)).toBe('<h1>Guide</h1>');
     expect(removed.results.rep.info).toEqual({ replaced: 1, removed: true });
-    // Without a selection it waits.
-    const waiting = await new GraphEvaluator(nodeRegistry).evaluate({ ...graph, edges: [graph.edges[1], graph.edges[3]] }, { files });
-    expect(waiting.results.rep.status).not.toBe('ok');
+    // Without anything at Where it gives the content alone.
+    const alone = await new GraphEvaluator(nodeRegistry).evaluate({ ...graph, edges: [graph.edges[1], graph.edges[3]] }, { files });
+    expect(alone.results.rep.info.alone).toBe(1);
   });
 
   it('old projects: Combinator nodes are left out with a plain warning', () => {
@@ -192,8 +192,8 @@ describe('Replace: inside the element, match by match', () => {
     const e = (source: string, sourcePort: string, target: string, targetPort: string): GraphEdge => ({ id: `${source}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
     const { results } = await new GraphEvaluator(nodeRegistry).evaluate(
       {
-        nodes: [n('c', 'documentSource', { fileId: 'code' }), n('t', 'documentSource', { fileId: 'text' }), n('s', 'selector', { mode: 'css', selector: '.card' }), n('r', 'replace', { target: 'inside', pairs: true })],
-        edges: [e('c', 'document', 's', 'document'), e('s', 'selection', 'r', 'selection'), e('t', 'document', 'r', 'content')],
+        nodes: [n('c', 'documentSource', { fileId: 'code' }), n('t', 'documentSource', { fileId: 'text' }), n('s', 'selector', { mode: 'css', selector: '.card' }), n('r', 'object', { content: { kind: 'selection' }, place: 'inside', pairs: true })],
+        edges: [e('c', 'document', 's', 'document'), e('s', 'selection', 'r', 'where'), e('t', 'document', 'r', 'content')],
       },
       { files },
     );

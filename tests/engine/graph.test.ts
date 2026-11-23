@@ -54,17 +54,15 @@ describe('hashing', () => {
 
 describe('node registry', () => {
   it('has the node types with typed ports', () => {
-    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'extractor', 'object', 'replace', 'fillTemplate', 'position', 'output', 'connector']);
+    expect(Object.keys(nodeRegistry)).toEqual(['documentSource', 'selector', 'snippet', 'extractor', 'object', 'fillTemplate', 'output', 'connector']);
     const ports = Object.values(nodeRegistry).map((d) => [d.type, d.inputs.map((p) => p.type), d.outputs.map((p) => p.type)]);
     expect(ports).toEqual([
       ['documentSource', [], ['document']],
       ['selector', ['document'], ['selection', 'point']],
       ['snippet', ['any'], ['document']],
       ['extractor', ['document'], ['document']],
-      ['object', ['point', 'any'], ['document']],
-      ['replace', ['selection', 'any'], ['document']],
+      ['object', ['any', 'any'], ['document']],
       ['fillTemplate', ['document', 'any'], ['document']],
-      ['position', ['document', 'any'], ['document']],
       ['output', ['document'], ['html', 'result']],
       ['connector', ['any'], ['document', 'selection', 'html', 'result']],
     ]);
@@ -319,7 +317,7 @@ describe('an Output with several inputs', () => {
       edge('src', 'document', 'sel', 'document'),
       edge('sel', 'selection', 'snip', 'selection'),
       edge('src', 'document', 'pt', 'document'),
-      edge('pt', 'point', 'ins', 'point'),
+      edge('pt', 'point', 'ins', 'where'),
       { id: 'a', source: 'snip', sourcePort: 'document', target: 'out', targetPort: 'document' },
       { id: 'b', source: 'ins', sourcePort: 'document', target: 'out', targetPort: 'document' },
     ],
@@ -383,7 +381,7 @@ describe('combining the changes of several inputs (the default)', () => {
       edge('src', 'document', 'sel', 'document'),
       edge('sel', 'selection', 'snip', 'selection'),
       edge('src', 'document', 'pt', 'document'),
-      edge('pt', 'point', 'ins', 'point'),
+      edge('pt', 'point', 'ins', 'where'),
       ...order.map((id) => ({ id: `${id}-out`, source: id, sourcePort: 'document', target: 'out', targetPort: 'document' })),
     ],
   });
@@ -466,7 +464,7 @@ describe('combining the changes of several inputs (the default)', () => {
         edge('src', 'document', 'sel', 'document'),
         edge('sel', 'selection', 'snip', 'selection'),
         edge('src', 'document', 'pt', 'document'),
-      edge('pt', 'point', 'ins', 'point'),
+      edge('pt', 'point', 'ins', 'where'),
         { id: 'a', source: 'snip', sourcePort: 'document', target: 'out', targetPort: 'document' },
         { id: 'b', source: 'ins', sourcePort: 'document', target: 'out', targetPort: 'document' },
       ],

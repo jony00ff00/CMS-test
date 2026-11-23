@@ -1,9 +1,11 @@
 import type { ChangeEvent } from 'react';
+import type React from 'react';
 import {
-  blockName, cssWidth, IMAGE_EXTENSIONS, mediaType, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertionPoint, type InsertKind,
-  type InsertPlace, type ObjectNodeConfig, type ReplaceOptions, type Selection, type SelectorNodeConfig, type Width,
+  blockName, cssWidth, describeInsertion, IMAGE_EXTENSIONS, mediaType, valueKind, VIDEO_EXTENSIONS, type GraphNode, type InsertContent, type InsertionPoint,
+  type InsertItem, type InsertKind, type InsertPlace, type ObjectNodeConfig, type ObjectPlace, type ReplaceOptions, type Selection, type SelectorNodeConfig, type Width,
 } from '../../engine';
-import { editorStore, useEditor } from '../../store/editor-store';
+import { editorStore, useEditor, type EditorState } from '../../store/editor-store';
+import { SourceFields } from './FillTemplateEditor';
 import { nodeLabel } from '../node-label';
 import { CheckboxField, CodeField, SelectField, TextAreaField, TextField } from './fields';
 
@@ -34,24 +36,195 @@ export const PLACES: { value: InsertPlace; label: string }[] = [
   { value: 'start', label: 'Inside it, at the start' },
 ];
 
+/** What comes into an Insert node's Where input: nothing, a Point, a Selection or a document (or HTML). */
+export type WhereKind = 'none' | 'point' | 'selection' | 'document' | 'html';
+
+export function whereKindOf(s: EditorState, nodeId: string): WhereKind | undefined {
+  const edge = s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'where');
+  if (!edge) return 'none';
+  const r = s.results[edge.source];
+  const value = r?.status === 'ok' ? r.outputs[edge.sourcePort] : undefined;
+  if (value !== undefined) return valueKind(value);
+  // Not run yet: guess from the port.
+  return edge.sourcePort === 'point' ? 'point' : edge.sourcePort === 'selection' ? 'selection' : undefined;
+}
+
+const PUT_FOR_POINT: { value: ObjectPlace | ''; label: string }[] = [
+  { value: '', label: 'Where the Point says' },
+  { value: 'before', label: 'Before each place' },
+  { value: 'after', label: 'After each place' },
+  { value: 'start', label: 'Inside each, at the start' },
+  { value: 'end', label: 'Inside each, at the end' },
+  { value: 'replace', label: 'Instead of what its Selector matched' },
+  { value: 'inside', label: 'Instead of what is inside each match' },
+];
+const PUT_FOR_SELECTION: { value: ObjectPlace | ''; label: string }[] = [
+  { value: '', label: 'Instead of each match (replace it)' },
+  { value: 'inside', label: 'Instead of what is inside each match' },
+  { value: 'before', label: 'Before each match' },
+  { value: 'after', label: 'After each match' },
+  { value: 'start', label: 'Inside each match, at the start' },
+  { value: 'end', label: 'Inside each match, at the end' },
+];
+
+/** The Insert node (type "object"): where (its Where input), how (Put it) and what (content, or several items). */
 export function ObjectEditor({ node }: { node: GraphNode }) {
   const config = node.config as ObjectNodeConfig;
   const { content } = config;
+  const kind = useEditor((s) => whereKindOf(s, node.id));
+  const hasContent = useEditor((s) => s.graph.edges.some((e) => e.target === node.id && e.targetPort === 'content'));
   const store = editorStore.getState();
   const update = (patch: Partial<ObjectNodeConfig>) => store.updateConfig<ObjectNodeConfig>(node.id, (c) => ({ ...c, ...patch }));
   const edit = (patch: Partial<InsertContent>) => update({ content: { ...content, ...patch } as InsertContent });
+  const several = !!config.items;
+  const putOptions = kind === 'point' ? PUT_FOR_POINT : kind === 'selection' ? PUT_FOR_SELECTION : undefined;
+  const place = config.place ?? (kind === 'selection' ? 'replace' : undefined);
+  const replacing = (place === 'replace' || place === 'inside') && (kind === 'selection' || kind === 'point');
 
   return (
     <>
-      <SelectField
-        label="Object"
-        value={content.kind}
-        options={KINDS}
-        onChange={(kind) => update({ content: kind === content.kind ? content : { ...EMPTY[kind] } })}
-      />
-      <ContentFields node={node} content={content} onChange={edit} />
-      <PointSource nodeId={node.id} />
+      <WhereSource nodeId={node.id} kind={kind} point={config.point} onClearPoint={() => update({ point: undefined })} />
+      {kind !== 'none' && (
+        <div className="field" role="radiogroup" aria-label="What it adds">
+          <span className="field-label">What it adds</span>
+          <label className="fill-check">
+            <input type="radio" name={`${node.id}-several`} checked={!several} onChange={() => update({ items: undefined })} />
+            One thing{putOptions ? ', where it says below' : ''}
+          </label>
+          <label className="fill-check">
+            <input type="radio" name={`${node.id}-several`} checked={several} onChange={() => update({ items: config.items ?? [newItem([])] })} />
+            Several items, each at its own place
+          </label>
+        </div>
+      )}
+      {several && kind !== 'none' ? (
+        <ItemsEditor node={node} items={config.items!} onChange={(items) => update({ items })} />
+      ) : (
+        <>
+          {putOptions && (
+            <SelectField
+              label="Put it"
+              value={(config.place === 'replace' && kind === 'selection' ? '' : (config.place ?? '')) as ObjectPlace | ''}
+              options={putOptions}
+              onChange={(v) => update({ place: v === '' ? undefined : (v as ObjectPlace) })}
+            />
+          )}
+          <SelectField
+            label="Content"
+            value={content.kind}
+            options={KINDS}
+            onChange={(k) => update({ content: k === content.kind ? content : { ...EMPTY[k] } })}
+          />
+          <ContentFields
+            node={node}
+            content={content}
+            onChange={edit}
+            none={
+              replacing
+                ? <>Nothing is connected to <strong>Content</strong>, so what is matched is {place === 'inside' ? 'emptied' : 'removed'}. Connect an Extractor, a Selector's Selection or any document to put something in its place.</>
+                : undefined
+            }
+          />
+          {replacing && content.kind === 'selection' && hasContent && (
+            <CheckboxField
+              label="Match by match"
+              checked={!!config.pairs}
+              hint="The 1st match gets the 1st part of the content (the 1st match of a selection, or the 1st block of a document), the 2nd the 2nd, and so on. Off: every match gets all of it."
+              onChange={(pairs) => update({ pairs: pairs || undefined })}
+            />
+          )}
+        </>
+      )}
     </>
+  );
+}
+
+let itemCounter = 0;
+function newItem(items: InsertItem[]): InsertItem {
+  let id: string;
+  do id = `item-${++itemCounter}`;
+  while (items.some((i) => i.id === id));
+  return { id, selector: { mode: 'css', selector: '' }, place: 'after', content: { kind: 'image', alt: '' } };
+}
+
+/** Several items, each with its own place (a selector in the document at Where) and its own content. */
+function ItemsEditor({ node, items, onChange }: { node: GraphNode; items: InsertItem[]; onChange: (items: InsertItem[]) => void }) {
+  const set = (id: string, patch: Partial<InsertItem>) => onChange(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= items.length) return;
+    const out = [...items];
+    [out[i], out[j]] = [out[j], out[i]];
+    onChange(out);
+  };
+  return (
+    <div className="field">
+      <ol className="fill-rows" aria-label="Items">
+        {items.map((item, i) => (
+          <li key={item.id}>
+            <div className="fill-row-head">
+              <span className="field-label">
+                {i + 1}. {item.label || describeInsertion(item.content)}
+              </span>
+              <span className="fill-row-actions">
+                <button type="button" className="ghost small-button" aria-label={`Move item ${i + 1} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                  ↑
+                </button>
+                <button type="button" className="ghost small-button" aria-label={`Move item ${i + 1} down`} disabled={i === items.length - 1} onClick={() => move(i, 1)}>
+                  ↓
+                </button>
+                <button type="button" className="ghost small-button danger" aria-label={`Remove item ${i + 1}`} onClick={() => onChange(items.filter((x) => x.id !== item.id))}>
+                  ×
+                </button>
+              </span>
+            </div>
+            <div className="fill-row">
+              <label className="fill-inline">
+                <span>Name</span>
+                <input type="text" value={item.label ?? ''} placeholder="e.g. Picture: hives" onChange={(e) => set(item.id, { label: e.target.value || undefined })} />
+              </label>
+              <SourceFields label="Where" value={item.selector} onChange={(selector) => set(item.id, { selector })} />
+              <label className="fill-inline">
+                <span>Put it</span>
+                <select value={item.place} onChange={(e) => set(item.id, { place: e.target.value as InsertPlace })}>
+                  {PLACES.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="fill-inline">
+                <span>Content</span>
+                <select
+                  value={item.content.kind}
+                  onChange={(e) => {
+                    const k = e.target.value as InsertKind;
+                    if (k !== item.content.kind && k !== 'selection') set(item.id, { content: { ...EMPTY[k] } as InsertItem['content'] });
+                  }}
+                >
+                  {KINDS.filter((k) => k.value !== 'selection').map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <ContentFields
+                node={node}
+                content={item.content}
+                onChange={(patch) => set(item.id, { content: { ...item.content, ...patch } as InsertItem['content'] })}
+                onFile={(name, data) => editorStore.getState().chooseItemMediaFile(node.id, item.id, name, data)}
+              />
+            </div>
+          </li>
+        ))}
+      </ol>
+      <button type="button" onClick={() => onChange([...items, newItem(items)])}>
+        Add an item
+      </button>
+      <p className="hint">Each item goes next to every match of its own selector in the document at Where. A place that is not found is a problem.</p>
+    </div>
   );
 }
 
@@ -62,35 +235,64 @@ const EVERY_MATCH: Record<InsertPlace, string> = {
   end: 'inside every match, at the end',
 };
 
-/** Where the Object goes: the Selector connected to its Point input. */
-function PointSource({ nodeId }: { nodeId: string }) {
-  const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'point'));
+/** What is connected to Where, in words. */
+function WhereSource({ nodeId, kind, point, onClearPoint }: { nodeId: string; kind?: WhereKind; point?: InsertionPoint; onClearPoint: () => void }) {
+  const edge = useEditor((s) => s.graph.edges.find((e) => e.target === nodeId && e.targetPort === 'where'));
   const from = useEditor((s) => (edge ? s.graph.nodes.find((n) => n.id === edge.source) : undefined));
+  const count = useEditor((s) => {
+    const r = edge ? s.results[edge.source] : undefined;
+    const value = r?.status === 'ok' ? (r.outputs[edge!.sourcePort] as Selection | undefined) : undefined;
+    return value?.kind === 'selection' ? value.matches.length : undefined;
+  });
   const store = editorStore.getState();
   if (!from) {
     return (
       <p className="hint">
-        No Point connected, so this Object gives its content on its own, as a document (e.g. for a Replace node's
-        Content, or an Output). To add it into a document, connect a Selector's <strong>Point</strong> output: a point
-        you click in the preview (Select by: “A point I click in the preview”), or next to every match.
+        Nothing is connected to <strong>Where</strong>, so this node gives its content on its own, as a document (e.g.
+        for another node's Content, or an Output). Connect a Selector's <strong>Point</strong> (a point you click, or
+        next to every match), its <strong>Selection</strong> (next to or instead of what it picked), or a document (then
+        click in the preview to pick the point).
       </p>
     );
   }
-  const c = from.config as SelectorNodeConfig;
-  const where = from.type !== 'selector'
-    ? ''
-    : c.mode === 'point'
-      ? c.point ? 'at the point picked in the preview' : 'at a point not picked yet'
-      : EVERY_MATCH[c.place ?? 'after'];
+  const link = (
+    <button type="button" className="link" onClick={() => store.select(from.id)}>
+      {nodeLabel(from)}
+    </button>
+  );
+  if (kind === 'point') {
+    const c = from.config as SelectorNodeConfig;
+    const where = from.type !== 'selector' ? '' : c.mode === 'point' ? (c.point ? 'at the point picked in the preview' : 'at a point not picked yet') : EVERY_MATCH[c.place ?? 'after'];
+    return (
+      <div className="field">
+        <span className="field-label">Where</span>
+        <p className="small">
+          The Point of {link}
+          {where && ` · ${where}`}
+        </p>
+      </div>
+    );
+  }
+  if (kind === 'selection') {
+    return (
+      <div className="field">
+        <span className="field-label">Where</span>
+        <p className="small">
+          What {link} selects{count === undefined ? '' : ` (${count} match${count === 1 ? '' : 'es'})`}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="field">
       <span className="field-label">Where</span>
-      <p className="small">
-        <button type="button" className="link" onClick={() => store.select(from.id)}>
-          {nodeLabel(from)}
+      <p className="small">In the document from {link}, at a point picked in the preview.</p>
+      <PointSummary nodeId={nodeId} point={point} noun="Insert node" />
+      {point && (
+        <button type="button" className="link" onClick={onClearPoint}>
+          Clear the point
         </button>
-        {where && ` · ${where}`}
-      </p>
+      )}
     </div>
   );
 }
@@ -120,7 +322,21 @@ export function PointSummary({ nodeId, point, noun = 'Selector' }: { nodeId: str
   );
 }
 
-function ContentFields({ node, content, onChange }: { node: GraphNode; content: InsertContent; onChange: (patch: Partial<InsertContent>) => void }) {
+function ContentFields({
+  node,
+  content,
+  onChange,
+  onFile,
+  none,
+}: {
+  node: GraphNode;
+  content: InsertContent;
+  onChange: (patch: Partial<InsertContent>) => void;
+  /** Where an uploaded file goes (default: this node's content). */
+  onFile?: (name: string, data: Uint8Array) => void;
+  /** Shown when nothing is connected to Content (when that is fine). */
+  none?: React.ReactNode;
+}) {
   const file = useEditor((s) => ('fileId' in content && content.fileId ? s.files[content.fileId] : undefined));
   const pick = async (e: ChangeEvent<HTMLInputElement>) => {
     const chosen = e.target.files?.[0];
@@ -132,7 +348,9 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
       editorStore.getState().notify('error', `${chosen.name}: choose ${want === 'image' ? 'an image' : 'a video'} (${(want === 'image' ? IMAGE_EXTENSIONS : VIDEO_EXTENSIONS).join(', ')})`);
       return;
     }
-    editorStore.getState().chooseMediaFile(node.id, chosen.name, new Uint8Array(await chosen.arrayBuffer()));
+    const data = new Uint8Array(await chosen.arrayBuffer());
+    if (onFile) onFile(chosen.name, data);
+    else editorStore.getState().chooseMediaFile(node.id, chosen.name, data);
   };
   const width = (w: Width | undefined, set: (w: string | undefined) => void) => {
     const parsed = cssWidth(w);
@@ -158,7 +376,7 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
     case 'selection':
       return (
         <>
-          <ContentSource nodeId={node.id} />
+          <ContentSource nodeId={node.id} owner="Insert node" none={none} />
           <CopyOptionsFields options={content} onChange={onChange} />
         </>
       );
@@ -297,7 +515,7 @@ function ContentFields({ node, content, onChange }: { node: GraphNode; content: 
   }
 }
 
-/** How copied content goes in (the Object's "Content from another node" and the Replace node). */
+/** How copied content goes in (an Insert node's "Content from another node"). */
 export function CopyOptionsFields({ options, onChange, placeWord = 'point' }: { options: ReplaceOptions; onChange: (patch: ReplaceOptions) => void; placeWord?: string }) {
   return (
     <>

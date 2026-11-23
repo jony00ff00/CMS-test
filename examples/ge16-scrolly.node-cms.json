@@ -2,7 +2,7 @@
   "format": "node-cms-project",
   "version": 1,
   "savedAt": "2026-11-10T00:00:00.000Z",
-  "engineVersion": "0.8.0",
+  "engineVersion": "0.9.0",
   "graph": {
     "nodes": [
       {
@@ -68,16 +68,19 @@
       },
       {
         "id": "fill-header",
-        "type": "replace",
+        "type": "object",
         "name": "Fill the header",
         "position": {
           "x": 560,
           "y": 40
         },
         "config": {
-          "target": "inside",
-          "pairs": true,
-          "styles": false
+          "content": {
+            "kind": "selection",
+            "styles": false
+          },
+          "place": "inside",
+          "pairs": true
         }
       },
       {
@@ -110,16 +113,19 @@
       },
       {
         "id": "fill-steps",
-        "type": "replace",
+        "type": "object",
         "name": "Fill the steps",
         "position": {
           "x": 1080,
           "y": 40
         },
         "config": {
-          "target": "inside",
-          "pairs": true,
-          "styles": false
+          "content": {
+            "kind": "selection",
+            "styles": false
+          },
+          "place": "inside",
+          "pairs": true
         }
       },
       {
@@ -150,16 +156,19 @@
       },
       {
         "id": "fill-footer",
-        "type": "replace",
+        "type": "object",
         "name": "Fill the footer",
         "position": {
           "x": 1600,
           "y": 40
         },
         "config": {
-          "target": "inside",
-          "pairs": true,
-          "styles": false
+          "content": {
+            "kind": "selection",
+            "styles": false
+          },
+          "place": "inside",
+          "pairs": true
         }
       },
       {
@@ -193,11 +202,11 @@
         "targetPort": "document"
       },
       {
-        "id": "header-slots.selection>fill-header.selection",
+        "id": "header-slots.selection>fill-header.where",
         "source": "header-slots",
         "sourcePort": "selection",
         "target": "fill-header",
-        "targetPort": "selection"
+        "targetPort": "where"
       },
       {
         "id": "header-text.selection>fill-header.content",
@@ -221,11 +230,11 @@
         "targetPort": "document"
       },
       {
-        "id": "step-slots.selection>fill-steps.selection",
+        "id": "step-slots.selection>fill-steps.where",
         "source": "step-slots",
         "sourcePort": "selection",
         "target": "fill-steps",
-        "targetPort": "selection"
+        "targetPort": "where"
       },
       {
         "id": "step-text.selection>fill-steps.content",
@@ -249,11 +258,11 @@
         "targetPort": "document"
       },
       {
-        "id": "footer-slots.selection>fill-footer.selection",
+        "id": "footer-slots.selection>fill-footer.where",
         "source": "footer-slots",
         "sourcePort": "selection",
         "target": "fill-footer",
-        "targetPort": "selection"
+        "targetPort": "where"
       },
       {
         "id": "footer-text.selection>fill-footer.content",

@@ -12,8 +12,6 @@ import { ExtractorEditor } from './ExtractorEditor';
 import { FillTemplateEditor } from './FillTemplateEditor';
 import { ObjectEditor } from './ObjectEditor';
 import { OutputEditor } from './OutputEditor';
-import { ReplaceEditor } from './ReplaceEditor';
-import { PositionEditor } from './PositionEditor';
 import { ResultPanel } from './ResultPanel';
 import { SelectorEditor } from './SelectorEditor';
 import { SnippetEditor } from './SnippetEditor';
@@ -26,9 +24,7 @@ const EDITORS = {
   snippet: SnippetEditor,
   extractor: ExtractorEditor,
   object: ObjectEditor,
-  replace: ReplaceEditor,
   fillTemplate: FillTemplateEditor,
-  position: PositionEditor,
   output: OutputEditor,
   connector: ConnectorEditor,
 } as const;

@@ -145,8 +145,10 @@ export interface EditorState {
   loadExample(kind: 'html' | 'json'): void;
   /** Open an example project file (like `importProject`, but quiet unless parts of it were left out); selects its Output. */
   openExampleProject(text: string): void;
-  /** Add an image or video file and use it in an Object node. */
+  /** Add an image or video file and use it in an Insert node. */
   chooseMediaFile(nodeId: string, name: string, data: Uint8Array): void;
+  /** Add an image or video file and use it in one of an Insert node's items. */
+  chooseItemMediaFile(nodeId: string, itemId: string, name: string, data: Uint8Array): void;
   /** Add a saved selection to a manual Selector node. */
   addAnchor(selectorId: string, anchor: Anchor): void;
   /** Create a manual Selector fed by `from` (a node's document output), holding one saved selection. */
@@ -678,6 +680,16 @@ export function createEditorStore(options: EditorOptions = {}) {
         const file = get().addFile(name, data);
         // A new file means a new JSON structure, so an old JSON mapping no longer applies.
         get().updateConfig<Record<string, unknown>>(nodeId, (c) => ({ ...c, fileId: file.id, json: undefined }));
+      });
+    },
+
+    chooseItemMediaFile(nodeId, itemId, name, data) {
+      batch(() => {
+        const file = get().addFile(name, data);
+        get().updateConfig<ObjectNodeConfig>(nodeId, (c) => ({
+          ...c,
+          items: c.items?.map((i) => (i.id === itemId ? { ...i, content: { ...i.content, fileId: file.id } as typeof i.content } : i)),
+        }));
       });
     },
 
