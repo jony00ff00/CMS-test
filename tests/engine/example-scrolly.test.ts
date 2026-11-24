@@ -20,8 +20,12 @@ describe('example: a scrolly from Word text and HTML code', () => {
     const { p, warnings, results } = await run(buildScrollyExample());
     expect(warnings).toEqual([]);
     for (const n of p.graph.nodes) expect([n.id, results[n.id].status, results[n.id].warnings, results[n.id].problems]).toEqual([n.id, 'ok', [], undefined]);
-    // Four nodes: code, text, one Fill template node, the page.
-    expect(p.graph.nodes.map((n) => n.type)).toEqual(['documentSource', 'documentSource', 'fillTemplate', 'output']);
+    // Code and text, one Fill template node, then two pages: the interactive one, and a static one (three nodes leave
+    // the graphic and its code out and give it an article look).
+    expect(p.graph.nodes.map((n) => `${n.type}:${n.id}`)).toEqual([
+      'documentSource:code', 'documentSource:text', 'fillTemplate:fill', 'output:page',
+      'selector:static-code', 'object:static-strip', 'snippet:static-look', 'output:static',
+    ]);
     const report = results.fill.outputs.report as FillReport[];
     expect(report.map((r) => [r.id, r.slots, r.matches, r.filled])).toEqual([
       ['kicker', 1, 1, 1], ['headline', 1, 1, 1], ['dek', 1, 1, 1], ['steps', 10, 10, 10], ['footer', 2, 2, 2],
@@ -66,6 +70,21 @@ describe('example: a scrolly from Word text and HTML code', () => {
     expect(runSelector(page, { mode: 'css', selector: '.gs-footer a[href="#full-brief"]' }).matches).toHaveLength(1);
   });
 
+  it('the static page: the same text as an article, with the data tables shown, and no script', async () => {
+    const { results } = await run(buildScrollyExample());
+    const interactive = parseHtml(results.page.outputs.html as string, { keepCode: true });
+    const page = parseHtml(results.static.outputs.html as string, { keepCode: true });
+    const count = (doc: CmsDocument, css: string) => runSelector(doc, { mode: 'css', selector: css }).matches.length;
+    expect(results.static.outputs.html as string).not.toContain('<script');
+    expect(count(page, '.gs-graphic')).toBe(0);
+    expect(count(page, 'div.gs-static > ge16-scrolly')).toBe(1);
+    // The same words: header, every step, the tables and the footer.
+    for (const css of ['.gs-kicker, .gs-headline, .gs-dek', '.gs-card', 'table caption', '.gs-footer p']) expect(texts(page, css), css).toEqual(texts(interactive, css));
+    expect(count(page, '.gs-step')).toBe(10);
+    expect(results.static.outputs.html as string).toContain('.gs-static table{');
+    expect(results.static.upstreamProblems).toBeUndefined();
+  });
+
   it('the step cards follow the Word steps: more steps, more cards; fewer, fewer', async () => {
     for (const n of [12, 4]) {
       const project = buildScrollyExample();
@@ -79,6 +98,7 @@ describe('example: a scrolly from Word text and HTML code', () => {
       const ids = runSelector(page, { mode: 'css', selector: '.gs-step' }).matches.length;
       expect(ids).toBe(n);
       expect(results.page.upstreamProblems).toBeUndefined();
+      expect(runSelector(results['static-look'].outputs.document as CmsDocument, { mode: 'css', selector: '.gs-step' }).matches).toHaveLength(n);
     }
   });
 
@@ -87,13 +107,16 @@ describe('example: a scrolly from Word text and HTML code', () => {
     const text = project.files.find((f) => f.id === 'scrolly-text')!;
     Object.assign(text, { name: 'edited.html', data: '<p class="title">T</p><p class="dek">D</p><h2>Step 1</h2><p>One.</p>', encoding: 'text' });
     const { results } = await run(project);
-    expect(results.page.upstreamProblems).toEqual([{ nodeId: 'fill', problem: 'Slot “.gs-kicker”: nothing in the content matches, so the slot keeps the template’s text' }]);
+    const problem = [{ nodeId: 'fill', problem: 'Slot “.gs-kicker”: nothing in the content matches, so the slot keeps the template’s text' }];
+    // Both pages show it.
+    expect(results.page.upstreamProblems).toEqual(problem);
+    expect(results.static.upstreamProblems).toEqual(problem);
   });
 
-  it('has a note on the canvas saying what the example is for', () => {
+  it('has notes on the canvas saying what the example is for', () => {
     const { project, warnings } = parseProject(JSON.stringify(buildScrollyExample()));
     expect(warnings).toEqual([]);
-    expect(project.graph.notes).toEqual([
+    expect(project.graph.notes?.slice(0, 1)).toEqual([
       {
         id: 'note-1',
         text: 'Example for merging text changes with pre-existing scrolly-telly code.\nAllows text to be easily updated by users, without requiring specialised tools.',

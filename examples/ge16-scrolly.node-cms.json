@@ -26,7 +26,7 @@
         "name": "Scrolly text (Word)",
         "position": {
           "x": 40,
-          "y": 240
+          "y": 260
         },
         "config": {
           "fileId": "scrolly-text",
@@ -45,8 +45,8 @@
         "type": "fillTemplate",
         "name": "Fill the scrolly",
         "position": {
-          "x": 340,
-          "y": 140
+          "x": 320,
+          "y": 150
         },
         "config": {
           "rows": [
@@ -113,10 +113,96 @@
       {
         "id": "page",
         "type": "output",
-        "name": "Scrolly page",
+        "name": "Interactive page",
         "position": {
-          "x": 640,
-          "y": 140
+          "x": 1160,
+          "y": 40
+        },
+        "config": {
+          "format": "html",
+          "fullDocument": true,
+          "inlineAssets": true,
+          "strict": true
+        }
+      },
+      {
+        "id": "static-code",
+        "type": "selector",
+        "name": "Graphic and its code",
+        "position": {
+          "x": 600,
+          "y": 260
+        },
+        "config": {
+          "mode": "css",
+          "selector": "ge16-scrolly > script, ge16-scrolly > style, .gs-graphic",
+          "expect": {
+            "min": 3
+          }
+        }
+      },
+      {
+        "id": "static-strip",
+        "type": "object",
+        "name": "Leave them out",
+        "position": {
+          "x": 880,
+          "y": 260
+        },
+        "config": {
+          "content": {
+            "kind": "selection"
+          },
+          "place": "replace"
+        }
+      },
+      {
+        "id": "static-look",
+        "type": "snippet",
+        "name": "Article look",
+        "position": {
+          "x": 1160,
+          "y": 260
+        },
+        "config": {
+          "snippet": {
+            "kind": "snippet",
+            "id": "callout",
+            "name": "Callout",
+            "description": "A coloured box around the content",
+            "version": 1,
+            "mode": "wrap",
+            "template": "<aside class=\"callout callout-{{params.variant}}\">{{content}}</aside>",
+            "params": [
+              {
+                "name": "variant",
+                "label": "Variant",
+                "type": "select",
+                "options": [
+                  "info",
+                  "warning",
+                  "success"
+                ],
+                "default": "info"
+              }
+            ],
+            "css": ".callout{border-left:4px solid #3b82f6;background:#eff6ff;padding:.75rem 1rem;margin:1rem 0;border-radius:4px}.callout-warning{border-color:#f59e0b;background:#fffbeb}.callout-success{border-color:#10b981;background:#ecfdf5}"
+          },
+          "custom": {
+            "className": "gs-static",
+            "wrap": "div"
+          },
+          "css": ".gs-static{max-width:42rem;margin:2.5rem auto;padding:0 1rem;font:1.05rem/1.65 Georgia,\"Times New Roman\",serif;color:#1f2937}\n.gs-static .gs-kicker{margin:0 0 .5rem;font:600 .75rem/1.4 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}\n.gs-static .gs-headline{margin:0 0 .75rem;font-size:2.4rem;line-height:1.1}\n.gs-static .gs-dek{margin:0 0 2rem;font-size:1.2rem;color:#4b5563}\n.gs-static .gs-step{margin:0 0 1.1rem}\n.gs-static .gs-card p{margin:0 0 .6rem}\n.gs-static .gs-sr-only{margin:2rem 0}\n.gs-static table{width:100%;margin:0 0 1.75rem;border-collapse:collapse;font:.9rem/1.45 system-ui,sans-serif}\n.gs-static caption{margin-bottom:.5rem;text-align:left;font-weight:600}\n.gs-static th,.gs-static td{padding:.4rem .5rem;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}\n.gs-static thead th{border-bottom:2px solid #9ca3af}\n.gs-static .gs-footer{margin-top:2rem;padding-top:1rem;border-top:1px solid #e5e7eb;font-size:.9rem;color:#4b5563}",
+          "documentScope": "document"
+        }
+      },
+      {
+        "id": "static",
+        "type": "output",
+        "name": "Static page",
+        "position": {
+          "x": 1440,
+          "y": 260
         },
         "config": {
           "format": "html",
@@ -147,6 +233,46 @@
         "sourcePort": "document",
         "target": "page",
         "targetPort": "document"
+      },
+      {
+        "id": "fill.document>static-code.document",
+        "source": "fill",
+        "sourcePort": "document",
+        "target": "static-code",
+        "targetPort": "document"
+      },
+      {
+        "id": "static-code.selection>static-strip.where",
+        "source": "static-code",
+        "sourcePort": "selection",
+        "target": "static-strip",
+        "targetPort": "where"
+      },
+      {
+        "id": "static-strip.document>static-look.selection",
+        "source": "static-strip",
+        "sourcePort": "document",
+        "target": "static-look",
+        "targetPort": "selection"
+      },
+      {
+        "id": "static-look.document>static.document",
+        "source": "static-look",
+        "sourcePort": "document",
+        "target": "static",
+        "targetPort": "document"
+      }
+    ],
+    "groups": [
+      {
+        "id": "group-static",
+        "name": "Static version",
+        "nodeIds": [
+          "static-code",
+          "static-strip",
+          "static-look"
+        ],
+        "color": "#0d9488"
       }
     ],
     "notes": [
@@ -158,6 +284,16 @@
           "y": -110
         },
         "width": 420
+      },
+      {
+        "id": "note-2",
+        "text": "Two outputs from the same filled page: the Interactive page runs the scrolly; the Static page leaves out its graphic and code and reads as an article, with the data tables shown.",
+        "position": {
+          "x": 640,
+          "y": -110
+        },
+        "width": 420,
+        "color": "blue"
       }
     ]
   },

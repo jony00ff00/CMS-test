@@ -92,11 +92,22 @@ test('the "Two documents" button opens the scrolly project, with its Word text i
   await page.getByRole('button', { name: 'Two documents' }).click();
   await expect(node(page, 'fill')).toContainText('5 of 5 rows filled');
   await expect(node(page, 'page')).toContainText('OK');
-  await expect(page.getByRole('complementary', { name: 'Inspector' }).getByLabel('Name')).toHaveValue('Scrolly page');
+  await expect(page.getByRole('complementary', { name: 'Inspector' }).getByLabel('Name')).toHaveValue('Interactive page');
   const host = preview(page).locator('ge16-scrolly');
   await expect.poll(() => host.evaluate((el) => !!el.shadowRoot)).toBe(true);
   await expect(host.locator('.gs-root .gs-kicker')).toHaveText(/what happens next/i);
   await expect(host.locator('.gs-step[data-step="tie"] .gs-card')).toContainText('three coalitions separated by just two seats');
   await expect(host.locator('.gs-dots circle').first()).toBeAttached();
   await page.screenshot({ path: 'test-results/two-documents-scrolly.png' });
+
+  // The static page: the same text as an article, the tables shown, no script.
+  await expect(node(page, 'static')).toContainText('OK');
+  await node(page, 'static').click();
+  await expect(preview(page).locator('.gs-static .gs-headline')).toBeVisible();
+  await expect(preview(page).locator('.gs-static .gs-step')).toHaveCount(10);
+  await expect(preview(page).locator('.gs-static table')).toHaveCount(2);
+  await expect(preview(page).locator('.gs-static table').first()).toBeVisible();
+  await expect(preview(page).locator('ge16-scrolly script, ge16-scrolly style')).toHaveCount(0);
+  await expect(preview(page).locator('.gs-graphic')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/two-documents-static.png' });
 });

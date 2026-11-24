@@ -395,9 +395,14 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
 - `examples/` (see its README): `ge16-scrolly.node-cms.json`, a scrollytelling graphic's code
   (`scrolly/*.html`, Document Source with `keepCode`) filled with text from Word (`scrolly/*.docx`, style map for
   Kicker / Title / Dek) by one Fill template node (`FILL_ROWS`: three required slots, a repeat of `.gs-step` per "Step"
-  heading section (min 1), the footer); the Output is `strict`. `npm run example:scrolly`
+  heading section (min 1), the footer), then two Outputs (both `strict`): `page` ("Interactive page", the scrolly) and
+  `static` ("Static page": Selector `static-code` (`ge16-scrolly > script, ge16-scrolly > style, .gs-graphic`, expect
+  ≥ 3) → Insert `static-strip` (replace, content from another node, nothing connected: removes them) → custom Snippet
+  `static-look` (`div.gs-static` around the document, `STATIC_CSS`): an article with the step text and the tables
+  shown, no script); group "Static version", two notes. `npm run example:scrolly`
   (`scripts/make-example-scrolly.ts`) writes it; `tests/engine/example-scrolly.test.ts` checks every node, the row
-  report, edited text, more / fewer steps, a missing kicker as a problem, and that the committed file is up to date; `tests/e2e/example-scrolly.spec.ts` opens it and checks the script runs.
+  report, the static page (same text, no script), edited text, more / fewer steps, a missing kicker as a problem on both
+  pages, and that the committed file is up to date; `tests/e2e/example-scrolly.spec.ts` opens it and checks the script runs.
   `ge16-scrolly-from-text.node-cms.json` (`scripts/make-example-scrolly-from-text.ts`, same npm script): only the
   .docx; the code is six library snippets made from the HTML file's pieces (`codePieces`), applied by a chain of
   Selector → Snippet pairs (step cards named with `{{item params.steps index}}`, joined Selectors for one wrapper
@@ -445,7 +450,7 @@ another document (wrap, source styles, heading levels, Content view, "Two docume
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
 image selection (Images mode, click an image in the preview), notes on the canvas, page variants, Fill template node,
 problems (expectations), Replace node, Object text and Object without a Point, Position node, one Insert node (Object, Replace and Position merged; several items), groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
-Word file; the JSON example button was removed), examples rebuilt on Fill template and page variants + Insert items. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+Word file; the JSON example button was removed), examples rebuilt on Fill template and page variants + Insert items, the scrolly example's static page. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

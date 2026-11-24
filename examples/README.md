@@ -11,14 +11,17 @@ scrollytelling graphic (`scrolly/ge16-scrolly-short.html`: its markup, CSS and J
 files are inside the project file; they are here on their own too. Writers change the Word document, developers
 change the HTML, and the project puts the two together again: choose the new file in either Document Source.
 
-Four nodes:
+It makes two pages from the same filled code: an **interactive** one (the scrolly, as its code makes it) and a
+**static** one (the same text as an article: no graphic and no JavaScript, with the data tables shown).
 
 | Node | What it does |
 | --- | --- |
 | **Scrolly code (HTML)** (Document Source) | Loads the code. "Keep its scripts and styles (code you trust)" is on, so its `<style>` and `<script>` stay inside `<ge16-scrolly>`, where the script expects them. |
 | **Scrolly text (Word)** (Document Source) | Loads the text. Its Word style rules turn the document's own styles Kicker, Title and Dek into `p.kicker`, `p.title` and `p.dek`. |
 | **Fill the scrolly** (Fill template) | One row per slot: `.gs-kicker` ← `.kicker`, `.gs-headline` ← `.title`, `.gs-dek` ← `.dek` (all three required), a **repeat** of `.gs-step` with one card per Word heading that contains "Step" (its `.gs-card` gets what is under the heading; the heading is a label for writers and is left out; at least one step), and the footer (the note and the link's text; the link keeps its address). |
-| **Scrolly page** (Output) | The finished page; the preview runs the graphic. "Don't download while there are problems" is on. |
+| **Interactive page** (Output) | The scrolly; the preview runs the graphic. "Don't download while there are problems" is on. |
+| **Static version** group | **Graphic and its code** (Selector: the element's `<script>` and `<style>`, and `.gs-graphic`; it expects all three) → **Leave them out** (Insert: in place of each match, with nothing connected to Content, so they are removed) → **Article look** (a custom Snippet: a `div.gs-static` around the page, with its own CSS for the header, the steps as paragraphs, the tables and the footer). |
+| **Static page** (Output) | The article: the same header, step text, tables and footer, with no script (a few kB). Problems with the text show here too. |
 
 The step cards follow the Word document: a writer who adds a step gets another card, and one who removes a step loses
 one. Card *i* keeps the code's own card *i* (its `data-step`, which the script uses for the graphic's state); extra
