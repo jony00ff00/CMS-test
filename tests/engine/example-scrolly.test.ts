@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { GraphEvaluator, nodeRegistry, parseHtml, runSelector, textOf, indexDocument, type CmsDocument, type FillReport } from '../../src/engine';
 import { parseProject } from '../../src/store/project';
-import { buildScrollyExample, PROJECT_FILE } from '../../scripts/make-example-scrolly';
+import { buildScrollyExample, PROJECT_FILE, readSnapshots } from '../../scripts/make-example-scrolly';
 
 const texts = (doc: CmsDocument, selector: string) => {
   const ix = indexDocument(doc);
@@ -24,7 +24,7 @@ describe('example: a scrolly from Word text and HTML code', () => {
     // the graphic and its code out and give it an article look).
     expect(p.graph.nodes.map((n) => `${n.type}:${n.id}`)).toEqual([
       'documentSource:code', 'documentSource:text', 'fillTemplate:fill', 'output:page',
-      'selector:static-code', 'object:static-strip', 'snippet:static-look', 'output:static',
+      'selector:static-code', 'object:static-strip', 'object:static-pictures', 'snippet:static-look', 'output:static',
     ]);
     const report = results.fill.outputs.report as FillReport[];
     expect(report.map((r) => [r.id, r.slots, r.matches, r.filled])).toEqual([
@@ -81,6 +81,13 @@ describe('example: a scrolly from Word text and HTML code', () => {
     // The same words: header, every step, the tables and the footer.
     for (const css of ['.gs-kicker, .gs-headline, .gs-dek', '.gs-card', 'table caption', '.gs-footer p']) expect(texts(page, css), css).toEqual(texts(interactive, css));
     expect(count(page, '.gs-step')).toBe(10);
+    // A picture of the graphic before each step's text, described by the text the script gives the chart.
+    expect(count(page, '.gs-step > img + .gs-card')).toBe(10);
+    expect(count(page, '.gs-step img[src^="data:image/webp;base64,"]')).toBe(10);
+    const snapshots = readSnapshots();
+    expect(snapshots.map((x) => x.step)).toEqual(['tie', 'distribution', 'since-ge15', 'no-path-alone', 'anwar', 'zahid', 'hadi', 'muhyiddin', 'borneo', 'deals']);
+    expect(results.static.outputs.html as string).toContain(`alt="${snapshots[2].alt}"`);
+    expect(snapshots[2].alt).toMatch(/^Change since GE15/);
     expect(results.static.outputs.html as string).toContain('.gs-static table{');
     expect(results.static.upstreamProblems).toBeUndefined();
   });
@@ -99,6 +106,9 @@ describe('example: a scrolly from Word text and HTML code', () => {
       expect(ids).toBe(n);
       expect(results.page.upstreamProblems).toBeUndefined();
       expect(runSelector(results['static-look'].outputs.document as CmsDocument, { mode: 'css', selector: '.gs-step' }).matches).toHaveLength(n);
+      // Removed steps take their pictures with them (a warning, not a problem); added ones copy the last step's.
+      expect(results.static.upstreamProblems).toBeUndefined();
+      expect(runSelector(results['static-look'].outputs.document as CmsDocument, { mode: 'css', selector: '.gs-step > img' }).matches).toHaveLength(n);
     }
   });
 

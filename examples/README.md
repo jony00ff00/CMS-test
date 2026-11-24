@@ -12,7 +12,8 @@ files are inside the project file; they are here on their own too. Writers chang
 change the HTML, and the project puts the two together again: choose the new file in either Document Source.
 
 It makes two pages from the same filled code: an **interactive** one (the scrolly, as its code makes it) and a
-**static** one (the same text as an article: no graphic and no JavaScript, with the data tables shown).
+**static** one (the same text as an article, with no JavaScript: a picture of the graphic at each step, and the data
+tables shown).
 
 | Node | What it does |
 | --- | --- |
@@ -20,8 +21,15 @@ It makes two pages from the same filled code: an **interactive** one (the scroll
 | **Scrolly text (Word)** (Document Source) | Loads the text. Its Word style rules turn the document's own styles Kicker, Title and Dek into `p.kicker`, `p.title` and `p.dek`. |
 | **Fill the scrolly** (Fill template) | One row per slot: `.gs-kicker` ← `.kicker`, `.gs-headline` ← `.title`, `.gs-dek` ← `.dek` (all three required), a **repeat** of `.gs-step` with one card per Word heading that contains "Step" (its `.gs-card` gets what is under the heading; the heading is a label for writers and is left out; at least one step), and the footer (the note and the link's text; the link keeps its address). |
 | **Interactive page** (Output) | The scrolly; the preview runs the graphic. "Don't download while there are problems" is on. |
-| **Static version** group | **Graphic and its code** (Selector: the element's `<script>` and `<style>`, and `.gs-graphic`; it expects all three) → **Leave them out** (Insert: in place of each match, with nothing connected to Content, so they are removed) → **Article look** (a custom Snippet: a `div.gs-static` around the page, with its own CSS for the header, the steps as paragraphs, the tables and the footer). |
-| **Static page** (Output) | The article: the same header, step text, tables and footer, with no script (a few kB). Problems with the text show here too. |
+| **Static version** group | **Graphic and its code** (Selector: the element's `<script>` and `<style>`, and `.gs-graphic`; it expects all three) → **Leave them out** (Insert: in place of each match, with nothing connected to Content, so they are removed) → **Article look** (a custom Snippet: a `div.gs-static` around the page, with its own CSS for the header, the steps as paragraphs, the tables and the footer). Between them, **Graphic at each step** (Insert, ten items) puts a picture of the graphic before each step's text, found by the step's `data-step`. |
+| **Static page** (Output) | The article: the same header, step text, pictures, tables and footer, with no script. Problems with the text show here too. |
+
+The pictures (`scrolly/snapshots/*.webp`) are captured from the running scrolly by `npm run example:scrolly-snapshots`:
+it opens the interactive page in Chromium, scrolls to each step, waits for the graphic to settle, trims it and saves it,
+with the text the script gives the chart for screen readers as its alternative text (`snapshots.json`). Run it after
+changing the scrolly's code, then `npm run example:scrolly`. The items are optional: a step the writer removes takes its
+picture with it (a warning, not a problem); a step the writer adds shows the last step's picture until new pictures are
+captured for a code that has that step.
 
 The step cards follow the Word document: a writer who adds a step gets another card, and one who removes a step loses
 one. Card *i* keeps the code's own card *i* (its `data-step`, which the script uses for the graphic's state); extra

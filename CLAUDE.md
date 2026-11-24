@@ -185,8 +185,8 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   picked). Replacing: "Content from another node" → `replaceSelection` (copy options, `pairs`; a count mismatch is a
   problem), with nothing connected → `removeSelection` (info `removed`); other content → `replaceWithContent` (built
   nodes in place of each match, via `replaceWithPieces`). `items` (`InsertItem` { id, label?, selector, place, content
-  (not selection) }): each goes in turn next to every match of its own selector in the Where document; a place not
-  found is a problem ("Item 2 (label): its place was not found"); `dependencies` hash every item's file. Outputs also
+  (not selection), optional? }): each goes in turn next to every match of its own selector in the Where document; a place
+  not found is a problem ("Item 2 (label): its place was not found"), or a warning for an `optional` item; `dependencies` hash every item's file. Outputs also
   carry `content` (not a port: what it adds, for the preview) and `info.from` / `what` / `inserted` / `replaced`.
   `copySelection` in `insert.ts` copies what a selection matched, in document order, via a wrap snippet with a
   `cms-extract` marker; the copy drops `data-json-path` and brings its images and the source's snippet assets.
@@ -397,9 +397,15 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   Kicker / Title / Dek) by one Fill template node (`FILL_ROWS`: three required slots, a repeat of `.gs-step` per "Step"
   heading section (min 1), the footer), then two Outputs (both `strict`): `page` ("Interactive page", the scrolly) and
   `static` ("Static page": Selector `static-code` (`ge16-scrolly > script, ge16-scrolly > style, .gs-graphic`, expect
-  ≥ 3) → Insert `static-strip` (replace, content from another node, nothing connected: removes them) → custom Snippet
-  `static-look` (`div.gs-static` around the document, `STATIC_CSS`): an article with the step text and the tables
-  shown, no script); group "Static version", two notes. `npm run example:scrolly`
+  ≥ 3) → Insert `static-strip` (replace, content from another node, nothing connected: removes them) → Insert
+  `static-pictures` (one optional item per snapshot: an image before `.gs-step[data-step="<step>"] > .gs-card`) → custom
+  Snippet `static-look` (`div.gs-static` around the document, `STATIC_CSS`): an article with the step text, a picture of
+  the graphic per step and the tables shown, no script); group "Static version", two notes. The pictures are
+  `scrolly/snapshots/<step>.webp` + `snapshots.json` (step, file, alt), captured by `npm run example:scrolly-snapshots`
+  (`scripts/make-example-scrolly-snapshots.ts`: Playwright opens the interactive page made with
+  `buildScrollyExample({ snapshots: false })`, scrolls to each step, waits for `data-active-step`, screenshots
+  `.gs-graphic` at 2×, trims the white margins and encodes WebP on a canvas; the alt text is the chart's `aria-label`
+  at that step). `npm run example:scrolly`
   (`scripts/make-example-scrolly.ts`) writes it; `tests/engine/example-scrolly.test.ts` checks every node, the row
   report, the static page (same text, no script), edited text, more / fewer steps, a missing kicker as a problem on both
   pages, and that the committed file is up to date; `tests/e2e/example-scrolly.spec.ts` opens it and checks the script runs.

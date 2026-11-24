@@ -58,6 +58,7 @@ describe('the Insert node', () => {
             { id: 'b', label: 'Before two', selector: { mode: 'heading', text: 'Two', includeHeading: true }, place: 'before', content: text('Note') },
             { id: 'c', label: 'Nowhere', selector: { mode: 'css', selector: '.missing' }, place: 'after', content: text('Lost') },
             { id: 'd', selector: { mode: 'css', selector: 'h1' }, place: 'after', content: { kind: 'image', alt: 'No file yet' } },
+            { id: 'e', label: 'Maybe', selector: { mode: 'css', selector: '.gone' }, place: 'after', content: text('Optional'), optional: true },
           ],
         }),
       ],
@@ -70,7 +71,9 @@ describe('the Insert node', () => {
     expect(out).not.toContain('Lost');
     expect(r.problems).toEqual(['Item 3 (Nowhere): its place was not found']);
     expect(r.warnings.join()).toMatch(/Item 4: /);
-    expect(r.info).toMatchObject({ items: 4, inserted: 2 });
+    // An optional item whose place is gone is a warning only.
+    expect(r.warnings).toContain('Item 5 (Maybe): its place was not found, so it is left out');
+    expect(r.info).toMatchObject({ items: 5, inserted: 2 });
     // Items need a document at Where.
     expect((await run({ nodes: [g.nodes[1]], edges: [] })).ins.status).toBe('waiting');
   });

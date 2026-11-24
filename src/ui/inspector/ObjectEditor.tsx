@@ -210,6 +210,10 @@ function ItemsEditor({ node, items, onChange }: { node: GraphNode; items: Insert
                   ))}
                 </select>
               </label>
+              <label className="fill-check">
+                <input type="checkbox" checked={!!item.optional} onChange={(e) => set(item.id, { optional: e.target.checked || undefined })} />
+                Optional: if its place is gone, leave it out (a warning, not a problem)
+              </label>
               <ContentFields
                 node={node}
                 content={item.content}

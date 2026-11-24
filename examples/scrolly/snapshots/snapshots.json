@@ -1,0 +1,52 @@
+[
+  {
+    "step": "tie",
+    "file": "tie.webp",
+    "alt": "Seats by bloc: PH 62, PN 62, BN 60, GPS 23, GRS 6, Others 9. 112 needed for a majority."
+  },
+  {
+    "step": "distribution",
+    "file": "distribution.webp",
+    "alt": "Seats and vote share: PH 62 seats on about 31% of the vote; PN 62 on about 30%; BN 60 on about 28%."
+  },
+  {
+    "step": "since-ge15",
+    "file": "since-ge15.webp",
+    "alt": "Change since GE15: PH 82 to 62, down 20; PN 74 to 62, down 12; BN 30 to 60, up 30; Others 7 to 9; GPS and GRS unchanged."
+  },
+  {
+    "step": "no-path-alone",
+    "file": "no-path-alone.webp",
+    "alt": "Build a government: PH 62 plus GPS 23, GRS 6 and Others 9 reaches 100. PN would reach 100 and BN 98. 112 needed."
+  },
+  {
+    "step": "anwar",
+    "file": "anwar.webp",
+    "alt": "Highlighted: PH 62 and BN 60, 122 seats together."
+  },
+  {
+    "step": "zahid",
+    "file": "zahid.webp",
+    "alt": "Highlighted: BN 60 seats, with PH 62 and PN 62 on either side."
+  },
+  {
+    "step": "hadi",
+    "file": "hadi.webp",
+    "alt": "Highlighted: PAS 41 and UMNO 53, 94 seats together."
+  },
+  {
+    "step": "muhyiddin",
+    "file": "muhyiddin.webp",
+    "alt": "Highlighted: Bersatu 20 seats. BN 60 and PAS 41 make 101."
+  },
+  {
+    "step": "borneo",
+    "file": "borneo.webp",
+    "alt": "Highlighted: GPS 23 and GRS 6, 29 seats, beside BN 60."
+  },
+  {
+    "step": "deals",
+    "file": "deals.webp",
+    "alt": "Three ways to 112, each with GPS and GRS. Option 1, PH + BN + Borneo: 151 seats, 39 above 112. Option 2, BN + PN + Borneo: 151 seats, 39 above 112. Option 3, PAS + UMNO + Borneo: 123 seats, 11 above 112."
+  }
+]

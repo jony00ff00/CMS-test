@@ -14,6 +14,19 @@ const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'examples');
 export const CODE_FILE = join(dir, 'scrolly', 'ge16-scrolly-short.html');
 export const TEXT_FILE = join(dir, 'scrolly', 'ge16-scrolly-short-text.docx');
 export const PROJECT_FILE = join(dir, 'ge16-scrolly.node-cms.json');
+/** Pictures of the graphic at each step, captured by scripts/make-example-scrolly-snapshots.ts. */
+export const SNAPSHOT_DIR = join(dir, 'scrolly', 'snapshots');
+
+/** One captured picture of the graphic: the step it shows, its file, and the chart's text for screen readers. */
+export interface Snapshot {
+  step: string;
+  file: string;
+  alt: string;
+}
+
+export function readSnapshots(): Snapshot[] {
+  return JSON.parse(readFileSync(join(SNAPSHOT_DIR, 'snapshots.json'), 'utf8')) as Snapshot[];
+}
 
 /** The Word document's own paragraph styles, as classes, so selectors can find the kicker, title and dek. */
 const STYLE_MAP = [
@@ -57,28 +70,48 @@ export const STATIC_CSS = [
   '.gs-static caption{margin-bottom:.5rem;text-align:left;font-weight:600}',
   '.gs-static th,.gs-static td{padding:.4rem .5rem;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}',
   '.gs-static thead th{border-bottom:2px solid #9ca3af}',
+  '.gs-static .gs-step > img{display:block;width:100%;height:auto;margin:1.75rem 0 .9rem;border:1px solid #e5e7eb;border-radius:8px}',
   '.gs-static .gs-footer{margin-top:2rem;padding-top:1rem;border-top:1px solid #e5e7eb;font-size:.9rem;color:#4b5563}',
 ].join('\n');
 
-export function scrollyGraph(codeId: string, textId: string): Graph {
+export function scrollyGraph(codeId: string, textId: string, snapshots: { snapshot: Snapshot; fileId: string }[] = []): Graph {
   const at = (col: number, row: number) => ({ x: 40 + col * 280, y: 40 + row * 220 });
   const nodes: GraphNode[] = [
     { id: 'code', type: 'documentSource', name: 'Scrolly code (HTML)', position: at(0, 0), config: { fileId: codeId, html: { keepCode: true } } },
     { id: 'text', type: 'documentSource', name: 'Scrolly text (Word)', position: at(0, 1), config: { fileId: textId, docx: { styleMap: STYLE_MAP } } },
     { id: 'fill', type: 'fillTemplate', name: 'Fill the scrolly', position: at(1, 0.5), config: { rows: FILL_ROWS } },
     // The interactive page: the scrolly as its code makes it.
-    { id: 'page', type: 'output', name: 'Interactive page', position: at(4, 0), config: { format: 'html', fullDocument: true, inlineAssets: true, strict: true } },
+    { id: 'page', type: 'output', name: 'Interactive page', position: at(6, 0), config: { format: 'html', fullDocument: true, inlineAssets: true, strict: true } },
     // The static page: the same text without the scrolly's code, as an article with the data tables shown.
     { id: 'static-code', type: 'selector', name: 'Graphic and its code', position: at(2, 1), config: { mode: 'css', selector: 'ge16-scrolly > script, ge16-scrolly > style, .gs-graphic', expect: { min: 3 } } },
     { id: 'static-strip', type: 'object', name: 'Leave them out', position: at(3, 1), config: { content: { kind: 'selection' }, place: 'replace' } },
+    // A picture of the graphic at each step (captured from the running scrolly), before that step's text.
+    {
+      id: 'static-pictures',
+      type: 'object',
+      name: 'Graphic at each step',
+      position: at(4, 1),
+      config: {
+        content: { kind: 'imageUrl', url: '', alt: '' },
+        items: snapshots.map(({ snapshot, fileId }) => ({
+          id: `step-${snapshot.step}`,
+          label: snapshot.step,
+          selector: { mode: 'css', selector: `.gs-step[data-step="${snapshot.step}"] > .gs-card` },
+          place: 'before',
+          content: { kind: 'image', fileId, alt: snapshot.alt },
+          // A step the writer removed takes its picture with it.
+          optional: true,
+        })),
+      },
+    },
     {
       id: 'static-look',
       type: 'snippet',
       name: 'Article look',
-      position: at(4, 1),
+      position: at(5, 1),
       config: { ...nodeRegistry.snippet.defaultConfig(), ref: undefined, params: undefined, custom: { className: 'gs-static', wrap: 'div' }, css: STATIC_CSS, documentScope: 'document' },
     },
-    { id: 'static', type: 'output', name: 'Static page', position: at(5, 1), config: { format: 'html', fullDocument: true, inlineAssets: true, strict: true } },
+    { id: 'static', type: 'output', name: 'Static page', position: at(6, 1), config: { format: 'html', fullDocument: true, inlineAssets: true, strict: true } },
   ];
   const edge = (source: string, sourcePort: string, target: string, targetPort: string) => ({ id: `${source}.${sourcePort}>${target}.${targetPort}`, source, sourcePort, target, targetPort });
   const edges = [
@@ -87,10 +120,11 @@ export function scrollyGraph(codeId: string, textId: string): Graph {
     edge('fill', 'document', 'page', 'document'),
     edge('fill', 'document', 'static-code', 'document'),
     edge('static-code', 'selection', 'static-strip', 'where'),
-    edge('static-strip', 'document', 'static-look', 'selection'),
+    edge('static-strip', 'document', 'static-pictures', 'where'),
+    edge('static-pictures', 'document', 'static-look', 'selection'),
     edge('static-look', 'document', 'static', 'document'),
   ];
-  const groups: NodeGroup[] = [{ id: 'group-static', name: 'Static version', nodeIds: ['static-code', 'static-strip', 'static-look'], color: '#0d9488' }];
+  const groups: NodeGroup[] = [{ id: 'group-static', name: 'Static version', nodeIds: ['static-code', 'static-strip', 'static-pictures', 'static-look'], color: '#0d9488' }];
   // A note on the canvas, above the flow, says what the example is for.
   const notes: CanvasNote[] = [
     {
@@ -101,7 +135,7 @@ export function scrollyGraph(codeId: string, textId: string): Graph {
     },
     {
       id: 'note-2',
-      text: 'Two outputs from the same filled page: the Interactive page runs the scrolly; the Static page leaves out its graphic and code and reads as an article, with the data tables shown.',
+      text: 'Two outputs from the same filled page: the Interactive page runs the scrolly; the Static page leaves out its code and reads as an article, with a picture of the graphic at each step (captured from the running scrolly) and the data tables shown.',
       position: { x: 640, y: -110 },
       width: 420,
       color: 'blue',
@@ -110,11 +144,17 @@ export function scrollyGraph(codeId: string, textId: string): Graph {
   return { nodes, edges, groups, notes };
 }
 
-export function buildScrollyExample() {
+/** The project; `snapshots: false` leaves the pictures out (the snapshot script uses that to capture new ones). */
+export function buildScrollyExample(options: { snapshots?: boolean } = {}) {
   const code = storeFile('ge16-scrolly-short.html', readFileSync(CODE_FILE, 'utf8'), 'scrolly-code');
   const text = storeFile('ge16-scrolly-short-text.docx', new Uint8Array(readFileSync(TEXT_FILE)), 'scrolly-text');
+  const pictures = (options.snapshots === false ? [] : readSnapshots()).map((snapshot) => ({
+    snapshot,
+    file: storeFile(`graphic-${snapshot.file}`, new Uint8Array(readFileSync(join(SNAPSHOT_DIR, snapshot.file))), `snapshot-${snapshot.step}`),
+  }));
+  const files = Object.fromEntries([code, text, ...pictures.map((p) => p.file)].map((f) => [f.id, f]));
   return toProjectFile(
-    { graph: scrollyGraph(code.id, text.id), files: { [code.id]: code, [text.id]: text }, library: seedLibrary() },
+    { graph: scrollyGraph(code.id, text.id, pictures.map((p) => ({ snapshot: p.snapshot, fileId: p.file.id }))), files, library: seedLibrary() },
     new Date('2026-11-10T00:00:00Z'),
   );
 }

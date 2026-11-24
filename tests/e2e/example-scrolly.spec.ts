@@ -106,6 +106,10 @@ test('the "Two documents" button opens the scrolly project, with its Word text i
   await expect(preview(page).locator('.gs-static .gs-headline')).toBeVisible();
   await expect(preview(page).locator('.gs-static .gs-step')).toHaveCount(10);
   await expect(preview(page).locator('.gs-static table')).toHaveCount(2);
+  // A picture of the graphic at each step, before its text.
+  await expect(preview(page).locator('.gs-static .gs-step > img')).toHaveCount(10);
+  await expect(preview(page).locator('.gs-static .gs-step > img').first()).toBeVisible();
+  await expect(preview(page).locator('.gs-step[data-step="since-ge15"] > img')).toHaveAttribute('alt', /^Change since GE15/);
   await expect(preview(page).locator('.gs-static table').first()).toBeVisible();
   await expect(preview(page).locator('ge16-scrolly script, ge16-scrolly style')).toHaveCount(0);
   await expect(preview(page).locator('.gs-graphic')).toHaveCount(0);

@@ -25,6 +25,8 @@ export interface InsertItem {
   place: InsertPlace;
   /** What it adds (not content from another node: each item holds its own). */
   content: Exclude<InsertContent, { kind: 'selection' }>;
+  /** Its place may be gone (e.g. a step the writer removed): then it is left out with a warning, not a problem. */
+  optional?: boolean;
 }
 
 export interface ObjectNodeConfig {
@@ -160,7 +162,7 @@ async function insertItems(whereValue: unknown, kind: string, items: InsertItem[
       continue;
     }
     for (const w of r.warnings) if (!/matched nothing/.test(w)) warnings.push(`${name}: ${w}`);
-    if (r.inserted === 0) problems.push(`${name}: its place was not found`);
+    if (r.inserted === 0) (item.optional ? warnings : problems).push(`${name}: its place was not found${item.optional ? ', so it is left out' : ''}`);
     inserted += r.inserted;
     doc = r.document;
   }
