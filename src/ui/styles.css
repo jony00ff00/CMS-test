@@ -420,3 +420,32 @@ textarea.note-text { display: block; width: 100%; resize: none; border: 0; paddi
 .cms-node.has-problems { box-shadow: 0 0 0 2px var(--danger); }
 .problems { margin: 0; padding-left: 1.1rem; color: var(--danger); font-size: 0.8rem; display: grid; gap: 2px; }
 .problems-note { display: flex; gap: 6px; align-items: baseline; font-size: 0.75rem; color: var(--danger); font-weight: 600; }
+
+/* Assistant (a local language model that builds the flow): bottom middle of the canvas. */
+.assistant-toggle { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 20; border-radius: 999px; padding: 0.4rem 1rem; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); font-weight: 600; }
+.assistant {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 20;
+  width: min(520px, calc(100% - 32px)); max-height: min(60%, 560px); display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.16);
+}
+.assistant-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.6rem 0.5rem 0.85rem; border-bottom: 1px solid var(--border); }
+.assistant-head h2 { margin: 0; font-size: 0.95rem; }
+.assistant-model { margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-settings { margin: 0.6rem 0.85rem 0; border: 1px solid var(--border); border-radius: 6px; display: grid; gap: 0.5rem; font-size: 0.85rem; }
+.assistant-settings label { display: grid; gap: 0.2rem; }
+.assistant-settings label.inline { display: flex; align-items: center; gap: 0.4rem; }
+.assistant-settings p { margin: 0; }
+.assistant-servers { display: flex; gap: 0.3rem; }
+.assistant-servers button[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); }
+.assistant-model-row { display: flex; gap: 0.3rem; }
+.assistant-model-row > :first-child { flex: 1; min-width: 0; }
+.assistant-log { list-style: none; margin: 0; padding: 0.6rem 0.85rem; overflow: auto; display: grid; gap: 0.75rem; min-height: 3rem; }
+.assistant-hint { line-height: 1.4; }
+.assistant-entry p { margin: 0.15rem 0; }
+.assistant-request { font-weight: 600; white-space: pre-wrap; }
+.assistant-reply { white-space: pre-wrap; }
+.assistant-steps { margin: 0.3rem 0; padding-left: 1.1rem; display: grid; gap: 0.15rem; }
+.assistant-steps .step-error { color: var(--muted); }
+.assistant-actions { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.3rem; }
+.assistant-form { display: flex; gap: 0.4rem; align-items: flex-end; padding: 0.6rem 0.85rem; border-top: 1px solid var(--border); }
+.assistant-form textarea { flex: 1; resize: none; font: inherit; }

@@ -430,6 +430,30 @@ Snippet nodes wrap or add to those parts, and Output previews or exports the res
   canvas between the three sidebars is too narrow for reliable drags between handles).
   `tests/e2e/preview.spec.ts` has `selectInPreview` / `selectElementInPreview` / `previewText`. After an
   action that changes highlights, wait for the new highlights before selecting again (the page reloads).
+- Assistant (a local language model builds the flow): `src/assistant/` is pure TS (no React, tested in
+  `tests/assistant/`, which `vite.config.ts` includes). `plan.ts`: the model answers one JSON object `{ reply, operations }`
+  (`parsePlan` also takes a fenced block, JSON after words, a bare list; plain words = a reply with no changes); ops `add`
+  (`id` is the model's own reference, the node gets an editor-style id `<type>-N`), `connect` (ports optional:
+  `choosePorts` takes the pair `edgeError` allows, same port type first, then port order), `disconnect`, `configure`
+  (shallow merge, `null` removes a key), `rename`, `remove`; nodes are referred to by id, unique name or an earlier `add`'s
+  id. `planGraph(graph, plan, { registry, library, files })` applies them to a copy (the start graph never changes), skips
+  what cannot be done with a reason (`steps[].error`, `errors`), places new nodes right of what feeds them
+  (`placeNew`), and understands shortcuts: Document Source / Insert content `file` by name → `fileId`; Snippet `library`
+  (id or name → `snippet` + `ref`), `template` + `mode` (its own snippet `assistant-<id>`, checked with
+  `validateSnippet`), `custom`; Selector / Extractor with another `mode` drop the old mode's fields; `point` / `manual`
+  warn (picked by hand); content connected to an Insert's `content` switches it to "content from another node", as in
+  the editor. `prompt.ts`: `systemPrompt` (answer format, every node type from the registry with ports + `SETTINGS`
+  text per type, the library, file names, `describeGraph` of the project with the selected node, snippet bodies and
+  anchors shortened), `repairMessage`. `client.ts`: OpenAI-compatible `/chat/completions` and `/models` (Ollama,
+  LM Studio, llama.cpp, vLLM, Jan; `LOCAL_SERVERS`, default `http://localhost:11434/v1`), asks for `response_format`
+  json_object and again without it on 400 / 422, strips `<think>`; `askAssistant` sends the reasons back up to 3 tries,
+  history keeps only requests and final answers (last 8 messages); `connectionHelp` (CORS: `OLLAMA_ORIGINS`, LM Studio's
+  CORS switch). Store `applyGraph(graph, select)`: one undo step, fits the view when nodes were added. UI
+  `src/ui/assistant/AssistantPanel.tsx`: "✦ Assistant" button at the bottom middle of the canvas, a panel (region
+  "Assistant") with settings (server, Ollama / LM Studio / llama.cpp, model, "Find models", API key, apply straight
+  away; remembered in localStorage `node-cms:assistant`), the conversation (reply, steps with skipped ones and
+  warnings, Apply / Discard; Apply re-plans against the graph as it is then), Enter asks, Stop aborts. e2e
+  (`assistant.spec.ts`) fakes the server with `page.route`.
 - The canvas fits the view only after loading an example, never while nodes are added (it would move them
   under the pointer).
 
@@ -456,7 +480,7 @@ another document (wrap, source styles, heading levels, Content view, "Two docume
 connections, multi-selection, groups (G1–G5: group / name / colour / move as one, collapse, Groups list, duplicate),
 image selection (Images mode, click an image in the preview), notes on the canvas, page variants, Fill template node,
 problems (expectations), Replace node, Object text and Object without a Point, Position node, one Insert node (Object, Replace and Position merged; several items), groups above other nodes, trusted HTML code, Replace inside / match by match, scrolly examples (combined, and from the text alone), "Two outputs" example (static and interactive pages from one
-Word file; the JSON example button was removed), examples rebuilt on Fill template and page variants + Insert items, the scrolly example's static page. Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
+Word file; the JSON example button was removed), examples rebuilt on Fill template and page variants + Insert items, the scrolly example's static page, the assistant (a local language model adds, connects and sets up nodes). Ideas for later: merge node, subgraphs, evaluation in a Web Worker,
 dark mode, rich-text JSON formats (ProseMirror, Portable Text).
 
 ## Deployment

@@ -1,3 +1,4 @@
+import { AssistantPanel } from '../assistant/AssistantPanel';
 import {
   applyNodeChanges, Background, Controls, MiniMap, Panel, ReactFlow, useReactFlow, type Connection, type Edge,
   type EdgeChange, type FinalConnectionState, type IsValidConnection, type NodeChange, useNodesInitialized,
@@ -345,6 +346,7 @@ export function Canvas() {
           <ProjectToolbar />
         </Panel>
       </ReactFlow>
+      <AssistantPanel />
       {graph.nodes.length === 0 && !graph.notes?.length && (
         <div className="canvas-empty">
           <p>Add nodes from the palette and connect them, or start from an example.</p>

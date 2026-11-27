@@ -28,7 +28,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['tests/engine/**/*.test.ts', 'tests/store/**/*.test.ts'],
+    include: ['tests/engine/**/*.test.ts', 'tests/store/**/*.test.ts', 'tests/assistant/**/*.test.ts'],
     environment: 'node',
   },
 });

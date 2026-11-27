@@ -63,6 +63,8 @@ export interface EditorState {
 
   addNode(type: string, position?: { x: number; y: number }): string;
   removeNodes(ids: string[]): void;
+  /** Replace the graph with a changed copy (the assistant's plan, made by `planGraph`): one undo step, selects `select`. */
+  applyGraph(graph: Graph, select?: string): void;
   removeEdges(ids: string[]): void;
   /**
    * Copy a node: same settings, its name with " copy", the same incoming connections, placed just below.
@@ -271,6 +273,12 @@ export function createEditorStore(options: EditorOptions = {}) {
       const node: GraphNode = { id, type, config: def.defaultConfig(), position: position ?? { x: rightmost + NODE_SPACING, y: 120 } };
       set({ graph: { ...graph, nodes: [...graph.nodes, node] }, selectedId: id });
       return id;
+    },
+
+    applyGraph(graph, select) {
+      groupKey = undefined;
+      const grew = graph.nodes.some((n) => !get().graph.nodes.some((m) => m.id === n.id));
+      set({ graph, ...(grew && { fitRequest: get().fitRequest + 1 }), ...(select && { selectedId: select, selectedIds: undefined, selectedGroupId: undefined, openSnippetId: undefined }) });
     },
 
     removeNodes(ids) {
